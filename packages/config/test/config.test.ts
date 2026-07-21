@@ -164,6 +164,24 @@ describe('ModelNaru config', () => {
     expect(compose.services['admin-tool']?.network_mode).toBe('none');
   });
 
+  it('does not invoke a package manager in production containers', async () => {
+    const compose = await readFile(
+      join(repositoryRoot, 'compose.yaml'),
+      'utf8',
+    );
+    const dockerfile = await readFile(
+      join(repositoryRoot, 'Dockerfile'),
+      'utf8',
+    );
+
+    expect(compose).not.toMatch(/command:\s*\[[^\]]*['"]pnpm['"]/s);
+    expect(dockerfile).not.toMatch(/CMD\s*\[[^\]]*['"]pnpm['"]/g);
+    expect(compose).toContain("'/workspace/packages/database/dist/migrate.js'");
+    expect(dockerfile).toContain(
+      'CMD ["node", "--enable-source-maps", "dist/main.js"]',
+    );
+  });
+
   it.runIf(process.platform !== 'win32')(
     'refuses to replace a symbolic-link config',
     async () => {

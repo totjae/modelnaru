@@ -58,6 +58,8 @@ Migration을 별도로 재검증할 때는 다음 명령을 사용한다. 이미
 docker compose run --rm migrate
 ```
 
+Production container는 build 결과물을 `node`로 직접 실행하며 시작 시 `pnpm`, Corepack 또는 외부 package registry에 접근하지 않는다. 따라서 backend internal network에서도 migration과 API가 시작되어야 한다.
+
 ## 7. Update와 rollback
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.
@@ -75,6 +77,7 @@ Rollback은 이전에 기록한 commit으로 새 worktree나 별도 배포 direc
 - gateway `502`: `web`과 `api` health 및 log 확인
 - API 시작 반복: `admin-tool validate` 실행 후 config와 secret 파일 권한 확인
 - migrate 실패: `docker compose logs migrate postgres`에서 checksum·SQL·연결 오류 확인. 적용된 migration 파일은 수정하지 않음
+- migrate log에 Corepack 또는 registry download가 나타남: runtime command가 build 결과물을 `node`로 직접 실행하는 현재 image인지 확인하고 `./bin/modelnaru start`로 rebuild
 - host에서 접속 불가: `.runtime.env`, gateway port binding과 host Nginx upstream 확인
 - disk 부족: 신규 upload를 중지하고 `data/uploads`, log, Docker image 사용량 확인
 

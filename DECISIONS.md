@@ -59,6 +59,15 @@
 - 이유: 고정 관리자 bootstrap 요구를 유지하면서 session 만료·동시 로그인 제한은 하나의 저장 구조로 관리하기 위함이다.
 - 영향: 관리자 session은 `user_id`가 없고 credential fingerprint로 설정 변경을 감지한다. 일반 사용자 삭제 시 FK cascade로 session을 함께 삭제한다.
 
+### ADR-007: Production runtime에서 package manager 미사용
+
+- 상태: 확정
+- 결정일: 2026-07-22
+- 결정: API, Web, migration container는 build 단계에서 생성된 결과물을 `node`로 직접 실행하고 runtime command에서 `pnpm`이나 Corepack을 호출하지 않는다.
+- 이유: backend internal network는 외부 인터넷이 차단되어 있으며 실행 사용자별 Corepack cache가 없으면 container 시작 중 package manager download가 발생할 수 있다.
+- 대안: runtime image에 pnpm을 별도 고정 설치, backend network의 외부 통신 허용.
+- 영향: production 시작은 package registry 상태와 무관하며, 실행 경로가 바뀌면 Dockerfile과 runtime command 정적 검증을 함께 갱신한다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

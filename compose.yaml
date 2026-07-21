@@ -91,7 +91,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ['pnpm', '--filter', '@modelnaru/database', 'migrate']
+    command:
+      [
+        'node',
+        '--enable-source-maps',
+        '/workspace/packages/database/dist/migrate.js',
+      ]
     environment:
       APICHAT_CONFIG_FILE: /app/config.yaml
       NODE_ENV: production

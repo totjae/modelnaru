@@ -27,6 +27,7 @@
 | DB-API-001         | 단위 | readiness            | DB 정상 응답과 비민감 503 응답 검증                | 통과   |
 | DB-INTEGRATION-001 | 통합 | PostgreSQL migration | 최초 적용·재실행·schema_migrations 기록 확인       | 미검증 |
 | DB-INTEGRATION-002 | 통합 | Compose 시작 순서    | migrate 성공 후 API healthy, DB 중단 시 ready 실패 | 미검증 |
+| DB-STATIC-002      | 정적 | Runtime command      | API·Web·migration이 package manager 없이 실행      | 통과   |
 
 ## 4. 실행 환경
 
@@ -52,14 +53,14 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 19개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 20개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
 - Compose YAML에서 host port를 가진 service가 gateway 하나뿐임을 단위시험으로 확인
 - Ubuntu에서 gateway·Web·API·PostgreSQL·Valkey healthy, `127.0.0.1:32432` 단일 publish, 외부 HTTPS Web과 health API 통신 확인
 
-Database migration 변경은 아직 Ubuntu server에 배포하지 않았으므로 DB 통합 항목은 미검증이다.
+2026-07-22 Ubuntu 최초 migration 실행은 internal backend network에서 Corepack이 `pnpm`을 내려받으려다 DNS `EAI_AGAIN`으로 실패했다. PostgreSQL은 healthy였고 migration 적용 전 실패하여 schema 손상은 없었다. Runtime command를 build된 JavaScript의 직접 `node` 실행으로 변경했으며 재배포 통합 검증은 아직 남아 있다.
 
 ## 7. 오류·경계 조건
 
