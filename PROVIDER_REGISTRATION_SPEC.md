@@ -36,11 +36,11 @@
 
 일부 제공자는 API 키 하나로 등록할 수 없으므로 제공자 선택 후 전용 자격증명 폼을 표시한다.
 
-| 제공자 | 필요한 자격증명 |
-|---|---|
-| Vertex AI | Access Token 또는 Project ID, Client Email, Private Key, Region |
-| AWS Bedrock | Bedrock API Key 또는 Access Key ID, Secret Access Key, 선택적 Session Token, Region |
-| GitHub Copilot | GitHub OAuth 로그인, 클라이언트 계열 선택, 필요시 Machine ID·Device ID |
+| 제공자         | 필요한 자격증명                                                                     |
+| -------------- | ----------------------------------------------------------------------------------- |
+| Vertex AI      | Access Token 또는 Project ID, Client Email, Private Key, Region                     |
+| AWS Bedrock    | Bedrock API Key 또는 Access Key ID, Secret Access Key, 선택적 Session Token, Region |
+| GitHub Copilot | GitHub OAuth 로그인, 클라이언트 계열 선택, 필요시 Machine ID·Device ID              |
 
 이 세 제공자는 간편 등록 UX를 유지하되 버튼 이름을 “API 키 입력”이 아니라 “자격증명 연결”로 표시한다.
 
@@ -50,16 +50,16 @@
 
 참고 파일의 내장 제공자는 다음과 같다.
 
-| ID | 표시 이름 | 인증 유형 | 기본 연결 엔진 |
-|---|---|---|---|
-| `openai` | OpenAI | API Key | OpenAI Chat·Responses |
-| `anthropic` | Anthropic | API Key | Anthropic Messages |
-| `google` | Google AI Studio | API Key | Gemini GenerateContent |
-| `gemini-express` | Gemini Express Mode | API 유형, 템플릿 정책 확인 필요 | Gemini GenerateContent |
-| `novelai` | NovelAI | API Key | NovelAI OpenAI 호환 |
-| `vertex` | Vertex AI | Access Token 또는 Service Account | Gemini·Anthropic on Vertex |
-| `bedrock` | AWS Bedrock | Bedrock API Key 또는 AWS IAM | Anthropic Invoke·OpenAI 호환 |
-| `copilot` | GitHub Copilot | OAuth | Copilot 전용 연결 |
+| ID               | 표시 이름           | 인증 유형                         | 기본 연결 엔진               |
+| ---------------- | ------------------- | --------------------------------- | ---------------------------- |
+| `openai`         | OpenAI              | API Key                           | OpenAI Chat·Responses        |
+| `anthropic`      | Anthropic           | API Key                           | Anthropic Messages           |
+| `google`         | Google AI Studio    | API Key                           | Gemini GenerateContent       |
+| `gemini-express` | Gemini Express Mode | API 유형, 템플릿 정책 확인 필요   | Gemini GenerateContent       |
+| `novelai`        | NovelAI             | API Key                           | NovelAI OpenAI 호환          |
+| `vertex`         | Vertex AI           | Access Token 또는 Service Account | Gemini·Anthropic on Vertex   |
+| `bedrock`        | AWS Bedrock         | Bedrock API Key 또는 AWS IAM      | Anthropic Invoke·OpenAI 호환 |
+| `copilot`        | GitHub Copilot      | OAuth                             | Copilot 전용 연결            |
 
 1차 UI에서는 전체 내장 제공자 catalog를 보존하되 OpenAI, Anthropic, Google AI Studio와 LLM Gateway를 우선 노출한다. Vertex AI, Bedrock, NovelAI, Gemini Express, GitHub Copilot은 “고급 제공자” 그룹으로 분리한다. 전용 adapter가 아직 완료되지 않은 제공자는 숨기지 않고 `준비 중`으로 표시한다.
 
@@ -107,13 +107,10 @@ type ProviderTemplate = {
   id: string;
   name: string;
   baseUrl: string;
-  auth: "bearer" | "bearer-optional" | "none";
+  auth: 'bearer' | 'bearer-optional' | 'none';
   modelListing?: string;
-  defaultFormat: "openai" | "responses" | "anthropic";
-  formats: Partial<Record<
-    "openai" | "responses" | "anthropic",
-    string
-  >>;
+  defaultFormat: 'openai' | 'responses' | 'anthropic';
+  formats: Partial<Record<'openai' | 'responses' | 'anthropic', string>>;
   modelFilter?: Record<string, unknown>;
   modelIdSuffix?: string;
   staticModels?: Array<{
@@ -131,12 +128,12 @@ type ProviderTemplate = {
   defaultBody?: Record<string, unknown>;
   caching?: ProviderCachingPolicy;
   providerTools?: {
-    web_search?: Array<"openai" | "responses" | "anthropic">;
+    web_search?: Array<'openai' | 'responses' | 'anthropic'>;
   };
   usage?: ProviderUsageDefinition;
   sessionAffinity?: {
     field: string;
-    target: "header" | "body";
+    target: 'header' | 'body';
   };
 };
 ```

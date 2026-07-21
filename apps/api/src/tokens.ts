@@ -1,0 +1,1 @@
+export const MODELNARU_CONFIG = Symbol('MODELNARU_CONFIG');

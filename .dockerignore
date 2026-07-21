@@ -1,0 +1,10 @@
+.git
+.next
+.runtime.env
+config.yaml
+coverage
+data
+dist
+node_modules
+secrets
+*.log

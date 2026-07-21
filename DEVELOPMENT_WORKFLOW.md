@@ -1,5 +1,7 @@
 # 개발 및 상세 문서 관리 원칙
 
+모든 개발 에이전트는 먼저 저장소 root의 [AGENTS.md](./AGENTS.md)를 읽고 이 문서와 함께 적용한다.
+
 ## 1. 목적
 
 다음 단계부터 실제 개발을 진행하면서 구현 상세 문서를 코드와 함께 지속적으로 작성하고 갱신한다. 문서는 사전 계획용 초안으로 끝내지 않고 실제 동작을 설명하는 최신 기준 자료로 유지한다.
@@ -20,18 +22,18 @@
 
 개발하면서 다음 문서를 생성하고 유지한다.
 
-| 문서 | 작성 시점 | 주요 내용 |
-|---|---|---|
-| `API_SPEC.md` | 첫 API 구현 전 | endpoint, 인증, request·response, pagination, 오류, idempotency |
-| `DATABASE_SCHEMA.md` | 첫 migration 전 | table, column, FK, index, unique, cascade, 보존·삭제 |
-| `CHAT_STATE_SPEC.md` | 채팅 저장 구현 전 | 생성·streaming·완료·취소·부분실패·재생성·branch 상태 전이 |
-| `FILE_PROCESSING_SPEC.md` | upload 구현 전 | MIME, 크기, encoding, PDF, 이미지, 저장·만료·삭제 queue |
-| `SECURITY_SPEC.md` | 인증 구현 전 | 관리자 bootstrap, Argon2id, TOTP, session, CSRF, CSP, SSRF, encryption |
-| `PROVIDER_CONTRACT_TESTS.md` | 첫 provider adapter 구현 시 | provider별 model 조회, request fixture, stream, usage, 오류 검증 결과 |
-| `DEPLOYMENT_RUNBOOK.md` | 첫 서버 배포 전 | Ubuntu 설치, Compose, Nginx, port, update, rollback, healthcheck |
-| `TEST_PLAN.md` | 첫 기능 구현과 동시에 | 단위·통합·E2E·보안·복구 시험과 인수 결과 |
-| `IMPLEMENTATION_STATUS.md` | 개발 시작 시 | 기능별 진행 상태, 검증 결과, 알려진 제한 |
-| `DECISIONS.md` | 설계 선택 발생 시 | 결정, 대안, 선택 이유, 영향과 변경 날짜 |
+| 문서                         | 작성 시점                   | 주요 내용                                                              |
+| ---------------------------- | --------------------------- | ---------------------------------------------------------------------- |
+| `API_SPEC.md`                | 첫 API 구현 전              | endpoint, 인증, request·response, pagination, 오류, idempotency        |
+| `DATABASE_SCHEMA.md`         | 첫 migration 전             | table, column, FK, index, unique, cascade, 보존·삭제                   |
+| `CHAT_STATE_SPEC.md`         | 채팅 저장 구현 전           | 생성·streaming·완료·취소·부분실패·재생성·branch 상태 전이              |
+| `FILE_PROCESSING_SPEC.md`    | upload 구현 전              | MIME, 크기, encoding, PDF, 이미지, 저장·만료·삭제 queue                |
+| `SECURITY_SPEC.md`           | 인증 구현 전                | 관리자 bootstrap, Argon2id, TOTP, session, CSRF, CSP, SSRF, encryption |
+| `PROVIDER_CONTRACT_TESTS.md` | 첫 provider adapter 구현 시 | provider별 model 조회, request fixture, stream, usage, 오류 검증 결과  |
+| `DEPLOYMENT_RUNBOOK.md`      | 첫 서버 배포 전             | Ubuntu 설치, Compose, Nginx, port, update, rollback, healthcheck       |
+| `TEST_PLAN.md`               | 첫 기능 구현과 동시에       | 단위·통합·E2E·보안·복구 시험과 인수 결과                               |
+| `IMPLEMENTATION_STATUS.md`   | 개발 시작 시                | 기능별 진행 상태, 검증 결과, 알려진 제한                               |
+| `DECISIONS.md`               | 설계 선택 발생 시           | 결정, 대안, 선택 이유, 영향과 변경 날짜                                |
 
 외부 backup을 사용하지 않는 현재 정책에서는 `DEPLOYMENT_RUNBOOK.md`에 데이터 유실 위험과 선택적 local dump까지만 기록한다. 추후 외부 backup을 도입하면 별도 `BACKUP_RESTORE_RUNBOOK.md`를 만든다.
 
@@ -78,16 +80,16 @@
 
 ## 6. 변경 유형별 필수 갱신 문서
 
-| 변경 유형 | 반드시 확인·갱신할 문서 |
-|---|---|
-| 로그인·사용자·session | `API_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`, `TEST_PLAN.md` |
-| 대화·message·branch | `API_SPEC.md`, `DATABASE_SCHEMA.md`, `CHAT_STATE_SPEC.md`, `TEST_PLAN.md` |
+| 변경 유형                | 반드시 확인·갱신할 문서                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| 로그인·사용자·session    | `API_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`, `TEST_PLAN.md`                 |
+| 대화·message·branch      | `API_SPEC.md`, `DATABASE_SCHEMA.md`, `CHAT_STATE_SPEC.md`, `TEST_PLAN.md`               |
 | provider·model·parameter | `AI_INTEGRATION_SPEC.md`, `PROVIDER_REGISTRATION_SPEC.md`, `PROVIDER_CONTRACT_TESTS.md` |
-| 파일·PDF·이미지·OCR | `FILE_PROCESSING_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`, `TEST_PLAN.md` |
-| 관리자 log | `ADMIN_LOGGING_SPEC.md`, `DATABASE_SCHEMA.md`, `API_SPEC.md`, `TEST_PLAN.md` |
-| config·port·계정 CLI | `SERVER_CONFIG_SPEC.md`, `DEPLOYMENT_RUNBOOK.md`, `SECURITY_SPEC.md` |
-| Compose·Nginx·Ubuntu | `DEPLOYMENT_PROFILE.md`, `DEPLOYMENT_RUNBOOK.md`, `TEST_PLAN.md` |
-| retention·삭제 | `DATABASE_SCHEMA.md`, `FILE_PROCESSING_SPEC.md`, `ADMIN_LOGGING_SPEC.md` |
+| 파일·PDF·이미지·OCR      | `FILE_PROCESSING_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`, `TEST_PLAN.md`     |
+| 관리자 log               | `ADMIN_LOGGING_SPEC.md`, `DATABASE_SCHEMA.md`, `API_SPEC.md`, `TEST_PLAN.md`            |
+| config·port·계정 CLI     | `SERVER_CONFIG_SPEC.md`, `DEPLOYMENT_RUNBOOK.md`, `SECURITY_SPEC.md`                    |
+| Compose·Nginx·Ubuntu     | `DEPLOYMENT_PROFILE.md`, `DEPLOYMENT_RUNBOOK.md`, `TEST_PLAN.md`                        |
+| retention·삭제           | `DATABASE_SCHEMA.md`, `FILE_PROCESSING_SPEC.md`, `ADMIN_LOGGING_SPEC.md`                |
 
 ## 7. API와 DB의 자동 생성 자료
 

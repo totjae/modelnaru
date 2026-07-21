@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+DEPLOYMENT_ROOT=$(dirname -- "$SCRIPT_DIR")
+APICHAT_UID=${APICHAT_UID:-$(id -u)}
+APICHAT_GID=${APICHAT_GID:-$(id -g)}
+export APICHAT_UID APICHAT_GID
+
+cd "$DEPLOYMENT_ROOT"
+exec docker compose run --rm admin-tool "$@"

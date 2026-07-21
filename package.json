@@ -1,0 +1,31 @@
+{
+  "name": "modelnaru",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted multi-provider AI chat for a small private user group",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @modelnaru/config build && pnpm --filter @modelnaru/admin-cli build && pnpm --filter @modelnaru/api build && pnpm --filter @modelnaru/web build",
+    "dev": "pnpm --parallel --filter @modelnaru/api --filter @modelnaru/web dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings=0",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "admin": "pnpm --filter @modelnaru/admin-cli cli"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@types/node": "^24.1.0",
+    "eslint": "^9.32.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^4.1.10"
+  }
+}

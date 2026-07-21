@@ -1,0 +1,9 @@
+.next
+coverage
+data
+dist
+node_modules
+provider-manager-v1.10.0.js
+secrets
+pnpm-lock.yaml
+apps/web/next-env.d.ts

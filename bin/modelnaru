@@ -1,0 +1,49 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+DEPLOYMENT_ROOT=$(dirname -- "$SCRIPT_DIR")
+COMMAND=${1:-help}
+APICHAT_UID=${APICHAT_UID:-$(id -u)}
+APICHAT_GID=${APICHAT_GID:-$(id -g)}
+export APICHAT_UID APICHAT_GID
+
+cd "$DEPLOYMENT_ROOT"
+
+case "$COMMAND" in
+  start)
+    "$SCRIPT_DIR/apichat-admin" validate
+    "$SCRIPT_DIR/apichat-admin" render-env
+    exec docker compose --env-file .runtime.env up -d --build
+    ;;
+  stop)
+    exec docker compose --env-file .runtime.env down
+    ;;
+  restart)
+    "$SCRIPT_DIR/apichat-admin" validate
+    "$SCRIPT_DIR/apichat-admin" render-env
+    exec docker compose --env-file .runtime.env up -d --build --force-recreate
+    ;;
+  status)
+    exec docker compose --env-file .runtime.env ps
+    ;;
+  logs)
+    exec docker compose --env-file .runtime.env logs --tail=200 -f
+    ;;
+  help|-h|--help)
+    printf '%s\n' \
+      'Usage: ./bin/modelnaru <command>' \
+      '' \
+      'Commands:' \
+      '  start    설정을 검증하고 서비스를 build·시작' \
+      '  stop     서비스를 종료' \
+      '  restart  설정을 검증하고 container를 다시 생성' \
+      '  status   container 상태 표시' \
+      '  logs     최근 log를 표시하고 계속 추적' \
+      '  help     이 도움말 표시'
+    ;;
+  *)
+    printf 'Unknown command: %s\n' "$COMMAND" >&2
+    exit 2
+    ;;
+esac

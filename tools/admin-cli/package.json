@@ -1,0 +1,25 @@
+{
+  "name": "@modelnaru/admin-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "apichat-admin": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "cli": "node --enable-source-maps dist/cli.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "@modelnaru/config": "workspace:*",
+    "@node-rs/argon2": "^2.0.2",
+    "qrcode": "^1.5.4",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5"
+  }
+}

@@ -56,8 +56,8 @@ server:
 
 admin:
   username: admin
-  passwordHash: "$argon2id$v=19$..."
-  totpSecret: "BASE32_SECRET"
+  passwordHash: '$argon2id$v=19$...'
+  totpSecret: 'BASE32_SECRET'
   requireTotp: true
 
 database:
@@ -127,14 +127,14 @@ TOTP 복구 code는 일회용으로 생성하고 hash만 DB에 저장한다. 원
 
 도구는 서버 배포물과 같은 폴더에 포함하고 다음 기능을 제공한다.
 
-| 명령 | 기능 |
-|---|---|
-| `init` | 기본 `config.yaml`, secret과 data 폴더 생성 및 최초 관리자 설정 |
-| `set-username` | 고정 관리자 ID 변경 |
-| `set-password` | 숨김 입력으로 새 비밀번호를 두 번 받고 Argon2id hash 저장 |
-| `reset-totp` | 새 TOTP secret·QR과 일회용 복구 code 생성 |
-| `validate` | config schema, 권한, 경로, secret 존재 여부 검사 |
-| `show` | 민감값을 마스킹한 현재 시작 설정 표시 |
+| 명령           | 기능                                                            |
+| -------------- | --------------------------------------------------------------- |
+| `init`         | 기본 `config.yaml`, secret과 data 폴더 생성 및 최초 관리자 설정 |
+| `set-username` | 고정 관리자 ID 변경                                             |
+| `set-password` | 숨김 입력으로 새 비밀번호를 두 번 받고 Argon2id hash 저장       |
+| `reset-totp`   | 새 TOTP secret·QR과 일회용 복구 code 생성                       |
+| `validate`     | config schema, 권한, 경로, secret 존재 여부 검사                |
+| `show`         | 민감값을 마스킹한 현재 시작 설정 표시                           |
 
 Docker만 설치된 환경에서는 동일 기능을 다음과 같이 실행할 수 있게 한다.
 

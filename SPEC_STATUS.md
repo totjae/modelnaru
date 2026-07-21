@@ -10,6 +10,8 @@
 
 개발 중 상세 문서의 지속 작성·갱신은 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)를 의무 기준으로 삼고, 진행 상태는 [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)에서 관리한다.
 
+저장소에서 작업하는 개발 에이전트는 root의 [AGENTS.md](./AGENTS.md)를 반드시 따른다.
+
 ## 1. 현재 판단
 
 현재 문서는 기능 설계와 서버 구조를 시작하기에는 충분하다. 그러나 운영 환경까지 포함한 최종 구현 명세가 모두 확정된 상태는 아니다. 아래 미확정 항목 중 필수 항목을 결정한 뒤 API·DB 상세 설계를 작성해야 실제 구현 중 재작업을 줄일 수 있다.
