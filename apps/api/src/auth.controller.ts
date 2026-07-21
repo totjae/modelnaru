@@ -16,10 +16,10 @@ import type { LoadedConfig } from '@modelnaru/config';
 import { AuthError, AuthService } from './auth.service.js';
 import { MODELNARU_CONFIG } from './tokens.js';
 
-const SESSION_COOKIE = 'modelnaru_session';
-const CSRF_COOKIE = 'modelnaru_csrf';
+export const SESSION_COOKIE = 'modelnaru_session';
+export const CSRF_COOKIE = 'modelnaru_csrf';
 
-interface RequestLike {
+export interface RequestLike {
   headers: Record<string, string | string[] | undefined>;
   ip?: string;
   socket?: { remoteAddress?: string };
@@ -45,11 +45,13 @@ interface LoginBody {
   username: string;
 }
 
-function firstHeader(value: string | string[] | undefined): string | undefined {
+export function firstHeader(
+  value: string | string[] | undefined,
+): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseCookies(header: string | undefined): Map<string, string> {
+export function parseCookies(header: string | undefined): Map<string, string> {
   const cookies = new Map<string, string>();
   for (const item of header?.split(';') ?? []) {
     const separator = item.indexOf('=');

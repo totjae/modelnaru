@@ -64,6 +64,14 @@
 - header 원문은 CSRF cookie와 constant-time 비교하고, SHA-256 값은 DB의 `csrf_token_hash`와 비교한다.
 - same-origin Web만 사용하고 CORS를 활성화하지 않는다.
 
+### 6.4 관리자 사용자 관리 권한
+
+- 사용자 목록은 관리자 session guard, 생성·수정·비밀번호 변경·삭제는 관리자 session과 CSRF guard를 모두 통과해야 한다.
+- 일반 사용자용 session이 추가돼도 관리자 guard는 `principal_type: admin` session만 허용한다.
+- 관리자 ID와 대소문자만 다른 일반 사용자 ID를 생성할 수 없다.
+- 사용자 관리 response·오류·감사 snapshot에는 password와 password hash를 포함하지 않는다.
+- 삭제 감사 snapshot에서는 삭제 사용자의 username과 display name도 제거한다.
+
 ## 7. 오류·경계 조건
 
 - 설정 parse 오류, 허용 범위를 벗어난 제한값, 필수 secret 파일 부재는 시작 실패 사유다.

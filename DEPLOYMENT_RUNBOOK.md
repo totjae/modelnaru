@@ -72,6 +72,24 @@ docker compose exec postgres \
   -c "SELECT principal_type, account_key, created_at, last_seen_at, revoked_at, revoked_reason FROM sessions ORDER BY created_at DESC LIMIT 5;"
 ```
 
+### 6.2 사용자 관리 점검
+
+관리자 로그인 후 사용자 관리 화면에서 시험 계정을 생성하고 표시 이름 편집, 비활성화·활성화와 비밀번호 변경을 확인한다. 삭제는 해당 사용자의 session과 향후 연결 데이터까지 제거하는 작업이므로 시험 계정에만 수행한다.
+
+두 번째 migration과 감사 기록은 다음처럼 확인한다.
+
+```bash
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT version, applied_at FROM schema_migrations ORDER BY version;"
+
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT action, target_type, target_id, occurred_at FROM audit_logs ORDER BY occurred_at DESC LIMIT 10;"
+```
+
+`0002_user_management_audit.sql`이 기록되고 사용자 작업별 `user.created`, `user.updated`·`user.enabled`·`user.disabled`, `user.password_changed`, `user.deleted` 이벤트가 나타나야 한다. 감사 JSON이나 지원 자료에 실제 password·cookie를 포함하지 않는다.
+
 ## 7. Update와 rollback
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.

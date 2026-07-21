@@ -143,6 +143,12 @@ export class AuthService {
     };
   }
 
+  hashIpAddress(ipAddress: string | undefined): Buffer | null {
+    return ipAddress
+      ? createKeyedMetadataHash(this.credentialFingerprint, 'ip', ipAddress)
+      : null;
+  }
+
   async authenticate(
     sessionToken: string | undefined,
   ): Promise<AuthenticatedAdminSession> {
@@ -197,6 +203,15 @@ export class AuthService {
     csrfHeader: string | undefined;
     sessionToken: string | undefined;
   }): Promise<void> {
+    const session = await this.authenticateWithCsrf(input);
+    await this.repository.revokeSession(session.row.id, 'logout');
+  }
+
+  async authenticateWithCsrf(input: {
+    csrfCookie: string | undefined;
+    csrfHeader: string | undefined;
+    sessionToken: string | undefined;
+  }): Promise<AuthenticatedAdminSession> {
     const session = await this.authenticate(input.sessionToken);
     const csrfHeader = input.csrfHeader ?? '';
     const csrfCookie = input.csrfCookie ?? '';
@@ -208,7 +223,7 @@ export class AuthService {
     if (!csrfHeader || !cookieMatchesHeader || !hashMatches) {
       throw new AuthError('AUTH_CSRF_INVALID', 403, 'CSRF validation failed.');
     }
-    await this.repository.revokeSession(session.row.id, 'logout');
+    return session;
   }
 
   private sessionRequired(): AuthError {

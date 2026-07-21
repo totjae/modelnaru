@@ -58,4 +58,18 @@ describe('migration plan', () => {
     expect(sql).toContain('sessions_active_account_created_idx');
     expect(sql).toContain('octet_length(token_hash) = 32');
   });
+
+  it('contains the user-management audit table without credential fields', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0002_user_management_audit.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE audit_logs');
+    expect(sql).toContain('before_data jsonb');
+    expect(sql).toContain('after_data jsonb');
+    expect(sql).toContain('audit_logs_target_idx');
+    expect(sql).not.toContain('password_hash');
+    expect(sql).not.toContain('token_hash');
+  });
 });

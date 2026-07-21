@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
-import postgres, { type Sql } from 'postgres';
+import postgres, { type Sql, type TransactionSql } from 'postgres';
 
 import type { LoadedConfig } from '@modelnaru/config';
 
 export type DatabaseClient = Sql<Record<string, never>>;
+export type DatabaseTransaction = TransactionSql<Record<string, never>>;
 
 export async function readDatabaseUrl(loaded: LoadedConfig): Promise<string> {
   const databaseUrl = (

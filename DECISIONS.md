@@ -77,6 +77,15 @@
 - 대안: stateless JWT access·refresh token, cookie session middleware 저장소, SameSite cookie만 사용하는 CSRF 방어.
 - 영향: 모든 후속 관리자·사용자 mutation API는 공통 session 인증과 CSRF 검증을 적용하며, cookie 원문과 CSRF 원문을 log나 DB에 저장하지 않는다.
 
+### ADR-009: 사용자 mutation과 감사 기록의 단일 transaction
+
+- 상태: 확정
+- 결정일: 2026-07-22
+- 결정: 사용자 생성·수정·비활성화·비밀번호 변경·삭제와 해당 `audit_logs` insert, 필요한 session 폐기를 하나의 PostgreSQL transaction에서 처리한다.
+- 이유: 계정은 변경됐지만 감사 기록이나 session 폐기가 누락되는 부분 성공을 방지하기 위함이다.
+- 대안: application log만 기록, 비동기 audit queue, 사용자 변경 후 별도 audit insert.
+- 영향: audit insert 실패 시 사용자 mutation도 rollback한다. password·hash·token은 snapshot에서 제외하고 삭제 이벤트는 사용자 표시 identity도 제거한다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

@@ -2,6 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 
+import { csrfToken } from './client-auth';
+import { UserManager } from './user-manager';
+
 interface Principal {
   type: 'admin';
   username: string;
@@ -9,15 +12,6 @@ interface Principal {
 
 interface SessionResponse {
   principal: Principal;
-}
-
-function csrfToken(): string {
-  const prefix = 'modelnaru_csrf=';
-  const item = document.cookie
-    .split(';')
-    .map((value) => value.trim())
-    .find((value) => value.startsWith(prefix));
-  return item?.slice(prefix.length) ?? '';
 }
 
 export default function HomePage() {
@@ -93,6 +87,32 @@ export default function HomePage() {
     }
   }
 
+  if (!checking && principal) {
+    return (
+      <main className="admin-shell">
+        <header className="admin-header">
+          <div className="admin-brand">
+            <div className="mark compact-mark" aria-hidden="true">
+              나루
+            </div>
+            <div>
+              <p className="eyebrow">MODELNARU · ADMIN</p>
+              <h1>관리자 공간</h1>
+            </div>
+          </div>
+          <div className="admin-session">
+            <span>{principal.username}</span>
+            <button type="button" onClick={logout} disabled={submitting}>
+              {submitting ? '처리 중…' : '로그아웃'}
+            </button>
+          </div>
+        </header>
+        {error && <div className="banner error-banner">{error}</div>}
+        <UserManager />
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <section className="brand-panel" aria-labelledby="page-title">
@@ -115,19 +135,6 @@ export default function HomePage() {
         {checking ? (
           <div className="auth-card loading-card" role="status">
             <span className="spinner" /> 세션 확인 중
-          </div>
-        ) : principal ? (
-          <div className="auth-card signed-in">
-            <p className="card-label">ADMIN SESSION</p>
-            <h2>{principal.username}</h2>
-            <p>
-              관리자 인증이 완료되었습니다. 다음 단계에서 사용자 관리가 이
-              공간에 연결됩니다.
-            </p>
-            <button type="button" onClick={logout} disabled={submitting}>
-              {submitting ? '처리 중…' : '로그아웃'}
-            </button>
-            {error && <p className="form-error">{error}</p>}
           </div>
         ) : (
           <form className="auth-card" onSubmit={login}>
