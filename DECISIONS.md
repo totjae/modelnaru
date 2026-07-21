@@ -68,6 +68,15 @@
 - 대안: runtime image에 pnpm을 별도 고정 설치, backend network의 외부 통신 허용.
 - 영향: production 시작은 package registry 상태와 무관하며, 실행 경로가 바뀌면 Dockerfile과 runtime command 정적 검증을 함께 갱신한다.
 
+### ADR-008: Opaque server session과 double-submit CSRF
+
+- 상태: 확정
+- 결정일: 2026-07-22
+- 결정: 인증은 browser에 무작위 opaque session cookie를 발급하고 DB에는 SHA-256 hash와 만료·폐기 상태만 저장한다. 상태 변경 요청은 읽기 가능한 CSRF cookie, `X-CSRF-Token` header와 DB hash를 모두 검증한다.
+- 이유: JWT처럼 credential 변경 이후에도 자체 유효한 token을 남기지 않고, 고정 관리자 설정 변경·동시 session 제한·강제 logout을 server에서 즉시 적용하기 위함이다.
+- 대안: stateless JWT access·refresh token, cookie session middleware 저장소, SameSite cookie만 사용하는 CSRF 방어.
+- 영향: 모든 후속 관리자·사용자 mutation API는 공통 session 인증과 CSRF 검증을 적용하며, cookie 원문과 CSRF 원문을 log나 DB에 저장하지 않는다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

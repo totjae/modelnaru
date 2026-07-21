@@ -1,0 +1,98 @@
+import type { LoadedConfig } from '@modelnaru/config';
+import { HttpException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
+
+import { AuthController } from '../src/auth.controller.js';
+import type { AuthService } from '../src/auth.service.js';
+
+const loadedConfig = {
+  config: {
+    security: { cookieSameSite: 'lax', cookieSecure: true },
+  },
+} as LoadedConfig;
+
+function response() {
+  return {
+    clearCookie: vi.fn(),
+    cookie: vi.fn(),
+    setHeader: vi.fn(),
+  };
+}
+
+describe('AuthController', () => {
+  it('sets secure host-only session and CSRF cookies after login', async () => {
+    const absoluteExpiresAt = new Date(Date.now() + 86_400_000);
+    const auth = {
+      login: vi.fn(() =>
+        Promise.resolve({
+          absoluteExpiresAt,
+          csrfToken: 'csrf-token',
+          idleExpiresAt: new Date(Date.now() + 3_600_000),
+          row: {},
+          sessionToken: 'session-token',
+          username: 'admin',
+        }),
+      ),
+    };
+    const controller = new AuthController(
+      auth as unknown as AuthService,
+      loadedConfig,
+    );
+    const target = response();
+
+    await expect(
+      controller.login(
+        {
+          password: 'correct-password',
+          totp: '123456',
+          username: 'admin',
+        },
+        { headers: { 'user-agent': 'test' }, ip: '203.0.113.10' },
+        target,
+      ),
+    ).resolves.toMatchObject({
+      principal: { type: 'admin', username: 'admin' },
+    });
+    expect(target.cookie).toHaveBeenNthCalledWith(
+      1,
+      'modelnaru_session',
+      'session-token',
+      expect.objectContaining({
+        httpOnly: true,
+        path: '/',
+        sameSite: 'lax',
+        secure: true,
+      }),
+    );
+    expect(target.cookie.mock.calls[0]?.[2]).not.toHaveProperty('domain');
+    expect(target.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    expect(target.cookie).toHaveBeenNthCalledWith(
+      2,
+      'modelnaru_csrf',
+      'csrf-token',
+      expect.objectContaining({
+        httpOnly: false,
+        path: '/',
+        sameSite: 'lax',
+        secure: true,
+      }),
+    );
+  });
+
+  it('rejects malformed login input before password verification', async () => {
+    const auth = { login: vi.fn() };
+    const controller = new AuthController(
+      auth as unknown as AuthService,
+      loadedConfig,
+    );
+
+    await expect(
+      controller.login(
+        { password: '', totp: 'x', username: 'a' },
+        { headers: {} },
+        response(),
+      ),
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(auth.login).not.toHaveBeenCalled();
+  });
+});

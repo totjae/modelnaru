@@ -40,4 +40,11 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     }
     await checkDatabase(this.client);
   }
+
+  getClient(): DatabaseClient {
+    if (!this.client) {
+      throw new Error('Database client is not initialized');
+    }
+    return this.client;
+  }
 }

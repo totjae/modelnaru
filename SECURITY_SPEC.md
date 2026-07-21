@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-이번 기반 단계는 시작 설정, 관리자 credential 생성, container port, proxy 신뢰, 파일 권한과 log 노출을 다룬다. 로그인·session·CSRF의 실제 구현은 다음 인증 단계에서 확장한다.
+시작 설정, 관리자 credential, container 경계와 고정 관리자 로그인·session·CSRF 구현을 다룬다.
 
 ## 3. 시작 설정과 secret
 
@@ -40,11 +40,36 @@
 - 세션은 계정당 최대 3개, idle 24시간, absolute 7일을 기본값으로 한다.
 - 관리자 credential 변경 시 기존 관리자 session 전체 만료를 인증 단계에서 구현한다.
 
+### 6.1 Password와 TOTP
+
+- 비밀번호는 `@node-rs/argon2`로 config의 Argon2id PHC 문자열을 검증한다.
+- TOTP는 RFC 6238 SHA-1, 30초 period, 6자리이며 server 시각 기준 이전·현재·다음 window만 허용한다.
+- 로그인 실패 response는 ID·비밀번호·TOTP 중 실패 지점을 노출하지 않는다.
+- 로그인 실패 제한은 API process별 username·IP 조합에 적용한다. 5회부터 일시 차단하며 성공 시 해당 기록을 제거한다.
+
+### 6.2 Session token과 cookie
+
+- session token과 CSRF token은 각각 CSPRNG 32 bytes를 base64url로 생성한다.
+- DB에는 각 token의 SHA-256 hash만 저장하고 원문은 cookie로만 전달한다.
+- `modelnaru_session`: HttpOnly, Secure, 설정된 SameSite, Path `/`, absolute 만료까지의 Max-Age.
+- `modelnaru_csrf`: Secure, 설정된 SameSite, Path `/`, JavaScript가 header에 복사할 수 있도록 HttpOnly를 사용하지 않음.
+- cookie Domain은 설정하지 않아 현재 host 전용으로 둔다.
+- session 인증 시 idle·absolute 만료, revoked 상태와 관리자 credential fingerprint를 모두 검증한다.
+- credential fingerprint는 관리자 ID·password hash·TOTP secret·MFA 설정의 SHA-256이며 원문 credential은 session table에 저장하지 않는다.
+- 활성 session은 최대 3개이고 네 번째 login transaction에서 `last_seen_at`이 가장 오래된 session을 폐기한다.
+
+### 6.3 CSRF
+
+- 상태 변경 인증 API는 `X-CSRF-Token` header를 요구한다.
+- header 원문은 CSRF cookie와 constant-time 비교하고, SHA-256 값은 DB의 `csrf_token_hash`와 비교한다.
+- same-origin Web만 사용하고 CORS를 활성화하지 않는다.
+
 ## 7. 오류·경계 조건
 
 - 설정 parse 오류, 허용 범위를 벗어난 제한값, 필수 secret 파일 부재는 시작 실패 사유다.
 - 개발용 HTTP는 명시적인 development mode에서만 허용하며 production 검증에는 사용할 수 없다.
 - CLI는 비대화형 terminal에서 비밀번호를 받을 수 없으면 실패하고 사용자가 TTY에서 다시 실행하도록 안내한다.
+- server 시각이 크게 틀리면 정상 TOTP도 거부되므로 production host의 시간 동기화가 필요하다.
 
 ## 8. 검증·인수 조건
 
@@ -52,8 +77,11 @@
 - 저장소 추적 파일에 실제 secret이 없다.
 - Compose에서 gateway 외 port가 host에 publish되지 않는다.
 - `show` 명령 결과에 민감값이 나타나지 않는다.
+- 인증 cookie 속성, TOTP window, session 만료·폐기와 CSRF 거부 시험이 통과한다.
 
 ## 9. 미결정·보류 항목
 
-- session token 저장 형식과 rotation은 인증 단계에서 결정한다.
+- 장기 session token rotation은 보류하며 logout·credential 변경·만료 시 폐기한다.
 - provider credential envelope encryption 구현은 provider registry 단계에서 결정한다.
+- 로그인 실패 제한을 Valkey 공유 제한으로 전환하는 것은 다중 API instance 도입 시 수행한다.
+- 관리자 TOTP 복구 code는 아직 구현하지 않는다.

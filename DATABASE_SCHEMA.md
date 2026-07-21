@@ -87,6 +87,9 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 - token, CSRF token과 원본 IP는 저장하지 않는다.
 - `last_seen_at >= created_at`, `idle_expires_at > last_seen_at`, `absolute_expires_at > created_at`이어야 한다.
 - 계정별 활성 session 최대 3개 제한은 인증 transaction에서 적용한다.
+- 고정 관리자 `account_key`는 정규화한 관리자 ID에서 파생하고 login transaction에서 advisory lock으로 직렬화한다.
+- `credential_fingerprint`는 관리자 시작 credential의 SHA-256이며 config 변경 후 기존 row가 조회돼도 인증 단계에서 폐기한다.
+- idle·absolute 만료 row는 login 또는 인증 요청에서 lazy revoke하며 자동 hard delete 주기는 아직 두지 않는다.
 
 Index:
 
@@ -116,4 +119,4 @@ Index:
 
 - Provider와 암호화 credential schema는 Provider registry 단계에서 추가한다.
 - 대화·branch·첨부 삭제 관계는 채팅과 파일 상세 명세 작성 후 추가한다.
-- session 자동 정리 주기와 보존 log는 인증·운영 단계에서 확정한다.
+- 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.

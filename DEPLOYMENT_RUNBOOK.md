@@ -60,6 +60,18 @@ docker compose run --rm migrate
 
 Production container는 build 결과물을 `node`로 직접 실행하며 시작 시 `pnpm`, Corepack 또는 외부 package registry에 접근하지 않는다. 따라서 backend internal network에서도 migration과 API가 시작되어야 한다.
 
+### 6.1 관리자 로그인 점검
+
+배포 후 `https://chat.mihoservice.xyz`에서 서버 설정의 관리자 ID·비밀번호와 인증 앱의 현재 6자리 TOTP code로 로그인한다. 새로고침 후 session 유지와 로그아웃을 확인한다. 브라우저 개발자 도구에서는 `modelnaru_session` cookie가 Secure·HttpOnly·SameSite이고 `modelnaru_csrf`가 Secure·SameSite인지 확인한다. 실제 cookie 원문은 log나 지원 요청에 첨부하지 않는다.
+
+Session row는 다음과 같이 원문 token 없이 확인한다.
+
+```bash
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT principal_type, account_key, created_at, last_seen_at, revoked_at, revoked_reason FROM sessions ORDER BY created_at DESC LIMIT 5;"
+```
+
 ## 7. Update와 rollback
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.
@@ -79,6 +91,7 @@ Rollback은 이전에 기록한 commit으로 새 worktree나 별도 배포 direc
 - migrate 실패: `docker compose logs migrate postgres`에서 checksum·SQL·연결 오류 확인. 적용된 migration 파일은 수정하지 않음
 - migrate log에 Corepack 또는 registry download가 나타남: runtime command가 build 결과물을 `node`로 직접 실행하는 현재 image인지 확인하고 `./bin/modelnaru start`로 rebuild
 - host에서 접속 불가: `.runtime.env`, gateway port binding과 host Nginx upstream 확인
+- TOTP login 실패: server 시간 동기화 상태와 인증 앱의 현재 code 확인. ID·비밀번호·TOTP 원문은 log에 남기지 않음
 - disk 부족: 신규 upload를 중지하고 `data/uploads`, log, Docker image 사용량 확인
 
 ## 9. 검증·인수 조건

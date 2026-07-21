@@ -20,7 +20,7 @@
 | 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                               |
 | `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                |
 | 데이터베이스         | 구현 완료 | users·sessions schema, checksum migration, Ubuntu 최초 적용과 DB readiness 확인 |
-| 인증·session         | 계획      | 고정 관리자와 사용자 로그인                                                     |
+| 인증·session         | 구현 완료 | 고정 관리자 TOTP·서버 session·CSRF·로그아웃, Ubuntu HTTPS 검증 필요             |
 | 사용자 관리          | 계획      | 관리자 전용                                                                     |
 | provider registry    | 계획      | 전체 catalog snapshot과 검증 등급                                               |
 | AI streaming         | 계획      | 공통 ChatEvent와 취소                                                           |
