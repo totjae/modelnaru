@@ -115,9 +115,12 @@ Nginx upstream은 `127.0.0.1:32432`를 사용한다. 외부 client가 32432 port
 - PDF·OCR worker 장애가 web/API process를 종료시키지 않음
 - disk 또는 DB 오류 시 신규 AI 호출 전에 명확한 오류를 반환하여 답변만 생성되고 저장되지 않는 상황 방지
 
-## 8. 아직 필요한 실제 환경 정보
+## 8. 확정된 실제 배포 정보
 
-1. 실제 domain을 `publicBaseUrl`과 `allowedHosts`에 입력
-2. 서버 구동 파일을 둘 배포 root 경로(`/opt/apichat` 권장)
+- public URL: `https://chat.mihoservice.xyz`
+- 배포 root: `/home/totquf4171/modelnaru`
+- Nginx site: `/etc/nginx/sites-available/modelnaru`
+- Nginx upstream: `127.0.0.1:32432`
+- TLS: Certbot의 `chat.mihoservice.xyz` 인증서와 자동 갱신
 
-이 정보가 확정되면 container image, host volume과 Nginx upstream 설정을 최종 확정할 수 있다.
+2026-07-21 외부 회선에서 HTTPS Web과 health API 연결을 확인했다.

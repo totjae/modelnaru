@@ -21,29 +21,29 @@
 
 현재 확정된 N100 미니 PC·1~3명·공개 인터넷 환경의 구체적인 자원 한도와 보안 설정은 [DEPLOYMENT_PROFILE.md](./DEPLOYMENT_PROFILE.md)를 따른다. 이 환경에서는 일반 권장안의 Caddy 대신 기존 Nginx를 사용한다.
 
-| 영역              | 권장 기술                                             |
-| ----------------- | ----------------------------------------------------- |
-| 개발 언어         | TypeScript / Node.js LTS                              |
-| 저장소 구조       | pnpm workspace 기반 monorepo                          |
-| 웹 프론트엔드     | Next.js App Router                                    |
-| 백엔드 API        | NestJS modular monolith                               |
-| UI                | Tailwind CSS + shadcn/ui                              |
-| 데이터베이스      | PostgreSQL                                            |
-| ORM·마이그레이션  | Prisma                                                |
-| 인증              | 자체 서버 세션 + Argon2id                             |
-| AI 연동           | 자체 Provider Registry·Adapter                        |
-| 답변 스트리밍     | POST 응답 기반 SSE 형식                               |
-| 파일 저장         | 로컬 마운트 볼륨 + Storage Adapter                    |
-| PDF 처리          | PyMuPDF 기반 별도 worker                              |
-| OCR(2차)          | PaddleOCR                                             |
-| 백그라운드 작업   | BullMQ + Valkey, 도입 전 호환성 통합 테스트           |
-| 애플리케이션 로그 | Pino JSON + PostgreSQL 관리 로그                      |
-| 관측성            | OpenTelemetry + Prometheus/Grafana, 필요 시 Loki 추가 |
-| 리버스 프록시     | 기존 Nginx                                            |
-| 배포              | Docker Compose                                        |
-| 비밀값            | Docker secret 또는 권한 제한 환경 파일                |
-| 테스트            | Vitest + Playwright                                   |
-| 백업              | 초기 외부 backup 미구성, 추후 pg_dump + restic        |
+| 영역                | 권장 기술                                             |
+| ------------------- | ----------------------------------------------------- |
+| 개발 언어           | TypeScript / Node.js LTS                              |
+| 저장소 구조         | pnpm workspace 기반 monorepo                          |
+| 웹 프론트엔드       | Next.js App Router                                    |
+| 백엔드 API          | NestJS modular monolith                               |
+| UI                  | Tailwind CSS + shadcn/ui                              |
+| 데이터베이스        | PostgreSQL                                            |
+| DB client·migration | postgres.js + versioned SQL migration                 |
+| 인증                | 자체 서버 세션 + Argon2id                             |
+| AI 연동             | 자체 Provider Registry·Adapter                        |
+| 답변 스트리밍       | POST 응답 기반 SSE 형식                               |
+| 파일 저장           | 로컬 마운트 볼륨 + Storage Adapter                    |
+| PDF 처리            | PyMuPDF 기반 별도 worker                              |
+| OCR(2차)            | PaddleOCR                                             |
+| 백그라운드 작업     | BullMQ + Valkey, 도입 전 호환성 통합 테스트           |
+| 애플리케이션 로그   | Pino JSON + PostgreSQL 관리 로그                      |
+| 관측성              | OpenTelemetry + Prometheus/Grafana, 필요 시 Loki 추가 |
+| 리버스 프록시       | 기존 Nginx                                            |
+| 배포                | Docker Compose                                        |
+| 비밀값              | Docker secret 또는 권한 제한 환경 파일                |
+| 테스트              | Vitest + Playwright                                   |
+| 백업                | 초기 외부 backup 미구성, 추후 pg_dump + restic        |
 
 전체를 처음부터 마이크로서비스로 나누지 않는다. 하나의 저장소 안에 `web`, `api`, `worker`, `shared`를 분리하되, API는 modular monolith로 시작한다. PDF·OCR worker만 프로세스를 분리하면 무거운 파일 처리가 채팅 스트리밍을 막는 문제를 줄일 수 있다.
 
@@ -101,15 +101,15 @@ Next.js는 Linux 자체 호스팅과 스트리밍을 지원한다. 참고: [Next
 
 운영 데이터의 기준 원장은 PostgreSQL로 둔다. 대화 본문, 사용자, 권한, 세션, 사용량, 감사 로그는 파일이 아닌 DB에 저장하고 원본 첨부파일만 파일 저장소에 둔다. 참고: [PostgreSQL 공식 문서](https://www.postgresql.org/docs/current/)
 
-### 3.5 ORM과 데이터베이스 마이그레이션
+### 3.5 Database client와 migration
 
-| 구분     | 기술        | 적합한 경우                                                  | 주의점                                                   |
-| -------- | ----------- | ------------------------------------------------------------ | -------------------------------------------------------- |
-| **권장** | Prisma      | 명확한 schema, 타입 생성, 팀 단위 migration 관리가 필요할 때 | 복잡한 통계 쿼리는 raw SQL을 병행할 수 있음              |
-| 대체안 1 | Drizzle ORM | SQL에 가까운 제어와 가벼운 런타임을 원할 때                  | 팀이 schema와 migration 운영 규칙을 더 직접 정해야 함    |
-| 대체안 2 | TypeORM     | NestJS와 오래된 통합 사례가 중요할 때                        | relation·migration 변경 시 생성 SQL을 꼼꼼히 검토해야 함 |
+| 구분     | 기술                        | 적합한 경우                                              | 주의점                                                   |
+| -------- | --------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| **선택** | postgres.js + versioned SQL | 작은 운영 규모에서 SQL 계약과 migration을 직접 검토할 때 | query type과 관계 mapping을 애플리케이션에서 관리해야 함 |
+| 대체안 1 | Prisma                      | schema 기반 type 생성과 ORM relation이 더 중요할 때      | code generation과 runtime 구성이 추가됨                  |
+| 대체안 2 | Drizzle ORM                 | SQL에 가까운 type-safe query builder가 필요할 때         | migration 운영 규칙을 별도로 고정해야 함                 |
 
-Prisma는 PostgreSQL connector와 migration을 제공하므로 초기 권장안으로 둔다. 참고: [Prisma ORM](https://www.prisma.io/docs/orm), [Prisma PostgreSQL](https://www.prisma.io/docs/orm/overview/databases/postgresql)
+ModelNaru는 N100 서버의 단순한 배포와 SQL 검토 가능성을 우선해 postgres.js와 checksum 기반 자체 migration runner를 선택했다. 세부 규칙은 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)와 [DECISIONS.md](./DECISIONS.md)를 따른다.
 
 ### 3.6 로그인, 세션, 비밀번호
 
@@ -267,7 +267,7 @@ provider API key는 DB에 AES-256-GCM으로 암호화하고 레코드마다 nonc
 
 ### 조합 A: 권장 균형형
 
-- Next.js + NestJS + PostgreSQL + Prisma
+- Next.js + NestJS + PostgreSQL + postgres.js
 - 자체 Provider Adapter
 - 로컬 volume + Storage Adapter
 - BullMQ + Valkey
@@ -290,7 +290,7 @@ provider API key는 DB에 AES-256-GCM으로 암호화하고 레코드마다 nonc
 ### 조합 C: 확장 우선형
 
 - Next.js + NestJS 또는 FastAPI
-- PostgreSQL + Prisma/SQLAlchemy
+- PostgreSQL + versioned SQL migration
 - LiteLLM Proxy와 자체 권한 계층
 - S3 object storage
 - 전용 queue·worker

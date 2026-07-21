@@ -1,13 +1,23 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 
 import type { LoadedConfig } from '@modelnaru/config';
 
-import { MODELNARU_CONFIG } from './tokens.js';
+import {
+  DATABASE_HEALTH,
+  MODELNARU_CONFIG,
+  type DatabaseHealth,
+} from './tokens.js';
 
 @Controller('health')
 export class HealthController {
   constructor(
     @Inject(MODELNARU_CONFIG) private readonly loadedConfig: LoadedConfig,
+    @Inject(DATABASE_HEALTH) private readonly database: DatabaseHealth,
   ) {}
 
   @Get('live')
@@ -16,8 +26,22 @@ export class HealthController {
   }
 
   @Get('ready')
-  ready(): { checks: { config: 'ok' }; status: 'ready' } {
+  async ready(): Promise<{
+    checks: { config: 'ok'; database: 'ok' };
+    status: 'ready';
+  }> {
     void this.loadedConfig.sourcePath;
-    return { status: 'ready', checks: { config: 'ok' } };
+    try {
+      await this.database.ping();
+      return {
+        status: 'ready',
+        checks: { config: 'ok', database: 'ok' },
+      };
+    } catch {
+      throw new ServiceUnavailableException({
+        status: 'unavailable',
+        checks: { config: 'ok', database: 'error' },
+      });
+    }
   }
 }

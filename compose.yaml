@@ -56,8 +56,8 @@ services:
       target: api
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       valkey:
         condition: service_healthy
     environment:
@@ -81,6 +81,25 @@ services:
       start_period: 20s
     networks:
       - frontend
+      - backend
+
+  migrate:
+    build:
+      context: .
+      target: api
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ['pnpm', '--filter', '@modelnaru/database', 'migrate']
+    environment:
+      APICHAT_CONFIG_FILE: /app/config.yaml
+      NODE_ENV: production
+    user: '${APICHAT_UID:-1000}:${APICHAT_GID:-1000}'
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./secrets:/app/secrets:ro
+    networks:
       - backend
 
   postgres:

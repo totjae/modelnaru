@@ -3,7 +3,13 @@ packages:
   - packages/*
   - tools/*
 
+overrides:
+  postcss: 8.5.21
+
 allowBuilds:
   '@node-rs/argon2': true
   esbuild: true
   sharp: true
+
+minimumReleaseAgeExclude:
+  - postcss@8.5.21

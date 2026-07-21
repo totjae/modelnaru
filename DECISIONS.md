@@ -42,6 +42,23 @@
 - 이유: 기반 배포 연결은 먼저 검증하면서 아직 확정하지 않은 인증·대화 schema를 성급히 고정하지 않기 위함이다.
 - 영향: 현재 readiness는 설정 유효성까지 검사하며 DB·Valkey 실제 연결 검사는 다음 단계에 추가한다.
 
+### ADR-005: Versioned SQL migration과 얇은 database client
+
+- 상태: 확정
+- 결정일: 2026-07-21
+- 결정: PostgreSQL schema는 순서가 고정된 SQL migration으로 관리하고, 애플리케이션 연결에는 `postgres.js`를 사용한다.
+- 이유: 1~3명 규모의 N100 서버에서 ORM code generation과 별도 query engine 없이 SQL 계약을 직접 검토할 수 있고 image와 build 부담이 작다.
+- 대안: Prisma ORM, Drizzle ORM, TypeORM.
+- 영향: migration 파일은 한 번 적용되면 수정하지 않는다. 자체 runner가 checksum과 PostgreSQL advisory lock을 검증하며 Compose 시작 시 API보다 먼저 실행한다.
+
+### ADR-006: 고정 관리자와 일반 사용자의 session principal 분리
+
+- 상태: 확정
+- 결정일: 2026-07-21
+- 결정: 고정 관리자는 `config.yaml`에 유지하고 `users` table에는 관리자가 생성한 일반 사용자만 저장한다. `sessions`는 `admin`과 `user` principal을 모두 표현한다.
+- 이유: 고정 관리자 bootstrap 요구를 유지하면서 session 만료·동시 로그인 제한은 하나의 저장 구조로 관리하기 위함이다.
+- 영향: 관리자 session은 `user_id`가 없고 credential fingerprint로 설정 변경을 감지한다. 일반 사용자 삭제 시 FK cascade로 session을 함께 삭제한다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.
@@ -54,5 +71,4 @@
 
 ## 5. 미결정·보류 항목
 
-- ORM과 최초 애플리케이션 schema는 인증 구현 전에 확정한다.
 - production container image 배포 방식은 최초 실제 배포 전에 확정한다.

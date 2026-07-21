@@ -1,0 +1,61 @@
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it } from 'vitest';
+
+import { loadMigrationPlan } from '../src/migration-plan.js';
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+describe('migration plan', () => {
+  it('loads migrations in version order with stable checksums', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'modelnaru-migrations-'));
+    await writeFile(join(directory, '0002_second.sql'), 'SELECT 2;\n');
+    await writeFile(join(directory, '0001_first.sql'), 'SELECT 1;\n');
+    await writeFile(join(directory, 'README.md'), 'ignored');
+
+    const plan = await loadMigrationPlan(directory);
+
+    expect(plan.map((migration) => migration.version)).toEqual([
+      '0001_first.sql',
+      '0002_second.sql',
+    ]);
+    expect(plan[0]?.checksum).toMatch(/^[a-f0-9]{64}$/);
+    expect(plan[0]?.checksum).not.toBe(plan[1]?.checksum);
+  });
+
+  it('rejects duplicate sequence numbers', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'modelnaru-duplicates-'));
+    await writeFile(join(directory, '0001_first.sql'), 'SELECT 1;\n');
+    await writeFile(join(directory, '0001_other.sql'), 'SELECT 2;\n');
+
+    await expect(loadMigrationPlan(directory)).rejects.toThrow(
+      'Duplicate migration sequence',
+    );
+  });
+
+  it('rejects empty migrations', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'modelnaru-empty-'));
+    await writeFile(join(directory, '0001_empty.sql'), '  \n');
+
+    await expect(loadMigrationPlan(directory)).rejects.toThrow(
+      'Migration is empty',
+    );
+  });
+
+  it('contains the required authentication constraints and indexes', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0001_auth_foundation.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE users');
+    expect(sql).toContain('CREATE TABLE sessions');
+    expect(sql).toContain('ON DELETE CASCADE');
+    expect(sql).toContain('sessions_token_hash_unique');
+    expect(sql).toContain('sessions_active_account_created_idx');
+    expect(sql).toContain('octet_length(token_hash) = 32');
+  });
+});

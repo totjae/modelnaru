@@ -9,8 +9,8 @@
     "pnpm": ">=11.0.0"
   },
   "scripts": {
-    "build": "pnpm --filter @modelnaru/config build && pnpm --filter @modelnaru/admin-cli build && pnpm --filter @modelnaru/api build && pnpm --filter @modelnaru/web build",
-    "dev": "pnpm --parallel --filter @modelnaru/api --filter @modelnaru/web dev",
+    "build": "pnpm --filter @modelnaru/config build && pnpm --filter @modelnaru/database build && pnpm --filter @modelnaru/admin-cli build && pnpm --filter @modelnaru/api build && pnpm --filter @modelnaru/web build",
+    "dev": "pnpm --filter @modelnaru/config build && pnpm --filter @modelnaru/database build && pnpm --parallel --filter @modelnaru/api --filter @modelnaru/web dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings=0",

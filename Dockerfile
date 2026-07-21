@@ -11,6 +11,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
 RUN pnpm --filter @modelnaru/config build \
+    && pnpm --filter @modelnaru/database build \
     && pnpm --filter @modelnaru/admin-cli build \
     && pnpm --filter @modelnaru/api build \
     && pnpm --filter @modelnaru/web build
@@ -18,6 +19,7 @@ RUN pnpm --filter @modelnaru/config build \
 FROM dependencies AS api
 ENV NODE_ENV=production
 COPY --from=build /workspace/packages/config/dist /workspace/packages/config/dist
+COPY --from=build /workspace/packages/database/dist /workspace/packages/database/dist
 COPY --from=build /workspace/apps/api/dist /workspace/apps/api/dist
 USER node
 CMD ["pnpm", "--filter", "@modelnaru/api", "start"]

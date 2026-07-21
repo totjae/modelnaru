@@ -32,7 +32,7 @@
 
 ### `GET /api/health/ready`
 
-시작 설정을 정상적으로 읽고 검증했는지 확인한다.
+시작 설정을 정상적으로 읽고 PostgreSQL에 query할 수 있는지 확인한다.
 
 정상 response: `200 OK`
 
@@ -40,17 +40,29 @@
 {
   "status": "ready",
   "checks": {
-    "config": "ok"
+    "config": "ok",
+    "database": "ok"
   }
 }
 ```
 
-설정이 유효하지 않으면 API process 자체가 시작되지 않으므로 gateway에서는 `502` 또는 연결 실패로 관측된다.
+설정이 유효하지 않거나 최초 DB 연결에 실패하면 API process가 시작되지 않는다. 실행 중 DB 검사가 실패하면 `503 Service Unavailable`과 다음 비민감 response를 반환한다.
+
+```json
+{
+  "status": "unavailable",
+  "checks": {
+    "config": "ok",
+    "database": "error"
+  }
+}
+```
 
 ## 5. 오류·경계 조건
 
 - 존재하지 않는 endpoint는 `404`를 반환한다.
-- readiness가 향후 DB·Valkey 검사를 포함하게 되면 의존 서비스 장애 시 `503`을 반환하도록 확장한다.
+- readiness에는 DB URL, query, 오류 message와 stack을 포함하지 않는다.
+- Valkey 검사는 queue 또는 인증 rate limit 도입 시 추가한다.
 
 ## 6. 검증·인수 조건
 

@@ -33,6 +33,7 @@
 | 배포 실행서        | [DEPLOYMENT_RUNBOOK.md](./DEPLOYMENT_RUNBOOK.md)                 | Ubuntu 설치, 설정 초기화, 실행, Nginx, 점검과 복구 절차           |
 | 시험 계획·결과     | [TEST_PLAN.md](./TEST_PLAN.md)                                   | 단위·통합·빌드·배포 시험 항목과 실제 실행 결과                    |
 | 설계 결정 기록     | [DECISIONS.md](./DECISIONS.md)                                   | 확정된 구조, 선택한 대안, 이유, 영향과 변경 이력                  |
+| Database 상세 명세 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)                       | table, column, 관계, index, migration과 삭제 정책                 |
 
 ## 3. 개발하면서 작성할 상세 문서
 
