@@ -13,10 +13,15 @@ import {
   verifyTotp,
 } from './auth.crypto.js';
 import { AuthRateLimiter } from './auth.rate-limiter.js';
-import { AuthRepository, type AdminSessionRow } from './auth.repository.js';
+import {
+  AuthRepository,
+  type SessionRow,
+  type UserCredentialRow,
+} from './auth.repository.js';
 import { MODELNARU_CONFIG } from './tokens.js';
 
 export type AuthErrorCode =
+  | 'AUTH_ADMIN_REQUIRED'
   | 'AUTH_CSRF_INVALID'
   | 'AUTH_INVALID_CREDENTIALS'
   | 'AUTH_RATE_LIMITED'
@@ -36,24 +41,43 @@ export class AuthError extends Error {
 export interface LoginInput {
   ipAddress: string;
   password: string;
-  totp: string;
+  totp?: string;
   userAgent: string;
   username: string;
 }
 
-export interface AuthenticatedAdminSession {
+export type AuthenticatedPrincipal =
+  | { type: 'admin'; username: string }
+  | {
+      displayName: string | null;
+      id: string;
+      type: 'user';
+      username: string;
+    };
+
+export interface AuthenticatedSession {
   absoluteExpiresAt: Date;
   csrfToken?: string;
   idleExpiresAt: Date;
-  row: AdminSessionRow;
+  principal: AuthenticatedPrincipal;
+  row: SessionRow;
   sessionToken?: string;
-  username: string;
+}
+
+export type AuthenticatedAdminSession = AuthenticatedSession & {
+  principal: Extract<AuthenticatedPrincipal, { type: 'admin' }>;
+};
+
+function userCredentialFingerprint(user: UserCredentialRow): Buffer {
+  return sha256(
+    `modelnaru:user-credential:v1\0${user.id}\0${user.credentialVersion}`,
+  );
 }
 
 @Injectable()
 export class AuthService {
-  private readonly accountKey: string;
-  private readonly credentialFingerprint: Buffer;
+  private readonly adminAccountKey: string;
+  private readonly adminCredentialFingerprint: Buffer;
 
   constructor(
     @Inject(MODELNARU_CONFIG) private readonly loadedConfig: LoadedConfig,
@@ -61,13 +85,13 @@ export class AuthService {
     private readonly rateLimiter: AuthRateLimiter,
   ) {
     const admin = loadedConfig.config.admin;
-    this.accountKey = `admin:${admin.username.toLowerCase()}`;
-    this.credentialFingerprint = createAdminCredentialFingerprint(admin);
+    this.adminAccountKey = `admin:${admin.username.toLowerCase()}`;
+    this.adminCredentialFingerprint = createAdminCredentialFingerprint(admin);
   }
 
-  async login(input: LoginInput): Promise<AuthenticatedAdminSession> {
+  async login(input: LoginInput): Promise<AuthenticatedSession> {
     const rateKey = createKeyedMetadataHash(
-      this.credentialFingerprint,
+      this.adminCredentialFingerprint,
       'login-rate',
       `${input.ipAddress}\0${input.username.toLowerCase()}`,
     ).toString('hex');
@@ -81,15 +105,10 @@ export class AuthService {
       );
     }
 
-    const admin = this.loadedConfig.config.admin;
-    const usernameMatches =
-      input.username.toLowerCase() === admin.username.toLowerCase();
-    const passwordMatches = await verify(admin.passwordHash, input.password)
-      .then(Boolean)
-      .catch(() => false);
-    const totpMatches = verifyTotp(admin.totpSecret, input.totp);
-
-    if (!usernameMatches || !passwordMatches || !totpMatches) {
+    const session = await (this.isAdminUsername(input.username)
+      ? this.authenticateAdminCredentials(input)
+      : this.authenticateUserCredentials(input));
+    if (!session) {
       const nextRetryAfter = this.rateLimiter.recordFailure(rateKey);
       throw new AuthError(
         nextRetryAfter > 0 ? 'AUTH_RATE_LIMITED' : 'AUTH_INVALID_CREDENTIALS',
@@ -114,61 +133,60 @@ export class AuthService {
         absoluteExpiresAt.getTime(),
       ),
     );
-    const row = await this.repository.createAdminSession({
+    const row = await this.repository.createSession({
       absoluteExpiresAt,
-      accountKey: this.accountKey,
-      credentialFingerprint: this.credentialFingerprint,
+      accountKey: session.accountKey,
+      credentialFingerprint: session.credentialFingerprint,
       csrfTokenHash: sha256(csrfToken),
       idleExpiresAt,
-      ipHash: input.ipAddress
-        ? createKeyedMetadataHash(
-            this.credentialFingerprint,
-            'ip',
-            input.ipAddress,
-          )
-        : null,
+      ipHash: input.ipAddress ? this.hashIpAddress(input.ipAddress) : null,
       maximumActiveSessions:
         this.loadedConfig.config.sessions.maximumActivePerAccount,
+      principalType: session.principal.type,
       tokenHash: sha256(sessionToken),
       userAgentHash: input.userAgent ? sha256(input.userAgent) : null,
+      userId: session.principal.type === 'user' ? session.principal.id : null,
     });
 
     return {
       absoluteExpiresAt,
       csrfToken,
       idleExpiresAt,
+      principal: session.principal,
       row,
       sessionToken,
-      username: admin.username,
     };
   }
 
   hashIpAddress(ipAddress: string | undefined): Buffer | null {
     return ipAddress
-      ? createKeyedMetadataHash(this.credentialFingerprint, 'ip', ipAddress)
+      ? createKeyedMetadataHash(
+          this.adminCredentialFingerprint,
+          'ip',
+          ipAddress,
+        )
       : null;
   }
 
   async authenticate(
     sessionToken: string | undefined,
-  ): Promise<AuthenticatedAdminSession> {
-    if (!sessionToken) {
-      throw this.sessionRequired();
-    }
-    const row = await this.repository.findAdminSessionByTokenHash(
+  ): Promise<AuthenticatedSession> {
+    if (!sessionToken) throw this.sessionRequired();
+    const row = await this.repository.findSessionByTokenHash(
       sha256(sessionToken),
     );
-    if (!row || row.revokedAt) {
-      throw this.sessionRequired();
-    }
+    if (!row || row.revokedAt) throw this.sessionRequired();
+
+    const current = await this.resolveCurrentPrincipal(row);
+    if (!current) throw this.sessionRequired();
 
     const now = new Date();
     const credentialIsCurrent = constantTimeBufferEqual(
       row.credentialFingerprint,
-      this.credentialFingerprint,
+      current.credentialFingerprint,
     );
     if (
-      row.accountKey !== this.accountKey ||
+      row.accountKey !== current.accountKey ||
       !credentialIsCurrent ||
       row.idleExpiresAt <= now ||
       row.absoluteExpiresAt <= now
@@ -193,9 +211,23 @@ export class AuthService {
     return {
       absoluteExpiresAt: row.absoluteExpiresAt,
       idleExpiresAt,
+      principal: current.principal,
       row: { ...row, idleExpiresAt, lastSeenAt: now },
-      username: this.loadedConfig.config.admin.username,
     };
+  }
+
+  async authenticateAdmin(
+    sessionToken: string | undefined,
+  ): Promise<AuthenticatedAdminSession> {
+    const session = await this.authenticate(sessionToken);
+    if (session.principal.type !== 'admin') {
+      throw new AuthError(
+        'AUTH_ADMIN_REQUIRED',
+        403,
+        'Administrator access is required.',
+      );
+    }
+    return session as AuthenticatedAdminSession;
   }
 
   async logout(input: {
@@ -211,7 +243,7 @@ export class AuthService {
     csrfCookie: string | undefined;
     csrfHeader: string | undefined;
     sessionToken: string | undefined;
-  }): Promise<AuthenticatedAdminSession> {
+  }): Promise<AuthenticatedSession> {
     const session = await this.authenticate(input.sessionToken);
     const csrfHeader = input.csrfHeader ?? '';
     const csrfCookie = input.csrfCookie ?? '';
@@ -224,6 +256,104 @@ export class AuthService {
       throw new AuthError('AUTH_CSRF_INVALID', 403, 'CSRF validation failed.');
     }
     return session;
+  }
+
+  async authenticateAdminWithCsrf(input: {
+    csrfCookie: string | undefined;
+    csrfHeader: string | undefined;
+    sessionToken: string | undefined;
+  }): Promise<AuthenticatedAdminSession> {
+    const session = await this.authenticateWithCsrf(input);
+    if (session.principal.type !== 'admin') {
+      throw new AuthError(
+        'AUTH_ADMIN_REQUIRED',
+        403,
+        'Administrator access is required.',
+      );
+    }
+    return session as AuthenticatedAdminSession;
+  }
+
+  private isAdminUsername(username: string): boolean {
+    return (
+      username.toLowerCase() ===
+      this.loadedConfig.config.admin.username.toLowerCase()
+    );
+  }
+
+  private async authenticateAdminCredentials(input: LoginInput): Promise<{
+    accountKey: string;
+    credentialFingerprint: Buffer;
+    principal: Extract<AuthenticatedPrincipal, { type: 'admin' }>;
+  } | null> {
+    const admin = this.loadedConfig.config.admin;
+    const passwordMatches = await verify(admin.passwordHash, input.password)
+      .then(Boolean)
+      .catch(() => false);
+    const totpMatches = verifyTotp(admin.totpSecret, input.totp ?? '');
+    if (!passwordMatches || !totpMatches) return null;
+    return {
+      accountKey: this.adminAccountKey,
+      credentialFingerprint: this.adminCredentialFingerprint,
+      principal: { type: 'admin', username: admin.username },
+    };
+  }
+
+  private async authenticateUserCredentials(input: LoginInput): Promise<{
+    accountKey: string;
+    credentialFingerprint: Buffer;
+    principal: Extract<AuthenticatedPrincipal, { type: 'user' }>;
+  } | null> {
+    const user = await this.repository.findUserByUsername(input.username);
+    const passwordHash =
+      user?.passwordHash ?? this.loadedConfig.config.admin.passwordHash;
+    const passwordMatches = await verify(passwordHash, input.password)
+      .then(Boolean)
+      .catch(() => false);
+    if (!user || !user.isEnabled || !passwordMatches) return null;
+    return {
+      accountKey: `user:${user.id}`,
+      credentialFingerprint: userCredentialFingerprint(user),
+      principal: {
+        displayName: user.displayName,
+        id: user.id,
+        type: 'user',
+        username: user.username,
+      },
+    };
+  }
+
+  private async resolveCurrentPrincipal(row: SessionRow): Promise<{
+    accountKey: string;
+    credentialFingerprint: Buffer;
+    principal: AuthenticatedPrincipal;
+  } | null> {
+    if (row.principalType === 'admin') {
+      return {
+        accountKey: this.adminAccountKey,
+        credentialFingerprint: this.adminCredentialFingerprint,
+        principal: {
+          type: 'admin',
+          username: this.loadedConfig.config.admin.username,
+        },
+      };
+    }
+    if (!row.userId) return null;
+    const user = await this.repository.findUserById(row.userId);
+    if (!user || !user.isEnabled) {
+      await this.repository.revokeSession(row.id, 'account_disabled');
+      return null;
+    }
+    return {
+      accountKey: `user:${user.id}`,
+      credentialFingerprint: userCredentialFingerprint(user),
+      principal: {
+        displayName: user.displayName,
+        id: user.id,
+        type: 'user',
+        username: user.username,
+      },
+    };
   }
 
   private sessionRequired(): AuthError {

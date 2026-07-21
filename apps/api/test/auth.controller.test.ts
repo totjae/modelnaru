@@ -23,16 +23,17 @@ describe('AuthController', () => {
   it('sets secure host-only session and CSRF cookies after login', async () => {
     const absoluteExpiresAt = new Date(Date.now() + 86_400_000);
     const auth = {
-      login: vi.fn(() =>
-        Promise.resolve({
+      login: vi.fn((input: unknown) => {
+        void input;
+        return Promise.resolve({
           absoluteExpiresAt,
           csrfToken: 'csrf-token',
           idleExpiresAt: new Date(Date.now() + 3_600_000),
+          principal: { type: 'admin', username: 'admin' },
           row: {},
           sessionToken: 'session-token',
-          username: 'admin',
-        }),
-      ),
+        });
+      }),
     };
     const controller = new AuthController(
       auth as unknown as AuthService,
@@ -77,6 +78,45 @@ describe('AuthController', () => {
         secure: true,
       }),
     );
+  });
+
+  it('accepts a user login without a TOTP field', async () => {
+    const auth = {
+      login: vi.fn((input: unknown) => {
+        void input;
+        return Promise.resolve({
+          absoluteExpiresAt: new Date(Date.now() + 86_400_000),
+          csrfToken: 'csrf-token',
+          idleExpiresAt: new Date(Date.now() + 3_600_000),
+          principal: {
+            displayName: 'User One',
+            id: '10000000-0000-4000-8000-000000000001',
+            type: 'user',
+            username: 'user1',
+          },
+          row: {},
+          sessionToken: 'session-token',
+        });
+      }),
+    };
+    const controller = new AuthController(
+      auth as unknown as AuthService,
+      loadedConfig,
+    );
+
+    await expect(
+      controller.login(
+        { password: 'correct-password', username: 'user1' },
+        { headers: {}, ip: '203.0.113.10' },
+        response(),
+      ),
+    ).resolves.toMatchObject({
+      principal: { type: 'user', username: 'user1' },
+    });
+    expect(auth.login).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'user1' }),
+    );
+    expect(auth.login.mock.calls[0]?.[0]).not.toHaveProperty('totp');
   });
 
   it('rejects malformed login input before password verification', async () => {

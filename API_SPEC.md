@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-현재 health endpoint, 고정 관리자 인증과 관리자 전용 사용자 관리 API를 포함한다. 일반 사용자 로그인·provider·대화 API는 각 구현 단계에서 이 문서에 추가한다.
+현재 health endpoint, 고정 관리자와 일반 사용자 인증, 관리자 전용 사용자 관리 API를 포함한다. Provider·대화 API는 각 구현 단계에서 이 문서에 추가한다.
 
 ## 3. 공통 규칙
 
@@ -62,11 +62,11 @@
 }
 ```
 
-## 5. 관리자 인증 API
+## 5. 공통 인증 API
 
 ### `POST /api/auth/login`
 
-고정 관리자 ID, 비밀번호와 6자리 TOTP code를 검증한다. 이미 로그인한 상태에서도 새 session을 만들 수 있으며, 활성 session이 설정된 최대 개수를 넘으면 `last_seen_at`이 가장 오래된 session부터 폐기한다.
+고정 관리자는 ID·비밀번호·6자리 TOTP code를, 일반 사용자는 관리자가 등록한 ID·비밀번호를 검증한다. 관리자 ID는 일반 사용자 ID와 충돌할 수 없으므로 정규화한 username으로 역할을 결정한다. 이미 로그인한 상태에서도 새 session을 만들 수 있으며, 활성 session이 설정된 최대 개수를 넘으면 `last_seen_at`이 가장 오래된 session부터 폐기한다.
 
 Request:
 
@@ -75,6 +75,15 @@ Request:
   "username": "admin",
   "password": "user-entered-password",
   "totp": "123456"
+}
+```
+
+일반 사용자는 `totp` 필드를 보내지 않는다.
+
+```json
+{
+  "username": "user1",
+  "password": "user-entered-password"
 }
 ```
 
@@ -93,15 +102,32 @@ Request:
 }
 ```
 
+일반 사용자 principal은 다음 형식이다. `displayName`은 설정되지 않았으면 `null`이다.
+
+```json
+{
+  "principal": {
+    "type": "user",
+    "id": "10000000-0000-4000-8000-000000000001",
+    "username": "user1",
+    "displayName": "사용자 1"
+  },
+  "session": {
+    "idleExpiresAt": "2026-07-23T00:00:00.000Z",
+    "absoluteExpiresAt": "2026-07-29T00:00:00.000Z"
+  }
+}
+```
+
 오류:
 
 - `400 AUTH_INPUT_INVALID`: body 형식 오류
-- `401 AUTH_INVALID_CREDENTIALS`: ID·비밀번호·TOTP 검증 실패
+- `401 AUTH_INVALID_CREDENTIALS`: ID·비밀번호 또는 관리자 TOTP 검증 실패, 비활성 사용자도 같은 오류
 - `429 AUTH_RATE_LIMITED`: 반복 실패 제한, `Retry-After` header 포함
 
 ### `GET /api/auth/session`
 
-session cookie를 검증하고 현재 관리자 principal과 만료 시각을 반환한다. 유효한 요청은 idle 만료 시각을 갱신한다.
+session cookie를 검증하고 현재 principal과 만료 시각을 반환한다. 일반 사용자는 현재 DB의 활성 상태와 credential version도 검증한다. 유효한 요청은 idle 만료 시각을 갱신한다.
 
 - 성공: `200 OK`, login과 같은 principal·session 구조
 - `401 AUTH_SESSION_REQUIRED`: cookie 없음, 만료, 폐기 또는 관리자 설정 변경
@@ -157,6 +183,7 @@ Request:
 - `400 USER_INPUT_INVALID`: body 또는 UUID 형식 오류
 - `401 AUTH_SESSION_REQUIRED`: 관리자 session 없음
 - `403 AUTH_CSRF_INVALID`: CSRF 검증 실패
+- `403 AUTH_ADMIN_REQUIRED`: 일반 사용자 session으로 관리자 API 요청
 - `404 USER_NOT_FOUND`: 대상 사용자 없음
 - `409 USERNAME_CONFLICT`: 관리자 또는 기존 사용자와 ID 충돌
 
@@ -177,6 +204,8 @@ Request:
 - 올바른 관리자 비밀번호와 현재 TOTP code로만 session이 생성된다.
 - DB에는 session token과 CSRF token의 SHA-256 hash만 저장된다.
 - 네 번째 login 성공 시 가장 오래 사용하지 않은 관리자 session이 폐기된다.
+- 일반 사용자 login은 TOTP 없이 Argon2id 비밀번호로 성공하고 비활성 계정은 동일한 인증 오류로 거부된다.
+- 일반 사용자 session은 계정 UUID별 최대 3개이며 DB의 활성 상태와 credential version 변경을 매 요청에서 검증한다.
 - idle·absolute 만료, config credential 변경, CSRF 불일치가 거부된다.
 - 인증되지 않은 요청과 CSRF가 없는 사용자 변경 요청이 거부된다.
 - 사용자 생성·수정·비활성화·비밀번호 변경·삭제가 감사 기록에 남는다.

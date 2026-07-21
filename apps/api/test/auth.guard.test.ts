@@ -17,9 +17,9 @@ function contextFor(request: AdminRequest): ExecutionContext {
 
 describe('administrator guards', () => {
   it('attaches the authenticated session for read requests', async () => {
-    const session = { username: 'admin' };
+    const session = { principal: { type: 'admin', username: 'admin' } };
     const auth = {
-      authenticate: vi.fn(() => Promise.resolve(session)),
+      authenticateAdmin: vi.fn(() => Promise.resolve(session)),
     };
     const request: AdminRequest = {
       headers: { cookie: 'modelnaru_session=session-token' },
@@ -27,14 +27,14 @@ describe('administrator guards', () => {
     const guard = new AdminSessionGuard(auth as unknown as AuthService);
 
     await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
-    expect(auth.authenticate).toHaveBeenCalledWith('session-token');
+    expect(auth.authenticateAdmin).toHaveBeenCalledWith('session-token');
     expect(request.adminSession).toBe(session);
   });
 
   it('requires the CSRF cookie and header for mutation requests', async () => {
-    const session = { username: 'admin' };
+    const session = { principal: { type: 'admin', username: 'admin' } };
     const auth = {
-      authenticateWithCsrf: vi.fn(() => Promise.resolve(session)),
+      authenticateAdminWithCsrf: vi.fn(() => Promise.resolve(session)),
     };
     const request: AdminRequest = {
       headers: {
@@ -45,7 +45,7 @@ describe('administrator guards', () => {
     const guard = new AdminMutationGuard(auth as unknown as AuthService);
 
     await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
-    expect(auth.authenticateWithCsrf).toHaveBeenCalledWith({
+    expect(auth.authenticateAdminWithCsrf).toHaveBeenCalledWith({
       csrfCookie: 'csrf-token',
       csrfHeader: 'csrf-token',
       sessionToken: 'session-token',
@@ -54,7 +54,7 @@ describe('administrator guards', () => {
 
   it('maps domain authorization failures to an HTTP error envelope', async () => {
     const auth = {
-      authenticate: vi.fn(() =>
+      authenticateAdmin: vi.fn(() =>
         Promise.reject(
           new AuthError(
             'AUTH_SESSION_REQUIRED',

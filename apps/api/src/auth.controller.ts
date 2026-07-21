@@ -13,7 +13,11 @@ import {
 
 import type { LoadedConfig } from '@modelnaru/config';
 
-import { AuthError, AuthService } from './auth.service.js';
+import {
+  AuthError,
+  AuthService,
+  type AuthenticatedPrincipal,
+} from './auth.service.js';
 import { MODELNARU_CONFIG } from './tokens.js';
 
 export const SESSION_COOKIE = 'modelnaru_session';
@@ -41,7 +45,7 @@ interface CookieOptions {
 
 interface LoginBody {
   password: string;
-  totp: string;
+  totp?: string;
   username: string;
 }
 
@@ -77,15 +81,15 @@ function parseLoginBody(body: unknown): LoginBody | undefined {
     typeof record.password !== 'string' ||
     record.password.length < 1 ||
     record.password.length > 1_024 ||
-    typeof record.totp !== 'string' ||
-    !/^\d{6}$/u.test(record.totp)
+    (record.totp !== undefined &&
+      (typeof record.totp !== 'string' || !/^\d{6}$/u.test(record.totp)))
   ) {
     return undefined;
   }
   return {
     password: record.password,
-    totp: record.totp,
     username: record.username,
+    ...(typeof record.totp === 'string' ? { totp: record.totp } : {}),
   };
 }
 
@@ -178,10 +182,10 @@ export class AuthController {
   private responseBody(session: {
     absoluteExpiresAt: Date;
     idleExpiresAt: Date;
-    username: string;
+    principal: AuthenticatedPrincipal;
   }): Record<string, unknown> {
     return {
-      principal: { type: 'admin', username: session.username },
+      principal: session.principal,
       session: {
         idleExpiresAt: session.idleExpiresAt.toISOString(),
         absoluteExpiresAt: session.absoluteExpiresAt.toISOString(),

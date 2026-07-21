@@ -40,7 +40,7 @@ export class AdminSessionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AdminRequest>();
     const cookies = parseCookies(firstHeader(request.headers.cookie));
     try {
-      request.adminSession = await this.auth.authenticate(
+      request.adminSession = await this.auth.authenticateAdmin(
         cookies.get(SESSION_COOKIE),
       );
       return true;
@@ -58,7 +58,7 @@ export class AdminMutationGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AdminRequest>();
     const cookies = parseCookies(firstHeader(request.headers.cookie));
     try {
-      request.adminSession = await this.auth.authenticateWithCsrf({
+      request.adminSession = await this.auth.authenticateAdminWithCsrf({
         csrfCookie: cookies.get(CSRF_COOKIE),
         csrfHeader: firstHeader(request.headers['x-csrf-token']),
         sessionToken: cookies.get(SESSION_COOKIE),

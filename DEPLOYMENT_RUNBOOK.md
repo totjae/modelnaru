@@ -90,6 +90,20 @@ docker compose exec postgres \
 
 `0002_user_management_audit.sql`이 기록되고 사용자 작업별 `user.created`, `user.updated`·`user.enabled`·`user.disabled`, `user.password_changed`, `user.deleted` 이벤트가 나타나야 한다. 감사 JSON이나 지원 자료에 실제 password·cookie를 포함하지 않는다.
 
+### 6.3 일반 사용자 로그인 점검
+
+관리자 화면에서 활성 시험 계정을 만든 뒤 로그아웃하고 기본 사용자 탭에서 해당 ID·비밀번호로 로그인한다. TOTP 입력은 사용자 탭에 표시되지 않아야 한다. 로그인 후 개인 작업공간이 보이고 새로고침해도 session이 유지되며 관리자 사용자 관리 화면은 노출되지 않아야 한다.
+
+서로 다른 browser profile 또는 시크릿 창을 이용해 같은 계정으로 네 번 로그인하면 가장 오래 사용하지 않은 session이 폐기돼야 한다. 비밀번호 변경과 계정 비활성화 뒤에는 기존 사용자 session이 다음 요청에서 거부돼 로그인 화면으로 돌아가야 한다. 시험이 끝나면 로그아웃하고 시험 계정을 삭제한다.
+
+```bash
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT principal_type, user_id, account_key, created_at, last_seen_at, revoked_at, revoked_reason FROM sessions WHERE principal_type = 'user' ORDER BY created_at DESC LIMIT 10;"
+```
+
+일반 사용자 row는 `principal_type = 'user'`, `user_id`가 설정돼야 한다. 지원 자료에는 cookie나 token 원문을 포함하지 않는다.
+
 ## 7. Update와 rollback
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.

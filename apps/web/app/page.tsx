@@ -5,10 +5,14 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { csrfToken } from './client-auth';
 import { UserManager } from './user-manager';
 
-interface Principal {
-  type: 'admin';
-  username: string;
-}
+type Principal =
+  | { type: 'admin'; username: string }
+  | {
+      displayName: string | null;
+      id: string;
+      type: 'user';
+      username: string;
+    };
 
 interface SessionResponse {
   principal: Principal;
@@ -17,6 +21,7 @@ interface SessionResponse {
 export default function HomePage() {
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [checking, setChecking] = useState(true);
+  const [loginMode, setLoginMode] = useState<'admin' | 'user'>('user');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,21 +47,24 @@ export default function HomePage() {
     setError('');
     const data = new FormData(event.currentTarget);
     try {
+      const payload: Record<string, FormDataEntryValue | null> = {
+        username: data.get('username'),
+        password: data.get('password'),
+      };
+      if (loginMode === 'admin') payload.totp = data.get('totp');
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: data.get('username'),
-          password: data.get('password'),
-          totp: data.get('totp'),
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         setError(
           response.status === 429
             ? '로그인 시도가 많습니다. 잠시 후 다시 시도하세요.'
-            : '관리자 ID, 비밀번호 또는 인증 코드를 확인하세요.',
+            : loginMode === 'admin'
+              ? '관리자 ID, 비밀번호 또는 인증 코드를 확인하세요.'
+              : '사용자 ID 또는 비밀번호를 확인하세요.',
         );
         return;
       }
@@ -88,6 +96,41 @@ export default function HomePage() {
   }
 
   if (!checking && principal) {
+    if (principal.type === 'user') {
+      return (
+        <main className="user-shell">
+          <header className="admin-header user-header">
+            <div className="admin-brand">
+              <div className="mark compact-mark" aria-hidden="true">
+                나루
+              </div>
+              <div>
+                <p className="eyebrow">MODELNARU · WORKSPACE</p>
+                <h1>{principal.displayName || principal.username}님의 공간</h1>
+              </div>
+            </div>
+            <div className="admin-session">
+              <span>{principal.username}</span>
+              <button type="button" onClick={logout} disabled={submitting}>
+                {submitting ? '처리 중…' : '로그아웃'}
+              </button>
+            </div>
+          </header>
+          {error && <div className="banner error-banner">{error}</div>}
+          <section
+            className="workspace-empty"
+            aria-labelledby="workspace-title"
+          >
+            <p className="card-label">PRIVATE WORKSPACE</p>
+            <h2 id="workspace-title">로그인되었습니다</h2>
+            <p>
+              이 계정의 대화와 설정은 다른 사용자와 분리됩니다. 다음 개발
+              단계에서 Provider와 대화방이 이 공간에 연결됩니다.
+            </p>
+          </section>
+        </main>
+      );
+    }
     return (
       <main className="admin-shell">
         <header className="admin-header">
@@ -126,8 +169,8 @@ export default function HomePage() {
           이어갑니다.
         </p>
         <div className="security-note">
-          <span className="status-dot" /> 관리자 로그인은 비밀번호와 TOTP 인증을
-          함께 사용합니다.
+          <span className="status-dot" /> 사용자 계정은 관리자가 생성하며
+          회원가입은 제공하지 않습니다.
         </div>
       </section>
 
@@ -138,13 +181,45 @@ export default function HomePage() {
           </div>
         ) : (
           <form className="auth-card" onSubmit={login}>
-            <p className="card-label">ADMIN SIGN IN</p>
-            <h2>관리자 로그인</h2>
+            <div className="login-mode" role="tablist" aria-label="로그인 유형">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={loginMode === 'user'}
+                className={loginMode === 'user' ? 'active' : ''}
+                onClick={() => {
+                  setLoginMode('user');
+                  setError('');
+                }}
+              >
+                사용자
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={loginMode === 'admin'}
+                className={loginMode === 'admin' ? 'active' : ''}
+                onClick={() => {
+                  setLoginMode('admin');
+                  setError('');
+                }}
+              >
+                관리자
+              </button>
+            </div>
+            <p className="card-label">
+              {loginMode === 'admin' ? 'ADMIN SIGN IN' : 'USER SIGN IN'}
+            </p>
+            <h2>{loginMode === 'admin' ? '관리자 로그인' : '사용자 로그인'}</h2>
             <p className="card-copy">
-              서버 설정에 등록한 관리자 계정으로 로그인하세요.
+              {loginMode === 'admin'
+                ? '서버 설정에 등록한 관리자 계정으로 로그인하세요.'
+                : '관리자가 등록한 사용자 계정으로 로그인하세요.'}
             </p>
 
-            <label htmlFor="username">관리자 ID</label>
+            <label htmlFor="username">
+              {loginMode === 'admin' ? '관리자 ID' : '사용자 ID'}
+            </label>
             <input
               id="username"
               name="username"
@@ -165,19 +240,23 @@ export default function HomePage() {
               required
             />
 
-            <label htmlFor="totp">인증 앱 코드</label>
-            <input
-              id="totp"
-              name="totp"
-              className="totp-input"
-              type="text"
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              placeholder="000000"
-              required
-            />
+            {loginMode === 'admin' && (
+              <>
+                <label htmlFor="totp">인증 앱 코드</label>
+                <input
+                  id="totp"
+                  name="totp"
+                  className="totp-input"
+                  type="text"
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="000000"
+                  required
+                />
+              </>
+            )}
 
             {error && <p className="form-error">{error}</p>}
             <button type="submit" disabled={submitting}>

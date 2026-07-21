@@ -8,9 +8,10 @@ import {
 } from '../src/auth.crypto.js';
 import { AuthRateLimiter } from '../src/auth.rate-limiter.js';
 import type {
-  AdminSessionRow,
   AuthRepository,
-  CreateAdminSessionInput,
+  CreateSessionInput,
+  SessionRow,
+  UserCredentialRow,
 } from '../src/auth.repository.js';
 import { AuthService, type AuthError } from '../src/auth.service.js';
 
@@ -45,7 +46,7 @@ function loadedConfig(): LoadedConfig {
   } as LoadedConfig;
 }
 
-function rowFrom(input: CreateAdminSessionInput): AdminSessionRow {
+function rowFrom(input: CreateSessionInput): SessionRow {
   return {
     absoluteExpiresAt: input.absoluteExpiresAt,
     accountKey: input.accountKey,
@@ -54,18 +55,33 @@ function rowFrom(input: CreateAdminSessionInput): AdminSessionRow {
     id: '00000000-0000-4000-8000-000000000001',
     idleExpiresAt: input.idleExpiresAt,
     lastSeenAt: new Date(),
-    principalType: 'admin',
+    principalType: input.principalType,
     revokedAt: null,
     tokenHash: input.tokenHash,
+    userId: input.userId,
+  };
+}
+
+function user(overrides: Partial<UserCredentialRow> = {}): UserCredentialRow {
+  return {
+    credentialVersion: 1,
+    displayName: 'User One',
+    id: '10000000-0000-4000-8000-000000000001',
+    isEnabled: true,
+    passwordHash,
+    username: 'user1',
+    ...overrides,
   };
 }
 
 function createRepository() {
   return {
-    createAdminSession: vi.fn((input: CreateAdminSessionInput) =>
+    createSession: vi.fn((input: CreateSessionInput) =>
       Promise.resolve(rowFrom(input)),
     ),
-    findAdminSessionByTokenHash: vi.fn(),
+    findSessionByTokenHash: vi.fn(),
+    findUserById: vi.fn(),
+    findUserByUsername: vi.fn(),
     revokeSession: vi.fn(() => Promise.resolve()),
     touchSession: vi.fn(() => Promise.resolve(true)),
   };
@@ -93,13 +109,67 @@ describe('AuthService', () => {
       username: 'ADMIN',
     });
 
+    expect(session.principal).toEqual({ type: 'admin', username: 'admin' });
     expect(session.sessionToken).toBeTruthy();
     expect(session.csrfToken).toBeTruthy();
-    expect(repository.createAdminSession).toHaveBeenCalledOnce();
-    const input = repository.createAdminSession.mock.calls[0]?.[0];
-    expect(input?.tokenHash).toHaveLength(32);
-    expect(input?.csrfTokenHash).toHaveLength(32);
+    const input = repository.createSession.mock.calls[0]?.[0];
+    expect(input?.principalType).toBe('admin');
+    expect(input?.userId).toBeNull();
     expect(input?.maximumActiveSessions).toBe(3);
+  });
+
+  it('creates a user session without requiring TOTP', async () => {
+    const repository = createRepository();
+    repository.findUserByUsername.mockResolvedValue(user());
+    const service = new AuthService(
+      loadedConfig(),
+      repository as unknown as AuthRepository,
+      new AuthRateLimiter(),
+    );
+
+    const session = await service.login({
+      ipAddress: '203.0.113.10',
+      password: 'correct-password',
+      userAgent: 'test-agent',
+      username: 'USER1',
+    });
+
+    expect(session.principal).toMatchObject({
+      displayName: 'User One',
+      id: user().id,
+      type: 'user',
+      username: 'user1',
+    });
+    expect(repository.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountKey: `user:${user().id}`,
+        principalType: 'user',
+        userId: user().id,
+      }),
+    );
+  });
+
+  it('rejects disabled users without revealing the reason', async () => {
+    const repository = createRepository();
+    repository.findUserByUsername.mockResolvedValue(user({ isEnabled: false }));
+    const service = new AuthService(
+      loadedConfig(),
+      repository as unknown as AuthRepository,
+      new AuthRateLimiter(),
+    );
+
+    await expect(
+      service.login({
+        ipAddress: '203.0.113.10',
+        password: 'correct-password',
+        userAgent: 'test-agent',
+        username: 'user1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'AUTH_INVALID_CREDENTIALS',
+      status: 401,
+    } satisfies Partial<AuthError>);
+    expect(repository.createSession).not.toHaveBeenCalled();
   });
 
   it('does not reveal which administrator credential failed', async () => {
@@ -116,19 +186,18 @@ describe('AuthService', () => {
         password: 'wrong-password',
         totp: '000000',
         userAgent: 'test-agent',
-        username: 'unknown',
+        username: 'admin',
       }),
     ).rejects.toMatchObject({
       code: 'AUTH_INVALID_CREDENTIALS',
       status: 401,
     } satisfies Partial<AuthError>);
-    expect(repository.createAdminSession).not.toHaveBeenCalled();
   });
 
   it('revokes a session when the admin credential fingerprint changed', async () => {
     const repository = createRepository();
-    repository.findAdminSessionByTokenHash.mockResolvedValue({
-      ...rowFrom({
+    repository.findSessionByTokenHash.mockResolvedValue(
+      rowFrom({
         absoluteExpiresAt: new Date(900_000_000),
         accountKey: 'admin:admin',
         credentialFingerprint: createAdminCredentialFingerprint({
@@ -141,10 +210,80 @@ describe('AuthService', () => {
         idleExpiresAt: new Date(800_000_000),
         ipHash: null,
         maximumActiveSessions: 3,
+        principalType: 'admin',
         tokenHash: Buffer.alloc(32),
         userAgentHash: null,
+        userId: null,
       }),
+    );
+    const service = new AuthService(
+      loadedConfig(),
+      repository as unknown as AuthRepository,
+      new AuthRateLimiter(),
+    );
+
+    await expect(service.authenticate('session-token')).rejects.toMatchObject({
+      code: 'AUTH_SESSION_REQUIRED',
     });
+    expect(repository.revokeSession).toHaveBeenCalledWith(
+      expect.any(String),
+      'credential_changed',
+    );
+  });
+
+  it('rejects a user session on administrator-only authentication', async () => {
+    const repository = createRepository();
+    const currentUser = user();
+    repository.findUserById.mockResolvedValue(currentUser);
+    repository.findSessionByTokenHash.mockResolvedValue(
+      rowFrom({
+        absoluteExpiresAt: new Date(900_000_000),
+        accountKey: `user:${currentUser.id}`,
+        credentialFingerprint: sha256(
+          `modelnaru:user-credential:v1\0${currentUser.id}\0${currentUser.credentialVersion}`,
+        ),
+        csrfTokenHash: sha256('csrf-token'),
+        idleExpiresAt: new Date(800_000_000),
+        ipHash: null,
+        maximumActiveSessions: 3,
+        principalType: 'user',
+        tokenHash: Buffer.alloc(32),
+        userAgentHash: null,
+        userId: currentUser.id,
+      }),
+    );
+    const service = new AuthService(
+      loadedConfig(),
+      repository as unknown as AuthRepository,
+      new AuthRateLimiter(),
+    );
+
+    await expect(
+      service.authenticateAdmin('session-token'),
+    ).rejects.toMatchObject({ code: 'AUTH_ADMIN_REQUIRED', status: 403 });
+  });
+
+  it('revokes a user session when the credential version changed', async () => {
+    const repository = createRepository();
+    const currentUser = user({ credentialVersion: 2 });
+    repository.findUserById.mockResolvedValue(currentUser);
+    repository.findSessionByTokenHash.mockResolvedValue(
+      rowFrom({
+        absoluteExpiresAt: new Date(900_000_000),
+        accountKey: `user:${currentUser.id}`,
+        credentialFingerprint: sha256(
+          ['modelnaru:user-credential:v1', currentUser.id, '1'].join('\0'),
+        ),
+        csrfTokenHash: sha256('csrf-token'),
+        idleExpiresAt: new Date(800_000_000),
+        ipHash: null,
+        maximumActiveSessions: 3,
+        principalType: 'user',
+        tokenHash: Buffer.alloc(32),
+        userAgentHash: null,
+        userId: currentUser.id,
+      }),
+    );
     const service = new AuthService(
       loadedConfig(),
       repository as unknown as AuthRepository,
@@ -173,10 +312,12 @@ describe('AuthService', () => {
       idleExpiresAt: new Date(800_000_000),
       ipHash: null,
       maximumActiveSessions: 3,
+      principalType: 'admin',
       tokenHash: Buffer.alloc(32),
       userAgentHash: null,
+      userId: null,
     });
-    repository.findAdminSessionByTokenHash.mockResolvedValue(validRow);
+    repository.findSessionByTokenHash.mockResolvedValue(validRow);
     const service = new AuthService(
       config,
       repository as unknown as AuthRepository,

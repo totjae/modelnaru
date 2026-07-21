@@ -94,7 +94,8 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 - `last_seen_at >= created_at`, `idle_expires_at > last_seen_at`, `absolute_expires_at > created_at`이어야 한다.
 - 계정별 활성 session 최대 3개 제한은 인증 transaction에서 적용한다.
 - 고정 관리자 `account_key`는 정규화한 관리자 ID에서 파생하고 login transaction에서 advisory lock으로 직렬화한다.
-- `credential_fingerprint`는 관리자 시작 credential의 SHA-256이며 config 변경 후 기존 row가 조회돼도 인증 단계에서 폐기한다.
+- 일반 사용자 `account_key`는 변경되지 않는 사용자 UUID에서 파생하고 같은 방식으로 login transaction을 직렬화한다.
+- `credential_fingerprint`는 관리자는 시작 credential, 일반 사용자는 사용자 UUID와 `credential_version`의 SHA-256이다. 현재 값과 다르면 인증 단계에서 폐기한다.
 - idle·absolute 만료 row는 login 또는 인증 요청에서 lazy revoke하며 자동 hard delete 주기는 아직 두지 않는다.
 
 Index:

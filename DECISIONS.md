@@ -86,6 +86,15 @@
 - 대안: application log만 기록, 비동기 audit queue, 사용자 변경 후 별도 audit insert.
 - 영향: audit insert 실패 시 사용자 mutation도 rollback한다. password·hash·token은 snapshot에서 제외하고 삭제 이벤트는 사용자 표시 identity도 제거한다.
 
+### ADR-010: 역할 공통 로그인 endpoint와 UUID 기반 사용자 session
+
+- 상태: 확정
+- 결정일: 2026-07-22
+- 결정: `/api/auth/login` 하나에서 고정 관리자 username은 비밀번호·TOTP, 그 외 username은 DB 사용자 비밀번호로 검증한다. 일반 사용자 session의 `account_key`는 사용자 UUID에서 파생한다.
+- 이유: 관리자 ID 충돌 금지 정책을 활용해 endpoint와 cookie 체계를 하나로 유지하고, username 변경과 무관하게 계정별 동시 session 제한을 안정적으로 적용하기 위함이다.
+- 대안: 관리자와 사용자 login endpoint·cookie를 분리, username을 사용자 account key로 사용.
+- 영향: 관리자 전용 guard가 principal type을 별도로 검사한다. 일반 사용자는 현재 활성 상태와 credential version을 매 session 인증에서 확인한다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

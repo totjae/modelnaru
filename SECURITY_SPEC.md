@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-시작 설정, 관리자 credential, container 경계와 고정 관리자 로그인·session·CSRF 구현을 다룬다.
+시작 설정, 관리자·일반 사용자 credential, container 경계와 로그인·session·CSRF 구현을 다룬다.
 
 ## 3. 시작 설정과 secret
 
@@ -71,6 +71,16 @@
 - 관리자 ID와 대소문자만 다른 일반 사용자 ID를 생성할 수 없다.
 - 사용자 관리 response·오류·감사 snapshot에는 password와 password hash를 포함하지 않는다.
 - 삭제 감사 snapshot에서는 삭제 사용자의 username과 display name도 제거한다.
+
+### 6.5 일반 사용자 인증
+
+- 일반 사용자는 관리자가 생성한 ID와 Argon2id 비밀번호로 로그인하며 TOTP를 요구하지 않는다.
+- 존재하지 않는 ID, 잘못된 비밀번호와 비활성 계정은 모두 `AUTH_INVALID_CREDENTIALS`로 응답한다.
+- 존재하지 않는 사용자도 Argon2id 검증을 한 번 수행하여 계정 존재 여부에 따른 큰 시간 차이를 줄인다.
+- 사용자 `account_key`는 변경 가능한 username이 아니라 내부 UUID에서 파생한다.
+- 사용자 credential fingerprint는 내부 UUID와 `credential_version`에서 파생하며 비밀번호·username 변경 시 기존 session을 무효화한다.
+- session 인증 시 현재 사용자 row가 없거나 비활성화됐으면 거부한다.
+- 일반 사용자 session으로 관리자 API를 요청하면 `AUTH_ADMIN_REQUIRED` 403을 반환한다.
 
 ## 7. 오류·경계 조건
 
