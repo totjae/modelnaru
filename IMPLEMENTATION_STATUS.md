@@ -1,0 +1,32 @@
+# 구현 진행 현황
+
+## 상태 정의
+
+- `계획`: 명세만 존재
+- `명세 완료`: 상위 요구와 정책 문서가 확정되었으나 코드는 아직 없음
+- `구현 중`: 코드 작성과 검증 진행 중
+- `문서화 필요`: 코드는 있으나 상세 문서가 최신이 아님
+- `구현 완료`: 코드와 문서가 일치하고 기본 시험 통과
+- `검증 완료`: 인수·통합·보안 시험까지 통과
+- `보류`: 후속 단계로 연기
+
+## 현재 상태
+
+| 영역 | 상태 | 비고 |
+|---|---|---|
+| 상위 요구사항 | 명세 완료 | 전체 요구·provider·log·기술·배포·config 문서 존재 |
+| 프로젝트 골격 | 계획 | 다음 개발 단계에서 시작 |
+| 시작 config loader | 계획 | `SERVER_CONFIG_SPEC.md` 기준 |
+| `apichat-admin` 도구 | 계획 | Argon2id·TOTP·config validator |
+| 데이터베이스 | 계획 | 상세 schema 문서와 migration 필요 |
+| 인증·session | 계획 | 고정 관리자와 사용자 로그인 |
+| 사용자 관리 | 계획 | 관리자 전용 |
+| provider registry | 계획 | 전체 catalog snapshot과 검증 등급 |
+| AI streaming | 계획 | 공통 ChatEvent와 취소 |
+| 대화·branch·요약 | 계획 | 상태 전이 상세 문서 필요 |
+| 파일 처리 | 계획 | 텍스트·PDF·이미지, OCR은 보류 |
+| 관리자 log | 계획 | 감사·보안·AI·파일·시스템 |
+| Ubuntu 배포 | 계획 | Ubuntu 24.04.4 LTS, 기존 Nginx |
+| 외부 backup | 보류 | 초기에는 구성하지 않음 |
+
+이 문서는 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)의 절차에 따라 각 개발 작업에서 갱신한다.
