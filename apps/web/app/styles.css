@@ -1189,8 +1189,8 @@ h1 {
 
 .chat-toolbar {
   display: flex;
-  min-height: 64px;
-  padding: 11px 16px;
+  min-height: 46px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--line);
   align-items: center;
   justify-content: space-between;
@@ -1208,8 +1208,8 @@ h1 {
 
 .panel-toggle {
   display: inline-flex;
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 30px;
+  padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 9px;
   align-items: center;
