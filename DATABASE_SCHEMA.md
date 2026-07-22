@@ -174,14 +174,25 @@ Index:
 - 대화 또는 branch 삭제 시 cascade한다.
 - 재생성 assistant가 완료될 때 같은 transaction에서 조건부로 `conversations.active_branch_id`를 새 분기로 전환한다. 실패·취소 분기는 저장하되 활성화하지 않는다.
 
-## 14. 오류·경계 조건
+## 14. 컨텍스트 요약
+
+`0006_context_summarization.sql`은 전역 `summarization_settings` singleton과 원본 메시지를 변경하지 않는 `context_summaries` 이력을 추가한다.
+
+- 관리자는 활성 Provider 모델 하나와 20~20,000자의 요약 prompt를 지정한다. 모델이 지정되지 않은 초기 상태에서는 자동 요약을 실행하지 않는다.
+- prompt를 저장할 때마다 `prompt_version`을 증가시켜 이전 결과와 새 설정을 구분한다.
+- 요약은 대화·생성 당시 branch, 포함한 최초·최종 메시지, 포함 개수, Provider 모델과 template·model snapshot, token usage를 보존한다.
+- 현재 분기 경로에 `last_message_id`가 포함되고 모델·prompt version이 같은 가장 넓은 기존 요약만 재사용한다.
+- 대화·branch·포함 메시지 삭제 시 관련 요약도 cascade 삭제한다. Provider 모델 삭제 시 실제 FK만 `NULL`로 바꾸고 snapshot은 유지한다.
+- 같은 branch 끝점·prompt version·Provider 모델의 중복 생성을 partial unique index로 방지한다.
+
+## 15. 오류·경계 조건
 
 - 적용 기록은 있는데 repository에 migration 파일이 없으면 downgrade 또는 불완전 배포로 보고 실패한다.
 - 기존 migration checksum이 다르면 파일 변조로 보고 실패한다.
 - migration 실패 시 해당 파일의 transaction을 rollback하고 API를 시작하지 않는다.
 - DB URL과 password는 migration log에 출력하지 않는다.
 
-## 15. 검증·인수 조건
+## 16. 검증·인수 조건
 
 - migration 계획 정렬·checksum 단위시험 통과
 - SQL에 users·sessions 제약과 필수 index가 존재
@@ -199,8 +210,9 @@ Index:
 - 대화의 사용자·게스트 상호 배타 소유권과 주체 삭제 cascade가 존재
 - 대화마다 root branch가 하나이며 활성 branch가 같은 대화에 속함
 - 메시지 역할·상태·분기 순서·모델 snapshot 제약이 존재
+- 요약 설정 singleton, prompt 범위와 요약 범위 message FK·중복 방지 index가 존재
 
-## 16. 미결정·보류 항목
+## 17. 미결정·보류 항목
 
 - 첨부 table과 원본 파일 삭제 관계는 파일 상세 명세 작성 후 추가한다.
 - 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.

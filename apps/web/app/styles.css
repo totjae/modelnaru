@@ -952,6 +952,70 @@ h1 {
   margin-top: 32px;
 }
 
+.summarization-management {
+  margin-top: 32px;
+}
+
+.summarization-management .card-label {
+  color: var(--violet);
+}
+
+.summary-panel {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.summary-panel > p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.summary-panel form {
+  display: grid;
+  gap: 10px;
+}
+
+.summary-panel select,
+.summary-panel textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+}
+
+.summary-panel textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.summary-panel select:focus,
+.summary-panel textarea:focus {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 18%, transparent);
+}
+
+.summary-panel small {
+  color: var(--muted);
+}
+
+.summary-panel form > button {
+  min-height: 42px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--violet);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 750;
+}
+
 .access-management .card-label {
   color: var(--blue);
 }

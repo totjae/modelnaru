@@ -188,7 +188,7 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `reason`, `ip_hash`, `user_agent_summary`
 - `request_id`
 
-현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`와 `guest.settings_updated`를 기록한다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
+현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`와 `summarization.settings_updated`를 기록한다. 요약 설정 감사 snapshot에는 선택한 model ID와 prompt version만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
 
 ### `security_logs`
 

@@ -20,6 +20,11 @@ import {
   type ChatPrincipal,
   ConversationNotFoundError,
 } from './chats.repository.js';
+import {
+  ContextSummarizationUnavailableError,
+  estimateContextSize,
+  SummarizationService,
+} from './summarization.service.js';
 
 interface ActiveRequest {
   controller: AbortController;
@@ -27,7 +32,6 @@ interface ActiveRequest {
   principalKey: string;
 }
 
-export class ChatContextLimitError extends Error {}
 export class ChatParameterPolicyError extends Error {}
 
 export interface ExecuteChatInput {
@@ -52,6 +56,7 @@ export class ChatExecutionService {
     private readonly access: AccessService,
     private readonly providers: ChatProviderService,
     private readonly messages: ChatMessagesRepository,
+    private readonly summarization: SummarizationService,
   ) {}
 
   async execute(
@@ -91,15 +96,22 @@ export class ChatExecutionService {
             templateId: runtime.template.id,
           });
       assistantMessageId = turn.assistantMessageId;
-      const estimatedTokens = Array.from(
-        `${turn.systemPrompt}\n${turn.context.map((message) => message.content).join('\n')}`,
-      ).length;
       const effectiveContextLimit = Math.min(
         turn.contextTokenLimit,
         runtime.contextWindow ?? turn.contextTokenLimit,
       );
-      if (estimatedTokens > effectiveContextLimit) {
-        throw new ChatContextLimitError();
+      let context = turn.context;
+      if (
+        estimateContextSize(turn.systemPrompt, context) > effectiveContextLimit
+      ) {
+        context = await this.summarization.fitContext({
+          branchId: turn.branchId,
+          context,
+          contextLimit: effectiveContextLimit,
+          conversationId: input.conversationId,
+          ...(externalSignal ? { signal: externalSignal } : {}),
+          systemPrompt: turn.systemPrompt,
+        });
       }
       await this.access.reserveDailyRequest(principal, input.providerModelId);
       emit({
@@ -131,7 +143,7 @@ export class ChatExecutionService {
         for await (const event of streamProvider({
           apiKey: runtime.apiKey,
           baseUrl: runtime.baseUrl,
-          messages: turn.context,
+          messages: context,
           modelId: runtime.modelId,
           parameters: input.parameters,
           signal: controller.signal,
@@ -279,10 +291,11 @@ export class ChatExecutionService {
         retryable: false,
       };
     }
-    if (error instanceof ChatContextLimitError) {
+    if (error instanceof ContextSummarizationUnavailableError) {
       return {
         code: 'CHAT_CONTEXT_LIMIT_EXCEEDED',
-        message: 'The conversation exceeds its context limit.',
+        message:
+          'The conversation exceeds its context limit and could not be summarized.',
         retryable: false,
       };
     }

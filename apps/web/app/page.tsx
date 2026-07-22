@@ -7,6 +7,7 @@ import { ChatWorkspace } from './chat-workspace';
 import { csrfToken } from './client-auth';
 import { ProviderManager } from './provider-manager';
 import { UserManager } from './user-manager';
+import { SummarizationManager } from './summarization-manager';
 
 type Principal =
   | { type: 'admin'; username: string }
@@ -190,6 +191,7 @@ export default function HomePage() {
         <UserManager />
         <ProviderManager />
         <AccessManager />
+        <SummarizationManager />
       </main>
     );
   }

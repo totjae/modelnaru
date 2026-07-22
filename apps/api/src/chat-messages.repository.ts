@@ -15,7 +15,7 @@ export interface ChatTurnRecord {
   activateBranchOnComplete: boolean;
   assistantMessageId: string;
   branchId: string;
-  context: Array<{ content: string; role: 'assistant' | 'user' }>;
+  context: Array<{ content: string; id: string; role: 'assistant' | 'user' }>;
   contextTokenLimit: number;
   previousActiveBranchId: string;
   systemPrompt: string;
@@ -195,6 +195,7 @@ export class ChatMessagesRepository {
         .filter((message) => message.status === 'completed')
         .map((message) => ({
           content: message.content,
+          id: message.id,
           role: message.role,
         }));
       const limited =
@@ -205,7 +206,10 @@ export class ChatMessagesRepository {
         activateBranchOnComplete: false,
         assistantMessageId,
         branchId: conversation.active_branch_id,
-        context: [...limited, { content: input.content, role: 'user' }],
+        context: [
+          ...limited,
+          { content: input.content, id: userMessageId, role: 'user' },
+        ],
         contextTokenLimit: conversation.context_token_limit,
         previousActiveBranchId: conversation.active_branch_id,
         systemPrompt: conversation.system_prompt,
@@ -311,6 +315,7 @@ export class ChatMessagesRepository {
         .filter((message) => message.status === 'completed')
         .map((message) => ({
           content: message.content,
+          id: message.id,
           role: message.role,
         }));
       const limited =

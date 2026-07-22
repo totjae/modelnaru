@@ -6,6 +6,8 @@ import { ChatExecutionService } from '../src/chat-execution.service.js';
 import type { ChatMessagesRepository } from '../src/chat-messages.repository.js';
 import type { ChatProviderService } from '../src/chat-provider.service.js';
 import { providerTemplateById } from '../src/provider-catalog.js';
+import type { SummarizationService } from '../src/summarization.service.js';
+import { ContextSummarizationUnavailableError } from '../src/summarization.service.js';
 
 const principal: AuthenticatedPrincipal = {
   displayName: null,
@@ -36,18 +38,33 @@ describe('ChatExecutionService', () => {
       beginTurn: vi.fn(() =>
         Promise.resolve({
           assistantMessageId: '30000000-0000-4000-8000-000000000001',
-          context: [{ content: 'too long', role: 'user' }],
+          activateBranchOnComplete: false,
+          branchId: '60000000-0000-4000-8000-000000000001',
+          context: [
+            {
+              content: 'too long',
+              id: '40000000-0000-4000-8000-000000000001',
+              role: 'user',
+            },
+          ],
           contextTokenLimit: 2,
+          previousActiveBranchId: '60000000-0000-4000-8000-000000000001',
           systemPrompt: '',
           userMessageId: '40000000-0000-4000-8000-000000000001',
         }),
       ),
       finishIncomplete: vi.fn(() => Promise.resolve()),
     };
+    const summarization = {
+      fitContext: vi.fn(() =>
+        Promise.reject(new ContextSummarizationUnavailableError()),
+      ),
+    };
     const service = new ChatExecutionService(
       access as unknown as AccessService,
       providers as unknown as ChatProviderService,
       messages as unknown as ChatMessagesRepository,
+      summarization as unknown as SummarizationService,
     );
     const events: unknown[] = [];
 
@@ -102,7 +119,13 @@ describe('ChatExecutionService', () => {
           activateBranchOnComplete: true,
           assistantMessageId: '30000000-0000-4000-8000-000000000001',
           branchId: '60000000-0000-4000-8000-000000000001',
-          context: [{ content: 'context', role: 'user' }],
+          context: [
+            {
+              content: 'context',
+              id: '40000000-0000-4000-8000-000000000001',
+              role: 'user',
+            },
+          ],
           contextTokenLimit: 100_000,
           previousActiveBranchId: '70000000-0000-4000-8000-000000000001',
           systemPrompt: '',
@@ -111,10 +134,16 @@ describe('ChatExecutionService', () => {
       ),
       finishIncomplete: vi.fn(() => Promise.resolve()),
     };
+    const summarization = {
+      fitContext: vi.fn(() =>
+        Promise.reject(new ContextSummarizationUnavailableError()),
+      ),
+    };
     const service = new ChatExecutionService(
       access as unknown as AccessService,
       providers as unknown as ChatProviderService,
       messages as unknown as ChatMessagesRepository,
+      summarization as unknown as SummarizationService,
     );
 
     await service.regenerate(

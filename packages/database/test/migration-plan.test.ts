@@ -120,4 +120,20 @@ describe('migration plan', () => {
     expect(sql).toContain('DEFAULT 100000');
     expect(sql).toContain('ON DELETE CASCADE');
   });
+
+  it('defines versioned context summaries without replacing messages', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0006_context_summarization.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE summarization_settings');
+    expect(sql).toContain('CREATE TABLE context_summaries');
+    expect(sql).toContain('prompt_version integer NOT NULL');
+    expect(sql).toContain('first_message_id uuid NOT NULL');
+    expect(sql).toContain('last_message_id uuid NOT NULL');
+    expect(sql).toContain('context_summaries_generation_unique');
+    expect(sql).toContain('ON DELETE CASCADE');
+    expect(sql).not.toContain('UPDATE messages');
+  });
 });

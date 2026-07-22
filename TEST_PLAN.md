@@ -117,6 +117,11 @@
 | CHAT-HEADER-001     | 정적 | 채팅 상단 헤더      | 브랜드·공간·ID·로그아웃 한 줄 배치와 좁은 화면 말줄임          | 통과 |
 | UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결             | 통과 |
 | UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용        | 통과 |
+| SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index  | 통과 |
+| SUMMARY-UNIT-001    | 단위 | 요약 context 구성   | Unicode 추정·호환 요약 재사용·최근 메시지 보존                 | 통과 |
+| SUMMARY-FAIL-001    | 단위 | 요약 실패 처리      | 본 호출 quota 예약 전 표준 오류·failed 상태 저장               | 통과 |
+| SUMMARY-ADMIN-001   | 통합 | 관리자 요약 설정    | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록            | 계획 |
+| SUMMARY-E2E-001     | E2E  | HTTPS 자동 요약     | 실제 모델 요약·원본 보존·재사용·후속 답변 품질                 | 계획 |
 
 ## 10. 실행 환경
 
@@ -142,7 +147,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 102개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 107개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -167,6 +172,7 @@ pnpm build
 - 부모 경로 공유형 분기 합성, 반복 재생성, 잘못된 fork 거부와 재생성 전용 실행·API 입력·분기 활성화 service 단위시험 통과
 - 마지막 assistant 답변만 재생성 대상으로 허용하고 동일 질문의 실제 branch 답변만 인라인 탐색 후보로 구성하는 단위시험 통과
 - 메시지 목록 하단 96px 자동 추적 경계와 사용자가 위로 스크롤한 경우의 추적 중단 단위시험 통과
+- 6차 migration의 요약 설정·메시지 경계·cascade·중복 방지 제약, Unicode 기반 한도 추정, 호환 요약 재사용과 요약 실패 시 quota 예약 방지를 단위시험으로 확인
 - Ubuntu HTTPS에서 Gemini·OpenAI 호환 모델 응답, 모델별 snapshot·token usage 저장, 새로고침 후 대화 복원과 assistant 취소 상태 저장을 확인했으며 대화별 모델 선택 복원은 수정 후 재배포 검증 대기
 - Ubuntu에서 `0003_provider_registry.sql` 적용과 LLM Gateway·OpenAI 실제 키 등록·모델 조회·동기화·활성 변경·감사 기록을 확인
 
