@@ -111,7 +111,7 @@ select {
   width: 58px;
   height: 58px;
   margin-bottom: 32px;
-  border: 1px solid color-mix(in srgb, var(--violet) 62%, transparent);
+  border: 1.25px solid color-mix(in srgb, var(--violet) 62%, transparent);
   border-radius: 17px;
   overflow: hidden;
   place-items: center;
