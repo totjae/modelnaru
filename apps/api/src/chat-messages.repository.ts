@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 
-import { composeBranchMessages } from './chat-branches.js';
+import {
+  composeBranchMessages,
+  isLatestRegenerationTarget,
+} from './chat-branches.js';
 import type { ChatParameters } from './chat-streaming.js';
 import type { ChatPrincipal } from './chats.repository.js';
 import { ConversationNotFoundError } from './chats.repository.js';
@@ -267,9 +270,7 @@ export class ChatMessagesRepository {
       const targetUser = activeMessages[targetIndex - 1];
       if (
         !target ||
-        target.role !== 'assistant' ||
-        target.status === 'pending' ||
-        target.status === 'streaming' ||
+        !isLatestRegenerationTarget(activeMessages, input.assistantMessageId) ||
         !targetUser ||
         targetUser.role !== 'user' ||
         targetUser.status !== 'completed'

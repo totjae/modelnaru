@@ -1177,11 +1177,6 @@ h1 {
   gap: 4px;
 }
 
-.chat-toolbar > .branch-selector {
-  min-width: 130px;
-  max-width: 180px;
-}
-
 .chat-toolbar select,
 .parameter-grid input,
 .chat-settings input,
@@ -1311,21 +1306,49 @@ h1 {
   color: var(--danger);
 }
 
-.regenerate-button {
+.message-actions {
+  display: flex;
   margin-top: 10px;
-  padding: 7px 10px;
-  border: 1px solid var(--violet);
-  border-radius: 9px;
-  background: transparent;
-  color: var(--violet);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
 }
 
+.response-navigation {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.response-navigation button,
+.regenerate-button {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
+  place-items: center;
+}
+
+.response-navigation button:hover:not(:disabled),
+.regenerate-button:hover:not(:disabled) {
+  background: var(--selected-surface);
+  color: var(--violet);
+}
+
+.response-navigation button:disabled,
 .regenerate-button:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 0.3;
 }
 
 .chat-welcome {

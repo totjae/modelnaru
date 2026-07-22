@@ -9,7 +9,26 @@ export interface ChatBranchMessageReference {
   sequenceNumber: number;
 }
 
+export interface RegenerationMessageReference {
+  id: string;
+  role: string;
+  status: string;
+}
+
 export class ChatBranchStateError extends Error {}
+
+export function isLatestRegenerationTarget(
+  messages: RegenerationMessageReference[],
+  targetId: string,
+): boolean {
+  const target = messages.at(-1);
+  return (
+    target?.id === targetId &&
+    target.role === 'assistant' &&
+    target.status !== 'pending' &&
+    target.status !== 'streaming'
+  );
+}
 
 export function composeBranchMessages<
   TMessage extends ChatBranchMessageReference,

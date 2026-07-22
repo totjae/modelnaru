@@ -11,6 +11,7 @@ import {
 
 import { csrfToken } from './client-auth';
 import { selectConversationModel } from './chat-model-selection';
+import { responseAlternatives } from './chat-response-navigation';
 
 interface AllowedModel {
   connectionName: string;
@@ -33,10 +34,12 @@ interface ConversationSummary {
 }
 
 interface ChatMessage {
+  branchId: string | null;
   content: string;
   errorCode: string | null;
   id: string;
   modelIdSnapshot: string | null;
+  parentMessageId: string | null;
   providerModelId: string | null;
   role: 'assistant' | 'summary' | 'user';
   sequenceNumber: number;
@@ -112,6 +115,9 @@ function streamError(code: string): string {
   if (code === 'CHAT_PARAMETER_INVALID') {
     return '생성 파라미터가 선택한 모델의 허용 범위를 넘었습니다.';
   }
+  if (code === 'CHAT_REGENERATION_INVALID') {
+    return '현재 대화의 가장 최근 AI 답변만 재생성할 수 있습니다.';
+  }
   if (code === 'CHAT_PROVIDER_AUTH_FAILED') {
     return 'Provider 인증에 실패했습니다. 관리자에게 알려주세요.';
   }
@@ -154,10 +160,12 @@ function temporaryMessage(
   content: string,
 ): ChatMessage {
   return {
+    branchId: null,
     content,
     errorCode: null,
     id,
     modelIdSnapshot: null,
+    parentMessageId: null,
     providerModelId: null,
     role,
     sequenceNumber: Number.MAX_SAFE_INTEGER,
@@ -380,6 +388,18 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     return value;
   }, [maxOutputTokens, temperature, topP]);
 
+  const latestMessage = messages.at(-1);
+  const alternatives = useMemo(
+    () =>
+      detail && latestMessage?.branchId
+        ? responseAlternatives(detail.branches, latestMessage)
+        : [],
+    [detail, latestMessage],
+  );
+  const activeAlternativeIndex = alternatives.findIndex(
+    (alternative) => alternative.branchId === detail?.activeBranchId,
+  );
+
   async function streamAssistant(
     response: Response,
     temporaryAssistantId: string,
@@ -395,6 +415,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             message.id === temporaryAssistantId
               ? {
                   ...message,
+                  branchId: streamEvent.branchId,
                   id: streamEvent.messageId,
                   modelIdSnapshot: streamEvent.modelId,
                   providerModelId: selectedModel,
@@ -510,6 +531,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         currentMessage.id === message.id
           ? {
               ...temporaryMessage(temporaryAssistantId, 'assistant', ''),
+              branchId: message.branchId,
+              parentMessageId: message.parentMessageId,
               providerModelId: selectedModel,
               sequenceNumber: message.sequenceNumber,
             }
@@ -639,27 +662,6 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   ))}
                 </select>
               </label>
-              {detail.branches.filter((branch) => branch.isSelectable).length >
-                1 && (
-                <label className="branch-selector">
-                  답변 분기
-                  <select
-                    value={detail.activeBranchId}
-                    onChange={(event) => activateBranch(event.target.value)}
-                    disabled={busy}
-                  >
-                    {detail.branches
-                      .filter((branch) => branch.isSelectable)
-                      .map((branch, index) => (
-                        <option key={branch.id} value={branch.id}>
-                          {branch.parentBranchId === null
-                            ? '원본 답변'
-                            : `재생성 답변 ${index}`}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              )}
               <details>
                 <summary>생성 파라미터</summary>
                 <div className="parameter-grid">
@@ -708,7 +710,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   <p>첫 메시지를 입력해 대화를 시작하세요.</p>
                 </div>
               ) : (
-                messages.map((message) => (
+                messages.map((message, messageIndex) => (
                   <article
                     className={`chat-message ${message.role} ${message.status}`}
                     key={message.id}
@@ -731,17 +733,67 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                           : '응답 실패'}
                       </small>
                     )}
-                    {message.role === 'assistant' &&
-                      message.status !== 'pending' &&
-                      message.status !== 'streaming' && (
-                        <button
-                          className="regenerate-button"
-                          type="button"
-                          onClick={() => regenerateMessage(message)}
-                          disabled={busy || !selectedModel}
-                        >
-                          답변 재생성
-                        </button>
+                    {messageIndex === messages.length - 1 &&
+                      message.role === 'assistant' && (
+                        <div className="message-actions">
+                          <div
+                            className="response-navigation"
+                            aria-label="답변 분기 탐색"
+                          >
+                            <button
+                              type="button"
+                              aria-label="이전 답변"
+                              title="이전 답변"
+                              onClick={() =>
+                                activateBranch(
+                                  alternatives[activeAlternativeIndex - 1]!
+                                    .branchId,
+                                )
+                              }
+                              disabled={busy || activeAlternativeIndex <= 0}
+                            >
+                              ←
+                            </button>
+                            <span>
+                              {activeAlternativeIndex >= 0
+                                ? activeAlternativeIndex + 1
+                                : 1}
+                              /{Math.max(alternatives.length, 1)}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label="다음 답변"
+                              title="다음 답변"
+                              onClick={() =>
+                                activateBranch(
+                                  alternatives[activeAlternativeIndex + 1]!
+                                    .branchId,
+                                )
+                              }
+                              disabled={
+                                busy ||
+                                activeAlternativeIndex < 0 ||
+                                activeAlternativeIndex >=
+                                  alternatives.length - 1
+                              }
+                            >
+                              →
+                            </button>
+                          </div>
+                          {message.status !== 'pending' &&
+                            message.status !== 'streaming' && (
+                              <button
+                                className="regenerate-button"
+                                type="button"
+                                onClick={() => regenerateMessage(message)}
+                                disabled={busy || !selectedModel}
+                                aria-label="답변 재생성"
+                                title="답변 재생성"
+                              >
+                                ↻
+                              </button>
+                            )}
+                        </div>
                       )}
                   </article>
                 ))

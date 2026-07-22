@@ -33,6 +33,7 @@ export interface ConversationBranchRecord {
 }
 
 export interface MessageRecord {
+  branchId: string;
   completedAt: Date | null;
   content: string;
   createdAt: Date;
@@ -126,6 +127,7 @@ function mapConversation(row: RawConversationRow): ConversationRecord {
 
 function mapMessage(row: RawMessageRow): MessageRecord {
   return {
+    branchId: row.branch_id,
     completedAt: row.completed_at,
     content: row.content,
     createdAt: row.created_at,

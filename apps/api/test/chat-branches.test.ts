@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ChatBranchStateError,
   composeBranchMessages,
+  isLatestRegenerationTarget,
 } from '../src/chat-branches.js';
 
 describe('composeBranchMessages', () => {
@@ -88,5 +89,27 @@ describe('composeBranchMessages', () => {
         new Map(),
       ),
     ).toThrow(ChatBranchStateError);
+  });
+});
+
+describe('isLatestRegenerationTarget', () => {
+  const messages = [
+    { id: 'answer-1', role: 'assistant', status: 'completed' },
+    { id: 'user-2', role: 'user', status: 'completed' },
+    { id: 'answer-2', role: 'assistant', status: 'completed' },
+  ];
+
+  it('accepts only the last completed assistant response', () => {
+    expect(isLatestRegenerationTarget(messages, 'answer-2')).toBe(true);
+    expect(isLatestRegenerationTarget(messages, 'answer-1')).toBe(false);
+  });
+
+  it('rejects a response that is still being generated', () => {
+    expect(
+      isLatestRegenerationTarget(
+        [{ id: 'answer', role: 'assistant', status: 'streaming' }],
+        'answer',
+      ),
+    ).toBe(false);
   });
 });
