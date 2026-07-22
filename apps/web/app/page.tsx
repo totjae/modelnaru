@@ -147,9 +147,7 @@ export default function HomePage() {
         <main className="user-shell">
           <header className="admin-header user-header">
             <div className="admin-brand">
-              <div className="mark compact-mark" aria-hidden="true">
-                <img src="/modelnaru-icon.svg" alt="" width="48" height="48" />
-              </div>
+              <div className="mark compact-mark" aria-hidden="true" />
               <div>
                 <p className="eyebrow">MODELNARU · WORKSPACE</p>
                 <h1>
@@ -175,9 +173,7 @@ export default function HomePage() {
       <main className="admin-shell">
         <header className="admin-header">
           <div className="admin-brand">
-            <div className="mark compact-mark" aria-hidden="true">
-              <img src="/modelnaru-icon.svg" alt="" width="48" height="48" />
-            </div>
+            <div className="mark compact-mark" aria-hidden="true" />
             <div>
               <p className="eyebrow">MODELNARU · ADMIN</p>
               <h1>관리자 공간</h1>
@@ -201,9 +197,7 @@ export default function HomePage() {
   return (
     <main className="shell">
       <section className="brand-panel" aria-labelledby="page-title">
-        <div className="mark" aria-hidden="true">
-          <img src="/modelnaru-icon.svg" alt="" width="58" height="58" />
-        </div>
+        <div className="mark" aria-hidden="true" />
         <p className="eyebrow">MODELNARU · PRIVATE AI WORKSPACE</p>
         <h1 id="page-title">여러 모델로 건너가는 하나의 대화 공간</h1>
         <p className="lead">
