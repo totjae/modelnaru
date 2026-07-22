@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 
 import type { AuthenticatedPrincipal } from './auth.service.js';
+import { composeBranchMessages } from './chat-branches.js';
 import { DatabaseService } from './database.service.js';
 
 export type ChatPrincipal = Extract<
@@ -26,6 +27,7 @@ export interface ConversationBranchRecord {
   createdAt: Date;
   forkedFromMessageId: string | null;
   id: string;
+  isSelectable: boolean;
   messages: MessageRecord[];
   parentBranchId: string | null;
 }
@@ -248,16 +250,84 @@ export class ChatsRepository {
       messages.push(mapMessage(messageRow));
       messagesByBranch.set(messageRow.branch_id, messages);
     }
+    const branches = branchRows.map((branch) => ({
+      forkedFromMessageId: branch.forked_from_message_id,
+      id: branch.id,
+      parentBranchId: branch.parent_branch_id,
+    }));
     return {
       ...mapConversation(row),
       branches: branchRows.map((branch) => ({
         createdAt: branch.created_at,
         forkedFromMessageId: branch.forked_from_message_id,
         id: branch.id,
-        messages: messagesByBranch.get(branch.id) ?? [],
+        isSelectable:
+          branch.parent_branch_id === null ||
+          (messagesByBranch.get(branch.id) ?? []).some(
+            (message) =>
+              message.role === 'assistant' && message.status === 'completed',
+          ),
+        messages: composeBranchMessages(branch.id, branches, messagesByBranch),
         parentBranchId: branch.parent_branch_id,
       })),
     };
+  }
+
+  async activateBranch(
+    principal: ChatPrincipal,
+    conversationId: string,
+    branchId: string,
+  ): Promise<ConversationRecord> {
+    const sql = this.database.getClient();
+    const rows =
+      principal.type === 'user'
+        ? await sql<RawConversationRow[]>`
+            UPDATE conversations c
+            SET active_branch_id = b.id
+            FROM conversation_branches b
+            WHERE c.id = ${conversationId}
+              AND c.user_id = ${principal.id}
+              AND b.id = ${branchId}
+              AND b.conversation_id = c.id
+              AND (
+                b.parent_branch_id IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM messages m
+                  WHERE m.branch_id = b.id
+                    AND m.role = 'assistant'
+                    AND m.status = 'completed'
+                )
+              )
+            RETURNING c.id, c.title, c.system_prompt,
+              c.history_message_limit, c.context_token_limit,
+              c.active_branch_id, c.created_at, c.updated_at,
+              (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS message_count
+          `
+        : await sql<RawConversationRow[]>`
+            UPDATE conversations c
+            SET active_branch_id = b.id
+            FROM conversation_branches b
+            WHERE c.id = ${conversationId}
+              AND c.guest_id = ${principal.id}
+              AND b.id = ${branchId}
+              AND b.conversation_id = c.id
+              AND (
+                b.parent_branch_id IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM messages m
+                  WHERE m.branch_id = b.id
+                    AND m.role = 'assistant'
+                    AND m.status = 'completed'
+                )
+              )
+            RETURNING c.id, c.title, c.system_prompt,
+              c.history_message_limit, c.context_token_limit,
+              c.active_branch_id, c.created_at, c.updated_at,
+              (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS message_count
+          `;
+    const row = rows[0];
+    if (!row) throw new ConversationNotFoundError();
+    return mapConversation(row);
   }
 
   async update(

@@ -106,6 +106,9 @@
 | CHAT-CANCEL-001    | 통합 | 중지·연결 종료      | upstream abort와 assistant `cancelled`·부분 본문 보존          | 계획 |
 | CHAT-E2E-001       | E2E  | HTTPS 텍스트 채팅   | 실제 허용 모델로 생성·stream·저장·새로고침·모델 변경           | 계획 |
 | CHAT-MODEL-001     | 단위 | 모델 선택 복원      | 마지막 허용 모델 복원·권한 제외 시 현재/첫 모델 fallback       | 통과 |
+| CHAT-BRANCH-001    | 단위 | 분기 경로 합성      | 부모 prefix 공유·반복 재생성·잘못된 fork 거부                  | 통과 |
+| CHAT-REGEN-001     | 단위 | 재생성 service·API  | 전용 저장 경로·입력 검증·분기 전환 소유권 전달                 | 통과 |
+| CHAT-REGEN-E2E-001 | E2E  | HTTPS 답변 재생성   | 원본 보존·성공 시 활성화·실패 시 유지·분기 왕복·후속 문맥      | 계획 |
 
 ## 10. 실행 환경
 
@@ -131,7 +134,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 89개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 96개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -153,6 +156,7 @@ pnpm build
 - 대화 CRUD 기본값·입력 범위, 관리자 workspace 차단과 소유권 not-found 변환 단위시험 통과
 - OpenAI 호환·Anthropic·Gemini 요청 builder, 분할 SSE parser와 컨텍스트 초과 시 quota 예약 방지 단위시험 통과
 - 활성 분기의 마지막 허용 모델 복원, 권한 제외 모델 무시와 fallback을 Web 단위시험으로 확인
+- 부모 경로 공유형 분기 합성, 반복 재생성, 잘못된 fork 거부와 재생성 전용 실행·API 입력·분기 활성화 service 단위시험 통과
 - Ubuntu HTTPS에서 Gemini·OpenAI 호환 모델 응답, 모델별 snapshot·token usage 저장, 새로고침 후 대화 복원과 assistant 취소 상태 저장을 확인했으며 대화별 모델 선택 복원은 수정 후 재배포 검증 대기
 - Ubuntu에서 `0003_provider_registry.sql` 적용과 LLM Gateway·OpenAI 실제 키 등록·모델 조회·동기화·활성 변경·감사 기록을 확인
 

@@ -32,6 +32,22 @@ export class ChatsService {
     return this.repository.create(this.chatPrincipal(principal), input);
   }
 
+  async activateBranch(
+    principal: AuthenticatedPrincipal,
+    conversationId: string,
+    branchId: string,
+  ) {
+    try {
+      return await this.repository.activateBranch(
+        this.chatPrincipal(principal),
+        conversationId,
+        branchId,
+      );
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
   async detail(principal: AuthenticatedPrincipal, id: string) {
     try {
       return await this.repository.detail(this.chatPrincipal(principal), id);

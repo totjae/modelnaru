@@ -77,4 +77,67 @@ describe('ChatExecutionService', () => {
       }),
     );
   });
+
+  it('creates regeneration through the branch-specific repository path', async () => {
+    const access = {
+      assertModelAllowed: vi.fn(() => Promise.resolve()),
+      reserveDailyRequest: vi.fn(),
+    };
+    const providers = {
+      resolve: vi.fn(() =>
+        Promise.resolve({
+          apiKey: 'secret',
+          baseUrl: 'https://api.openai.com/v1',
+          contextWindow: 1,
+          modelId: 'gpt-test',
+          providerModelId: '20000000-0000-4000-8000-000000000001',
+          template: providerTemplateById('openai')!,
+        }),
+      ),
+    };
+    const messages = {
+      assertConversation: vi.fn(() => Promise.resolve()),
+      beginRegeneration: vi.fn(() =>
+        Promise.resolve({
+          activateBranchOnComplete: true,
+          assistantMessageId: '30000000-0000-4000-8000-000000000001',
+          branchId: '60000000-0000-4000-8000-000000000001',
+          context: [{ content: 'context', role: 'user' }],
+          contextTokenLimit: 100_000,
+          previousActiveBranchId: '70000000-0000-4000-8000-000000000001',
+          systemPrompt: '',
+          userMessageId: null,
+        }),
+      ),
+      finishIncomplete: vi.fn(() => Promise.resolve()),
+    };
+    const service = new ChatExecutionService(
+      access as unknown as AccessService,
+      providers as unknown as ChatProviderService,
+      messages as unknown as ChatMessagesRepository,
+    );
+
+    await service.regenerate(
+      {
+        assistantMessageId: '80000000-0000-4000-8000-000000000001',
+        conversationId: '50000000-0000-4000-8000-000000000001',
+        parameters: {},
+        principal,
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      vi.fn(),
+    );
+
+    expect(messages.beginRegeneration).toHaveBeenCalledWith(
+      principal,
+      expect.objectContaining({
+        assistantMessageId: '80000000-0000-4000-8000-000000000001',
+      }),
+    );
+    expect(access.reserveDailyRequest).not.toHaveBeenCalled();
+    expect(messages.finishIncomplete).toHaveBeenCalledWith(
+      '30000000-0000-4000-8000-000000000001',
+      expect.objectContaining({ errorCode: 'CHAT_CONTEXT_LIMIT_EXCEEDED' }),
+    );
+  });
 });

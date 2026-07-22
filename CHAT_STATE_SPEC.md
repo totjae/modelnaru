@@ -44,8 +44,10 @@
 
 - 대화 생성 transaction에서 root 분기를 정확히 하나 생성하고 활성 분기로 지정한다.
 - 답변 재생성 시 기존 assistant 메시지를 덮어쓰지 않고, 원래 분기를 부모로 하는 새 분기를 만든다.
-- 새 분기는 분기 지점 메시지를 `forked_from_message_id`로 참조한다.
+- 새 분기는 교체할 기존 assistant 메시지를 `forked_from_message_id`로 참조하며 부모 분기의 해당 메시지 직전까지를 공유한다. 부모 메시지를 새 행으로 복사하지 않는다.
 - 재생성이 완료되면 새 분기를 활성 분기로 전환한다. 실패·취소 시 기존 활성 분기를 유지한다.
+- 이전 답변을 선택하면 root 또는 정상 완료된 재생성 분기를 활성 분기로 바꾸며 이후 요청은 선택한 경로만 컨텍스트로 사용한다.
+- 재생성 중 다른 session에서 활성 분기를 먼저 바꾼 경우 완료된 새 분기는 보존하되 현재 활성 분기를 강제로 덮어쓰지 않는다.
 - 첫 단계에서는 분기 삭제·이름 변경 API를 제공하지 않는다.
 
 ### 3.4 메시지와 상태
@@ -78,8 +80,10 @@
 - `DELETE /api/conversations/:id`: 대화 hard delete
 - `POST /api/conversations/:id/messages`: user·assistant 메시지를 저장하고 SSE로 AI 응답 전송
 - `POST /api/conversations/:id/messages/:messageId/cancel`: 진행 중인 upstream 요청 취소
+- `POST /api/conversations/:id/messages/:messageId/regenerate`: 기존 답변을 보존한 새 분기에서 SSE 재생성
+- `PATCH /api/conversations/:id/branches/:branchId/active`: 정상 완료된 답변 분기로 전환
 
-메시지 전송은 `content`, `providerModelId`와 검증된 `temperature`, `topP`, `maxOutputTokens`만 받는다. 모델 권한을 먼저 확인하고 컨텍스트 한도를 검사한 뒤 일일 호출량을 예약한다. 브라우저 연결 종료 또는 취소 API 요청은 같은 `AbortController`를 통해 upstream 연결도 중단한다. 재생성 endpoint는 후속 단계에서 추가한다. 모든 mutation은 CSRF 검증을 요구한다.
+메시지 전송은 `content`, `providerModelId`와 검증된 `temperature`, `topP`, `maxOutputTokens`만 받는다. 재생성은 새 `content` 없이 대상 assistant ID와 새 답변에 사용할 모델·parameter를 받는다. 모델 권한을 먼저 확인하고 컨텍스트 한도를 검사한 뒤 일일 호출량을 예약한다. 브라우저 연결 종료 또는 취소 API 요청은 같은 `AbortController`를 통해 upstream 연결도 중단한다. 모든 mutation은 CSRF 검증을 요구한다.
 
 ## 4. 오류·예외 또는 경계 조건
 
@@ -89,6 +93,7 @@
 - `CHAT_NOT_FOUND`(`404`): 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
 - `CHAT_CONTEXT_LIMIT_EXCEEDED`: 요약을 사용할 수 없는 상태에서 설정한 컨텍스트 한도 초과
 - `CHAT_NOT_CANCELLABLE`(`409`): 이미 완료됐거나 진행 중이 아닌 메시지 취소
+- `CHAT_REGENERATION_INVALID`: 활성 경로에 없거나 생성 중인 assistant 메시지를 재생성 대상으로 지정
 - 활성 분기와 대화의 관계가 일치하지 않으면 DB 제약으로 거부한다.
 - 브라우저 연결이 끊기면 현재 단일 API process의 upstream 요청을 중단하고 assistant 메시지를 `cancelled`로 저장한다.
 - 같은 client mutation의 중복 전송 방지는 후속 idempotency key 단계에서 확정한다.
@@ -104,6 +109,7 @@
 - OpenAI 호환·Anthropic·Gemini SSE를 공통 이벤트로 변환하고 완료·실패·취소 상태를 저장한다.
 - 허용되지 않은 모델은 메시지를 만들기 전에 거부하고 컨텍스트 초과는 quota 예약 전에 중단한다.
 - 재생성 결과는 기존 답변을 덮어쓰지 않는 새 분기로 저장할 수 있다.
+- 성공한 재생성만 활성화되고 이전·새 답변 분기를 왕복해도 각 경로가 보존된다.
 - controller·service 단위시험, migration 정적 시험, typecheck와 production build가 통과한다.
 
 ## 6. 미결정·보류 항목

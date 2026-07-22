@@ -184,6 +184,22 @@ function parseMessage(body: unknown):
   return { content, parameters, providerModelId: input.providerModelId };
 }
 
+function parseRegeneration(
+  body: unknown,
+): { parameters: ChatParameters; providerModelId: string } | undefined {
+  const input = recordBody(body);
+  if (!input) return undefined;
+  const parameters = parseParameters(input.parameters);
+  if (
+    typeof input.providerModelId !== 'string' ||
+    !UUID.test(input.providerModelId) ||
+    !parameters
+  ) {
+    return undefined;
+  }
+  return { parameters, providerModelId: input.providerModelId };
+}
+
 @Controller('conversations')
 export class ChatsController {
   constructor(
@@ -264,6 +280,27 @@ export class ChatsController {
         request.authenticatedSession!.principal,
         id,
         input,
+      );
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
+  @Patch(':id/branches/:branchId/active')
+  @UseGuards(AuthenticatedMutationGuard)
+  async activateBranch(
+    @Param('id') id: string,
+    @Param('branchId') branchId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id) || !UUID.test(branchId)) this.invalidInput();
+    try {
+      return await this.chats.activateBranch(
+        request.authenticatedSession!.principal,
+        id,
+        branchId,
       );
     } catch (error) {
       this.mapError(error);
@@ -355,6 +392,47 @@ export class ChatsController {
       }
       this.mapError(error);
     }
+  }
+
+  @Post(':id/messages/:messageId/regenerate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthenticatedMutationGuard)
+  async regenerate(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: ResponseLike,
+  ): Promise<void> {
+    const input = parseRegeneration(body);
+    if (!UUID.test(id) || !UUID.test(messageId) || !input) {
+      this.invalidInput();
+    }
+    response.setHeader('Cache-Control', 'no-cache, no-store');
+    response.setHeader('Connection', 'keep-alive');
+    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders?.();
+    const disconnected = new AbortController();
+    let completed = false;
+    response.on?.('close', () => {
+      if (!completed) disconnected.abort();
+    });
+    const emit = (event: ChatEvent) => {
+      response.write?.(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    await this.execution.regenerate(
+      {
+        ...input,
+        assistantMessageId: messageId,
+        conversationId: id,
+        principal: request.authenticatedSession!.principal,
+      },
+      emit,
+      disconnected.signal,
+    );
+    completed = true;
+    response.end?.();
   }
 
   private invalidInput(): never {

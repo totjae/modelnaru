@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 
 import { AccessError, AccessService } from './access.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
-import { ChatMessagesRepository } from './chat-messages.repository.js';
+import {
+  ChatMessagesRepository,
+  ChatRegenerationTargetError,
+} from './chat-messages.repository.js';
 import {
   ChatProviderService,
   ChatProviderUnavailableError,
@@ -33,7 +36,13 @@ export interface ExecuteChatInput {
   parameters: ChatParameters;
   principal: AuthenticatedPrincipal;
   providerModelId: string;
+  regenerateAssistantMessageId?: string;
 }
+
+export type RegenerateChatInput = Omit<
+  ExecuteChatInput,
+  'content' | 'regenerateAssistantMessageId'
+> & { assistantMessageId: string };
 
 @Injectable()
 export class ChatExecutionService {
@@ -64,14 +73,23 @@ export class ChatExecutionService {
       ) {
         throw new ChatParameterPolicyError();
       }
-      const turn = await this.messages.beginTurn(principal, {
-        content: input.content,
-        conversationId: input.conversationId,
-        modelId: runtime.modelId,
-        parameters: input.parameters,
-        providerModelId: input.providerModelId,
-        templateId: runtime.template.id,
-      });
+      const turn = input.regenerateAssistantMessageId
+        ? await this.messages.beginRegeneration(principal, {
+            assistantMessageId: input.regenerateAssistantMessageId,
+            conversationId: input.conversationId,
+            modelId: runtime.modelId,
+            parameters: input.parameters,
+            providerModelId: input.providerModelId,
+            templateId: runtime.template.id,
+          })
+        : await this.messages.beginTurn(principal, {
+            content: input.content,
+            conversationId: input.conversationId,
+            modelId: runtime.modelId,
+            parameters: input.parameters,
+            providerModelId: input.providerModelId,
+            templateId: runtime.template.id,
+          });
       assistantMessageId = turn.assistantMessageId;
       const estimatedTokens = Array.from(
         `${turn.systemPrompt}\n${turn.context.map((message) => message.content).join('\n')}`,
@@ -85,6 +103,7 @@ export class ChatExecutionService {
       }
       await this.access.reserveDailyRequest(principal, input.providerModelId);
       emit({
+        branchId: turn.branchId,
         messageId: turn.assistantMessageId,
         modelId: runtime.modelId,
         type: 'start',
@@ -133,6 +152,15 @@ export class ChatExecutionService {
         if (controller.signal.aborted)
           throw new DOMException('Aborted', 'AbortError');
         await this.messages.complete(turn.assistantMessageId, {
+          ...(turn.activateBranchOnComplete
+            ? {
+                activateBranch: {
+                  branchId: turn.branchId,
+                  conversationId: input.conversationId,
+                  previousActiveBranchId: turn.previousActiveBranchId,
+                },
+              }
+            : {}),
           content,
           inputTokens,
           outputTokens,
@@ -168,6 +196,25 @@ export class ChatExecutionService {
         // The browser may already have closed the stream.
       }
     }
+  }
+
+  regenerate(
+    input: RegenerateChatInput,
+    emit: (event: ChatEvent) => void,
+    externalSignal?: AbortSignal,
+  ): Promise<void> {
+    return this.execute(
+      {
+        content: '',
+        conversationId: input.conversationId,
+        parameters: input.parameters,
+        principal: input.principal,
+        providerModelId: input.providerModelId,
+        regenerateAssistantMessageId: input.assistantMessageId,
+      },
+      emit,
+      externalSignal,
+    );
   }
 
   async cancel(
@@ -243,6 +290,13 @@ export class ChatExecutionService {
       return {
         code: 'CHAT_PARAMETER_INVALID',
         message: 'A parameter exceeds the selected model limit.',
+        retryable: false,
+      };
+    }
+    if (error instanceof ChatRegenerationTargetError) {
+      return {
+        code: 'CHAT_REGENERATION_INVALID',
+        message: 'The selected response cannot be regenerated.',
         retryable: false,
       };
     }

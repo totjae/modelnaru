@@ -46,6 +46,23 @@ describe('ChatsService', () => {
     );
   });
 
+  it('activates a selectable branch for the authenticated owner', async () => {
+    const updated = { activeBranchId: 'branch-id' };
+    const repository = {
+      activateBranch: vi.fn(() => Promise.resolve(updated)),
+    };
+    const service = new ChatsService(repository as unknown as ChatsRepository);
+
+    await expect(
+      service.activateBranch(user, 'conversation-id', 'branch-id'),
+    ).resolves.toBe(updated);
+    expect(repository.activateBranch).toHaveBeenCalledWith(
+      user,
+      'conversation-id',
+      'branch-id',
+    );
+  });
+
   it('rejects the administrator workspace with the same not-found error', () => {
     const service = new ChatsService({} as ChatsRepository);
 

@@ -46,12 +46,14 @@ interface ChatMessage {
 interface ConversationDetail extends ConversationSummary {
   branches: Array<{
     id: string;
+    isSelectable: boolean;
     messages: ChatMessage[];
+    parentBranchId: string | null;
   }>;
 }
 
 type StreamEvent =
-  | { messageId: string; modelId: string; type: 'start' }
+  | { branchId: string; messageId: string; modelId: string; type: 'start' }
   | { text: string; type: 'text_delta' }
   | { inputTokens?: number; outputTokens?: number; type: 'usage' }
   | { durationMs: number; stopReason?: string; type: 'done' }
@@ -276,6 +278,30 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     }
   }
 
+  async function activateBranch(branchId: string) {
+    if (!selectedId || busy || branchId === detail?.activeBranchId) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await mutation(
+        `/api/conversations/${selectedId}/branches/${branchId}/active`,
+        'PATCH',
+      );
+      if (!response.ok) throw new Error(await responseMessage(response));
+      await loadDetail(selectedId);
+      setNotice('선택한 답변 분기로 전환했습니다.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : '답변 분기를 전환하지 못했습니다.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedId) return;
@@ -354,6 +380,67 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     return value;
   }, [maxOutputTokens, temperature, topP]);
 
+  async function streamAssistant(
+    response: Response,
+    temporaryAssistantId: string,
+  ) {
+    let currentAssistantId = temporaryAssistantId;
+    let completed = false;
+    await consumeSse(response, (streamEvent) => {
+      if (streamEvent.type === 'start') {
+        currentAssistantId = streamEvent.messageId;
+        setAssistantId(streamEvent.messageId);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === temporaryAssistantId
+              ? {
+                  ...message,
+                  id: streamEvent.messageId,
+                  modelIdSnapshot: streamEvent.modelId,
+                  providerModelId: selectedModel,
+                  status: 'streaming',
+                }
+              : message,
+          ),
+        );
+      } else if (streamEvent.type === 'text_delta') {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === currentAssistantId
+              ? { ...message, content: message.content + streamEvent.text }
+              : message,
+          ),
+        );
+      } else if (streamEvent.type === 'done') {
+        completed = true;
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === currentAssistantId
+              ? { ...message, status: 'completed' }
+              : message,
+          ),
+        );
+      } else if (streamEvent.type === 'error') {
+        setError(streamError(streamEvent.code));
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === currentAssistantId
+              ? {
+                  ...message,
+                  errorCode: streamEvent.code,
+                  status:
+                    streamEvent.code === 'CHAT_CANCELLED'
+                      ? 'cancelled'
+                      : 'failed',
+                }
+              : message,
+          ),
+        );
+      }
+    });
+    return completed;
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedId || !selectedModel || busy) return;
@@ -375,7 +462,6 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     form.reset();
     const controller = new AbortController();
     abortRef.current = controller;
-    let currentAssistantId = temporaryAssistantId;
     try {
       const response = await mutation(
         `/api/conversations/${selectedId}/messages`,
@@ -384,56 +470,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         controller.signal,
       );
       if (!response.ok) throw new Error(await responseMessage(response));
-      await consumeSse(response, (streamEvent) => {
-        if (streamEvent.type === 'start') {
-          currentAssistantId = streamEvent.messageId;
-          setAssistantId(streamEvent.messageId);
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === temporaryAssistantId
-                ? {
-                    ...message,
-                    id: streamEvent.messageId,
-                    modelIdSnapshot: streamEvent.modelId,
-                    status: 'streaming',
-                  }
-                : message,
-            ),
-          );
-        } else if (streamEvent.type === 'text_delta') {
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === currentAssistantId
-                ? { ...message, content: message.content + streamEvent.text }
-                : message,
-            ),
-          );
-        } else if (streamEvent.type === 'done') {
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === currentAssistantId
-                ? { ...message, status: 'completed' }
-                : message,
-            ),
-          );
-        } else if (streamEvent.type === 'error') {
-          setError(streamError(streamEvent.code));
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === currentAssistantId
-                ? {
-                    ...message,
-                    errorCode: streamEvent.code,
-                    status:
-                      streamEvent.code === 'CHAT_CANCELLED'
-                        ? 'cancelled'
-                        : 'failed',
-                  }
-                : message,
-            ),
-          );
-        }
-      });
+      await streamAssistant(response, temporaryAssistantId);
       await loadDetail(selectedId);
       await load(selectedId);
     } catch (caught) {
@@ -448,6 +485,66 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         await loadDetail(selectedId);
       } catch {
         // Keep the optimistic messages when refresh is unavailable.
+      }
+    } finally {
+      abortRef.current = null;
+      setAssistantId(null);
+      setBusy(false);
+    }
+  }
+
+  async function regenerateMessage(message: ChatMessage) {
+    if (
+      !selectedId ||
+      !selectedModel ||
+      busy ||
+      message.role !== 'assistant' ||
+      message.status === 'pending' ||
+      message.status === 'streaming'
+    ) {
+      return;
+    }
+    const temporaryAssistantId = `regenerated-${Date.now()}`;
+    setMessages((current) =>
+      current.map((currentMessage) =>
+        currentMessage.id === message.id
+          ? {
+              ...temporaryMessage(temporaryAssistantId, 'assistant', ''),
+              providerModelId: selectedModel,
+              sequenceNumber: message.sequenceNumber,
+            }
+          : currentMessage,
+      ),
+    );
+    setBusy(true);
+    setError('');
+    setNotice('새 답변 분기를 생성하고 있습니다.');
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const response = await mutation(
+        `/api/conversations/${selectedId}/messages/${message.id}/regenerate`,
+        'POST',
+        { parameters, providerModelId: selectedModel },
+        controller.signal,
+      );
+      if (!response.ok) throw new Error(await responseMessage(response));
+      const completed = await streamAssistant(response, temporaryAssistantId);
+      await loadDetail(selectedId);
+      await load(selectedId);
+      if (completed) setNotice('새 답변을 별도 분기로 보존했습니다.');
+    } catch (caught) {
+      if (!controller.signal.aborted) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : '답변을 재생성하지 못했습니다.',
+        );
+      }
+      try {
+        await loadDetail(selectedId);
+      } catch {
+        // Keep the preview when the active branch cannot be reloaded.
       }
     } finally {
       abortRef.current = null;
@@ -542,6 +639,27 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   ))}
                 </select>
               </label>
+              {detail.branches.filter((branch) => branch.isSelectable).length >
+                1 && (
+                <label className="branch-selector">
+                  답변 분기
+                  <select
+                    value={detail.activeBranchId}
+                    onChange={(event) => activateBranch(event.target.value)}
+                    disabled={busy}
+                  >
+                    {detail.branches
+                      .filter((branch) => branch.isSelectable)
+                      .map((branch, index) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.parentBranchId === null
+                            ? '원본 답변'
+                            : `재생성 답변 ${index}`}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
               <details>
                 <summary>생성 파라미터</summary>
                 <div className="parameter-grid">
@@ -613,6 +731,18 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                           : '응답 실패'}
                       </small>
                     )}
+                    {message.role === 'assistant' &&
+                      message.status !== 'pending' &&
+                      message.status !== 'streaming' && (
+                        <button
+                          className="regenerate-button"
+                          type="button"
+                          onClick={() => regenerateMessage(message)}
+                          disabled={busy || !selectedModel}
+                        >
+                          답변 재생성
+                        </button>
+                      )}
                   </article>
                 ))
               )}

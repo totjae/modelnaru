@@ -13,7 +13,7 @@ export interface ChatParameters {
 }
 
 export type ChatEvent =
-  | { messageId: string; modelId: string; type: 'start' }
+  | { branchId: string; messageId: string; modelId: string; type: 'start' }
   | { text: string; type: 'text_delta' }
   | { inputTokens?: number; outputTokens?: number; type: 'usage' }
   | { durationMs: number; stopReason?: string; type: 'done' }

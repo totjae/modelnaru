@@ -161,7 +161,7 @@ Index:
 
 ## 12. `conversation_branches`
 
-대화 생성 시 parent가 없는 root branch를 하나 만든다. 대화별 root branch는 partial unique index로 하나만 허용한다. 재생성 branch는 같은 대화의 `parent_branch_id`와 선택한 `forked_from_message_id`를 보존한다. 대화 삭제 시 모든 branch가 cascade 삭제된다.
+대화 생성 시 parent가 없는 root branch를 하나 만든다. 대화별 root branch는 partial unique index로 하나만 허용한다. 재생성 branch는 같은 대화의 `parent_branch_id`와 교체 대상 assistant의 `forked_from_message_id`를 보존한다. 자식 분기는 부모의 분기 대상 직전까지를 논리적으로 상속하고 새 assistant와 이후 메시지만 자체 행으로 저장한다. 대화 삭제 시 모든 branch가 cascade 삭제된다.
 
 ## 13. `messages`
 
@@ -172,6 +172,7 @@ Index:
 - Provider 모델이 삭제돼도 FK만 `NULL`로 바꾸고 template·model snapshot은 보존한다.
 - 완료 상태와 `completed_at` 존재 여부를 일치시킨다.
 - 대화 또는 branch 삭제 시 cascade한다.
+- 재생성 assistant가 완료될 때 같은 transaction에서 조건부로 `conversations.active_branch_id`를 새 분기로 전환한다. 실패·취소 분기는 저장하되 활성화하지 않는다.
 
 ## 14. 오류·경계 조건
 

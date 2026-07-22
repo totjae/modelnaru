@@ -71,4 +71,36 @@ describe('ChatsController', () => {
     ).rejects.toBeInstanceOf(HttpException);
     expect(chats.update).not.toHaveBeenCalled();
   });
+
+  it('rejects an invalid branch activation identifier', async () => {
+    const chats = { activateBranch: vi.fn() };
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
+
+    await expect(
+      controller.activateBranch(
+        '10000000-0000-4000-8000-000000000001',
+        'not-a-uuid',
+        request(),
+        response(),
+      ),
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(chats.activateBranch).not.toHaveBeenCalled();
+  });
+
+  it('requires a valid model identifier for regeneration', async () => {
+    const controller = new ChatsController({} as ChatsService, execution);
+
+    await expect(
+      controller.regenerate(
+        '10000000-0000-4000-8000-000000000001',
+        '20000000-0000-4000-8000-000000000001',
+        { providerModelId: 'invalid' },
+        request(),
+        response(),
+      ),
+    ).rejects.toBeInstanceOf(HttpException);
+  });
 });
