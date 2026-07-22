@@ -189,6 +189,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [temperature, setTemperature] = useState('');
   const [topP, setTopP] = useState('');
   const [maxOutputTokens, setMaxOutputTokens] = useState('');
+  const [conversationListOpen, setConversationListOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const followLatestRef = useRef(true);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -212,6 +214,18 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     setSelectedModel((current) =>
       selectConversationModel(activeMessages, modelsRef.current, current),
     );
+  }, []);
+
+  const refreshConversations = useCallback(async () => {
+    const response = await fetch('/api/conversations', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (!response.ok) throw new Error('conversation list failed');
+    const value = (await response.json()) as {
+      conversations: ConversationSummary[];
+    };
+    setConversations(value.conversations);
   }, []);
 
   const load = useCallback(
@@ -510,7 +524,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       if (!response.ok) throw new Error(await responseMessage(response));
       await streamAssistant(response, temporaryAssistantId);
       await loadDetail(selectedId);
-      await load(selectedId);
+      await refreshConversations().catch(() => undefined);
     } catch (caught) {
       if (!controller.signal.aborted) {
         setError(
@@ -572,7 +586,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       if (!response.ok) throw new Error(await responseMessage(response));
       const completed = await streamAssistant(response, temporaryAssistantId);
       await loadDetail(selectedId);
-      await load(selectedId);
+      await refreshConversations().catch(() => undefined);
       if (completed) setNotice('새 답변을 별도 분기로 보존했습니다.');
     } catch (caught) {
       if (!controller.signal.aborted) {
@@ -613,8 +627,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   }
 
   return (
-    <section className="chat-workspace" aria-label="AI 대화 공간">
-      <aside className="chat-sidebar">
+    <section
+      className={`chat-workspace${conversationListOpen ? '' : ' sidebar-collapsed'}${settingsOpen ? '' : ' settings-collapsed'}`}
+      aria-label="AI 대화 공간"
+    >
+      <aside className="chat-sidebar" hidden={!conversationListOpen}>
         <button
           className="new-chat-button"
           type="button"
@@ -656,6 +673,29 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             {error || notice}
           </div>
         )}
+        <div className="chat-toolbar">
+          <button
+            className="panel-toggle conversation-panel-toggle"
+            type="button"
+            aria-expanded={conversationListOpen}
+            onClick={() => setConversationListOpen((current) => !current)}
+          >
+            <span aria-hidden="true">{conversationListOpen ? '←' : '→'}</span>
+            대화 목록
+          </button>
+          <strong title={detail?.title ?? '대화 공간'}>
+            {detail?.title ?? '대화 공간'}
+          </strong>
+          <button
+            className="panel-toggle settings-panel-toggle"
+            type="button"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((current) => !current)}
+          >
+            설정
+            <span aria-hidden="true">{settingsOpen ? '→' : '←'}</span>
+          </button>
+        </div>
         {!detail ? (
           <div className="chat-welcome">
             <p className="card-label">READY TO CROSS MODELS</p>
@@ -664,63 +704,6 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           </div>
         ) : (
           <>
-            <div className="chat-toolbar">
-              <label>
-                모델
-                <select
-                  value={selectedModel}
-                  onChange={(event) => setSelectedModel(event.target.value)}
-                  disabled={busy}
-                >
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.displayName || model.modelId} ·{' '}
-                      {model.connectionName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <details>
-                <summary>생성 파라미터</summary>
-                <div className="parameter-grid">
-                  <label>
-                    Temperature
-                    <input
-                      type="number"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      value={temperature}
-                      onChange={(event) => setTemperature(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Top P
-                    <input
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={topP}
-                      onChange={(event) => setTopP(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    최대 출력 토큰
-                    <input
-                      type="number"
-                      min="1"
-                      max="131072"
-                      value={maxOutputTokens}
-                      onChange={(event) =>
-                        setMaxOutputTokens(event.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-              </details>
-            </div>
-
             <div
               className="message-list"
               aria-live="polite"
@@ -856,7 +839,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         )}
       </div>
 
-      <aside className="chat-settings">
+      <aside className="chat-settings" hidden={!settingsOpen}>
         {detail ? (
           <form key={detail.id} onSubmit={saveSettings}>
             <p className="card-label">CONVERSATION SETTINGS</p>
@@ -870,14 +853,57 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
               />
             </label>
             <label>
-              시스템 프롬프트
-              <textarea
-                name="systemPrompt"
-                defaultValue={detail.systemPrompt}
-                rows={8}
-                maxLength={100000}
-              />
+              모델
+              <select
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+                disabled={busy}
+              >
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.displayName || model.modelId} ·{' '}
+                    {model.connectionName}
+                  </option>
+                ))}
+              </select>
             </label>
+            <fieldset className="parameter-box">
+              <legend>생성 파라미터</legend>
+              <div className="parameter-grid">
+                <label>
+                  Temperature
+                  <input
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(event) => setTemperature(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Top P
+                  <input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={topP}
+                    onChange={(event) => setTopP(event.target.value)}
+                  />
+                </label>
+                <label>
+                  최대 출력 토큰
+                  <input
+                    type="number"
+                    min="1"
+                    max="131072"
+                    value={maxOutputTokens}
+                    onChange={(event) => setMaxOutputTokens(event.target.value)}
+                  />
+                </label>
+              </div>
+            </fieldset>
             <label>
               이전 메시지 수
               <input
@@ -888,7 +914,10 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 defaultValue={detail.historyMessageLimit}
                 required
               />
-              <small>0은 전체 대화입니다.</small>
+              <small>
+                0은 전체 대화입니다. 값이 크면 더 많은 이전 문맥을 모델에
+                전달합니다.
+              </small>
             </label>
             <label>
               컨텍스트 토큰 한도
@@ -901,7 +930,20 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 required
               />
             </label>
-            <button type="submit" disabled={busy}>
+            <label>
+              시스템 프롬프트
+              <textarea
+                name="systemPrompt"
+                defaultValue={detail.systemPrompt}
+                rows={8}
+                maxLength={100000}
+              />
+            </label>
+            <button
+              className="settings-save-button"
+              type="submit"
+              disabled={busy}
+            >
               설정 저장
             </button>
             <button
