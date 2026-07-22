@@ -60,11 +60,28 @@ export class SummarizationController {
         : typeof record?.providerModelId === 'string'
           ? record.providerModelId
           : undefined;
+    const maxOutputTokens = record?.maxOutputTokens;
+    const temperature = record?.temperature;
+    const topP = record?.topP;
     if (
       prompt.length < 20 ||
       prompt.length > 20_000 ||
       providerModelId === undefined ||
-      (providerModelId !== null && !uuid(providerModelId))
+      (providerModelId !== null && !uuid(providerModelId)) ||
+      typeof maxOutputTokens !== 'number' ||
+      !Number.isInteger(maxOutputTokens) ||
+      maxOutputTokens < 128 ||
+      maxOutputTokens > 32_768 ||
+      (temperature !== null &&
+        (typeof temperature !== 'number' ||
+          !Number.isFinite(temperature) ||
+          temperature < 0 ||
+          temperature > 2)) ||
+      (topP !== null &&
+        (typeof topP !== 'number' ||
+          !Number.isFinite(topP) ||
+          topP < 0 ||
+          topP > 1))
     ) {
       throw new HttpException(
         {
@@ -82,8 +99,11 @@ export class SummarizationController {
         ipHash: this.auth.hashIpAddress(
           request.ip ?? request.socket?.remoteAddress,
         ),
+        maxOutputTokens,
         prompt,
         providerModelId,
+        temperature,
+        topP,
       });
     } catch (error) {
       if (error instanceof SummarizationModelUnavailableError) {

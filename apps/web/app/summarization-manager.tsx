@@ -17,12 +17,19 @@ interface SummarySettings {
   prompt: string;
   promptVersion: number;
   providerModelId: string | null;
+  temperature: number | null;
+  topP: number | null;
   updatedAt: string;
 }
 
 interface SummaryState {
   models: SummaryModel[];
   settings: SummarySettings;
+}
+
+function optionalNumber(data: FormData, name: string): number | null {
+  const value = data.get(name);
+  return typeof value === 'string' && value.trim() ? Number(value) : null;
 }
 
 export function SummarizationManager() {
@@ -61,8 +68,11 @@ export function SummarizationManager() {
     try {
       const response = await fetch('/api/admin/summarization', {
         body: JSON.stringify({
+          maxOutputTokens: Number(data.get('maxOutputTokens')),
           prompt: data.get('prompt'),
           providerModelId: data.get('providerModelId') || null,
+          temperature: optionalNumber(data, 'temperature'),
+          topP: optionalNumber(data, 'topP'),
         }),
         credentials: 'same-origin',
         headers: {
@@ -137,6 +147,44 @@ export function SummarizationManager() {
                 </option>
               ))}
             </select>
+            <div className="summary-parameter-grid">
+              <label>
+                Temperature
+                <input
+                  name="temperature"
+                  type="number"
+                  min={0}
+                  max={2}
+                  step={0.01}
+                  defaultValue={state.settings.temperature ?? ''}
+                  placeholder="Provider 기본값"
+                />
+              </label>
+              <label>
+                Top P
+                <input
+                  name="topP"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  defaultValue={state.settings.topP ?? ''}
+                  placeholder="Provider 기본값"
+                />
+              </label>
+              <label>
+                최대 출력 토큰
+                <input
+                  name="maxOutputTokens"
+                  type="number"
+                  min={128}
+                  max={32768}
+                  step={1}
+                  defaultValue={state.settings.maxOutputTokens}
+                  required
+                />
+              </label>
+            </div>
             <label htmlFor="summary-prompt">요약 시스템 프롬프트</label>
             <textarea
               id="summary-prompt"

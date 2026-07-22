@@ -43,8 +43,11 @@ export class SummarizationService {
   async updateAdminSettings(input: {
     actorId: string;
     ipHash: Buffer | null;
+    maxOutputTokens: number;
     prompt: string;
     providerModelId: string | null;
+    temperature: number | null;
+    topP: number | null;
   }): Promise<{ settings: SummarizationSettings }> {
     return { settings: await this.repository.updateSettings(input) };
   }
@@ -119,6 +122,10 @@ export class SummarizationService {
             settings.maxOutputTokens,
             runtime.maxOutputTokens ?? settings.maxOutputTokens,
           ),
+          ...(settings.temperature !== null
+            ? { temperature: settings.temperature }
+            : {}),
+          ...(settings.topP !== null ? { topP: settings.topP } : {}),
         },
         signal: controller.signal,
         systemPrompt: settings.prompt,

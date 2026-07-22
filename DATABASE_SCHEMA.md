@@ -179,6 +179,7 @@ Index:
 `0006_context_summarization.sql`은 전역 `summarization_settings` singleton과 원본 메시지를 변경하지 않는 `context_summaries` 이력을 추가한다.
 
 - 관리자는 활성 Provider 모델 하나와 20~20,000자의 요약 prompt를 지정한다. 모델이 지정되지 않은 초기 상태에서는 자동 요약을 실행하지 않는다.
+- `0007_summarization_parameters.sql`은 선택적 `temperature`(0~~2)와 `top_p`(0~~1)를 추가한다. `NULL`은 Provider 기본 sampling 값을 사용한다는 뜻이다.
 - prompt를 저장할 때마다 `prompt_version`을 증가시켜 이전 결과와 새 설정을 구분한다.
 - 요약은 대화·생성 당시 branch, 포함한 최초·최종 메시지, 포함 개수, Provider 모델과 template·model snapshot, token usage를 보존한다.
 - 현재 분기 경로에 `last_message_id`가 포함되고 모델·prompt version이 같은 가장 넓은 기존 요약만 재사용한다.

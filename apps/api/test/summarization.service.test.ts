@@ -33,6 +33,8 @@ describe('SummarizationService', () => {
           prompt: '요약 프롬프트',
           promptVersion: 3,
           providerModelId: 'model-1',
+          temperature: 0.2,
+          topP: 0.9,
           updatedAt: new Date(),
         }),
       ),

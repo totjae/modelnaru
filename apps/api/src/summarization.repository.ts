@@ -17,6 +17,8 @@ export interface SummarizationSettings {
   prompt: string;
   promptVersion: number;
   providerModelId: string | null;
+  temperature: number | null;
+  topP: number | null;
   updatedAt: Date;
 }
 
@@ -35,6 +37,8 @@ interface RawSettings {
   prompt: string;
   prompt_version: number;
   provider_model_id: string | null;
+  temperature: number | null;
+  top_p: number | null;
   updated_at: Date;
 }
 
@@ -54,6 +58,8 @@ function mapSettings(row: RawSettings): SummarizationSettings {
     prompt: row.prompt,
     promptVersion: row.prompt_version,
     providerModelId: row.provider_model_id,
+    temperature: row.temperature,
+    topP: row.top_p,
     updatedAt: row.updated_at,
   };
 }
@@ -66,7 +72,8 @@ export class SummarizationRepository {
 
   async getSettings(): Promise<SummarizationSettings> {
     const rows = await this.database.getClient()<RawSettings[]>`
-      SELECT provider_model_id, prompt, prompt_version, max_output_tokens, updated_at
+      SELECT provider_model_id, prompt, prompt_version, max_output_tokens,
+        temperature, top_p, updated_at
       FROM summarization_settings WHERE singleton = true
     `;
     if (!rows[0]) throw new Error('Summarization settings are missing');
@@ -88,8 +95,11 @@ export class SummarizationRepository {
   async updateSettings(input: {
     actorId: string;
     ipHash: Buffer | null;
+    maxOutputTokens: number;
     prompt: string;
     providerModelId: string | null;
+    temperature: number | null;
+    topP: number | null;
   }): Promise<SummarizationSettings> {
     return this.database.getClient().begin(async (transaction) => {
       if (input.providerModelId) {
@@ -105,10 +115,12 @@ export class SummarizationRepository {
       const rows = await transaction<RawSettings[]>`
         UPDATE summarization_settings SET
           provider_model_id = ${input.providerModelId}, prompt = ${input.prompt},
+          temperature = ${input.temperature}, top_p = ${input.topP},
+          max_output_tokens = ${input.maxOutputTokens},
           prompt_version = prompt_version + 1
         WHERE singleton = true
         RETURNING provider_model_id, prompt, prompt_version,
-          max_output_tokens, updated_at
+          max_output_tokens, temperature, top_p, updated_at
       `;
       await this.audit(transaction, input, rows[0]!.prompt_version);
       return mapSettings(rows[0]!);
@@ -179,7 +191,10 @@ export class SummarizationRepository {
     input: {
       actorId: string;
       ipHash: Buffer | null;
+      maxOutputTokens: number;
       providerModelId: string | null;
+      temperature: number | null;
+      topP: number | null;
     },
     promptVersion: number,
   ): Promise<void> {
@@ -189,7 +204,13 @@ export class SummarizationRepository {
       ) VALUES (
         'admin', ${input.actorId}, 'summarization.settings_updated',
         'summarization_settings',
-        ${transaction.json({ promptVersion, providerModelId: input.providerModelId })},
+        ${transaction.json({
+          maxOutputTokens: input.maxOutputTokens,
+          promptVersion,
+          providerModelId: input.providerModelId,
+          temperature: input.temperature,
+          topP: input.topP,
+        })},
         ${input.ipHash}
       )
     `;

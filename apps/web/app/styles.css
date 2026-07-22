@@ -979,6 +979,7 @@ h1 {
 }
 
 .summary-panel select,
+.summary-panel input,
 .summary-panel textarea {
   width: 100%;
   padding: 11px 12px;
@@ -996,6 +997,7 @@ h1 {
 }
 
 .summary-panel select:focus,
+.summary-panel input:focus,
 .summary-panel textarea:focus {
   border-color: var(--violet);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 18%, transparent);
@@ -1003,6 +1005,17 @@ h1 {
 
 .summary-panel small {
   color: var(--muted);
+}
+
+.summary-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summary-parameter-grid label {
+  display: grid;
+  gap: 7px;
 }
 
 .summary-panel form > button {
@@ -1678,6 +1691,10 @@ h1 {
   }
 
   .access-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-parameter-grid {
     grid-template-columns: 1fr;
   }
 

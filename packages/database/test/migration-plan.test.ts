@@ -136,4 +136,16 @@ describe('migration plan', () => {
     expect(sql).toContain('ON DELETE CASCADE');
     expect(sql).not.toContain('UPDATE messages');
   });
+
+  it('adds optional context-summary sampling parameters', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0007_summarization_parameters.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('ADD COLUMN temperature double precision');
+    expect(sql).toContain('ADD COLUMN top_p double precision');
+    expect(sql).toContain('temperature BETWEEN 0 AND 2');
+    expect(sql).toContain('top_p BETWEEN 0 AND 1');
+  });
 });

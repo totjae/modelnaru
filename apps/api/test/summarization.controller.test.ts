@@ -30,8 +30,11 @@ describe('SummarizationController', () => {
 
     await controller.update(
       {
+        maxOutputTokens: 1024,
         prompt: '이전 대화에서 중요한 사실과 미해결 작업을 정확히 요약하세요.',
         providerModelId: null,
+        temperature: 0.2,
+        topP: null,
       },
       request(),
       { setHeader: vi.fn() },
@@ -40,8 +43,11 @@ describe('SummarizationController', () => {
     expect(summarization.updateAdminSettings).toHaveBeenCalledWith({
       actorId: 'admin:admin',
       ipHash: expect.any(Buffer),
+      maxOutputTokens: 1024,
       prompt: '이전 대화에서 중요한 사실과 미해결 작업을 정확히 요약하세요.',
       providerModelId: null,
+      temperature: 0.2,
+      topP: null,
     });
   });
 
@@ -53,9 +59,41 @@ describe('SummarizationController', () => {
     );
 
     await expect(
-      controller.update({ prompt: '짧음', providerModelId: null }, request(), {
-        setHeader: vi.fn(),
-      }),
+      controller.update(
+        {
+          maxOutputTokens: 2048,
+          prompt: '짧음',
+          providerModelId: null,
+          temperature: null,
+          topP: null,
+        },
+        request(),
+        { setHeader: vi.fn() },
+      ),
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(summarization.updateAdminSettings).not.toHaveBeenCalled();
+  });
+
+  it('rejects sampling parameters outside their common ranges', async () => {
+    const summarization = { updateAdminSettings: vi.fn() };
+    const controller = new SummarizationController(
+      summarization as unknown as SummarizationService,
+      { hashIpAddress: vi.fn() } as unknown as AuthService,
+    );
+
+    await expect(
+      controller.update(
+        {
+          maxOutputTokens: 2048,
+          prompt:
+            '이전 대화를 중요한 사실 중심으로 정확하고 간결하게 요약하세요.',
+          providerModelId: null,
+          temperature: 2.1,
+          topP: 1,
+        },
+        request(),
+        { setHeader: vi.fn() },
+      ),
     ).rejects.toBeInstanceOf(HttpException);
     expect(summarization.updateAdminSettings).not.toHaveBeenCalled();
   });

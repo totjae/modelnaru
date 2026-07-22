@@ -118,6 +118,7 @@
 | UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결             | 통과 |
 | UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용        | 통과 |
 | SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index  | 통과 |
+| SUMMARY-PARAM-001   | 단위 | 7차 migration·API   | sampling 범위·nullable 기본값·최대 출력 범위 검증              | 통과 |
 | SUMMARY-UNIT-001    | 단위 | 요약 context 구성   | Unicode 추정·호환 요약 재사용·최근 메시지 보존                 | 통과 |
 | SUMMARY-FAIL-001    | 단위 | 요약 실패 처리      | 본 호출 quota 예약 전 표준 오류·failed 상태 저장               | 통과 |
 | SUMMARY-ADMIN-001   | 통합 | 관리자 요약 설정    | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록            | 계획 |
@@ -147,7 +148,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 107개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 109개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
