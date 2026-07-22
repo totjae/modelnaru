@@ -217,8 +217,6 @@ export function AccessManager() {
         permissions: selectedPermissions(data, state.models),
         resetTimezone: formText(data.get('resetTimezone')),
         sessionDailyRequestLimit: Number(data.get('sessionDailyRequestLimit')),
-        terminateExistingSessions:
-          data.get('terminateExistingSessions') === 'on',
       });
       if (!response.ok) throw new Error('save failed');
       setState((await response.json()) as AccessState);
@@ -416,10 +414,9 @@ export function AccessManager() {
                 />{' '}
                 게스트 파일 첨부(파일 기능 구현 후 활성화)
               </label>
-              <label className="check-field warning-check">
-                <input name="terminateExistingSessions" type="checkbox" /> 저장
-                시 기존 게스트 세션 모두 종료
-              </label>
+              <p className="guest-session-notice">
+                설정을 저장하면 현재 게스트 세션이 모두 종료됩니다.
+              </p>
               <ModelPermissionList
                 models={state.models}
                 permissions={state.guest.permissions}

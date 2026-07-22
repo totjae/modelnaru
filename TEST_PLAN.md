@@ -85,6 +85,9 @@
 | ACCESS-UNIT-001     | 단위 | 사용자 모델 권한  | 코드 hash·timezone·quota 오류 변환과 migration 계약              | 통과 |
 | ACCESS-CONCUR-001   | 통합 | 일일 호출 counter | 동시 요청에서 사용자·모델·게스트 한도를 원자적으로 초과하지 않음 | 계획 |
 | GUEST-AUTH-001      | 단위 | 공유 코드·session | hash 검증·생성 속도 제한·idle·absolute 만료 계산                 | 통과 |
+| GUEST-POLICY-001    | 통합 | 게스트 설정 저장  | 설정 저장 시 기존 게스트 session을 항상 모두 종료                | 계획 |
+| UI-STATIC-001       | 정적 | 공통 UI theme     | 라이트·다크 token·7색 공통 gradient·focus·checkbox 정렬          | 통과 |
+| UI-THEME-001        | E2E  | 테마 전환         | 시스템 추종·수동 전환·새로고침 후 선택 복원                      | 계획 |
 | GUEST-ISOLATION-001 | 보안 | 게스트 소유권     | 같은 코드를 쓴 두 guest가 상대 대화·첨부를 조회하지 못함         | 계획 |
 | GUEST-CLEANUP-001   | 통합 | 임시 데이터 삭제  | logout·만료·관리자 종료 후 기한 내 연쇄 삭제                     | 계획 |
 | GUEST-E2E-001       | E2E  | HTTPS 게스트 체험 | 코드 참가·독립 대화·호출 제한·logout                             | 계획 |

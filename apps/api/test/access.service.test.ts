@@ -46,7 +46,6 @@ describe('AccessService', () => {
         maximumActiveSessions: 10,
         permissions: [],
         resetTimezone: 'Asia/Seoul',
-        terminateExistingSessions: false,
       },
       audit,
     );
@@ -74,7 +73,6 @@ describe('AccessService', () => {
           maximumActiveSessions: 10,
           permissions: [],
           resetTimezone: 'invalid/timezone',
-          terminateExistingSessions: false,
         },
         audit,
       ),

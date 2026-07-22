@@ -36,6 +36,7 @@
 | Database 상세 명세 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)                       | table, column, 관계, index, migration과 삭제 정책                 |
 | Provider 계약 시험 | [PROVIDER_CONTRACT_TESTS.md](./PROVIDER_CONTRACT_TESTS.md)       | provider별 fixture·모델 조회·연결 시험과 실제 자격증명 검증 결과  |
 | 게스트 체험 명세   | [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)                   | 공유 코드, 임시 session·격리·수명·모델 권한과 일일 호출 제한      |
+| Web UI 명세        | [WEB_UI_SPEC.md](./WEB_UI_SPEC.md)                               | 검정 기반 색상, 7색 포인트, 컴포넌트·레이아웃·반응형 기준         |
 
 ## 3. 개발하면서 작성할 상세 문서
 
@@ -59,6 +60,7 @@
 | ------------------------ | --------------------------------------------------------------------------------------- |
 | 사용자·로그인·session    | `API_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`, `TEST_PLAN.md`                 |
 | 게스트 체험·호출 제한    | `GUEST_ACCESS_SPEC.md`, `API_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`         |
+| Web UI·색상·레이아웃     | `WEB_UI_SPEC.md`, `TEST_PLAN.md`, `IMPLEMENTATION_STATUS.md`                            |
 | 대화·message·branch·요약 | `API_SPEC.md`, `DATABASE_SCHEMA.md`, `CHAT_STATE_SPEC.md`, `TEST_PLAN.md`               |
 | provider·model·parameter | `AI_INTEGRATION_SPEC.md`, `PROVIDER_REGISTRATION_SPEC.md`, `PROVIDER_CONTRACT_TESTS.md` |
 | 파일·PDF·이미지·OCR      | `FILE_PROCESSING_SPEC.md`, `DATABASE_SCHEMA.md`, `SECURITY_SPEC.md`, `TEST_PLAN.md`     |

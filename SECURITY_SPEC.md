@@ -101,6 +101,7 @@
 - 게스트 cookie·CSRF·proxy 신뢰 기준은 일반 사용자와 동일하다.
 - 코드 시도는 IP HMAC 기준 5회/15분, session 생성은 5회/시간을 기본 제한으로 적용한다.
 - 게스트 session은 기본 1시간 idle·24시간 absolute 만료이며 로그아웃·만료·관리자 종료 뒤 임시 데이터를 삭제한다.
+- 게스트 설정 저장은 기존 게스트 session을 항상 종료하여 변경 전 정책이나 코드로 발급된 session을 남기지 않는다.
 - session당·모델별·전체 게스트 호출 제한은 upstream 전송 전에 DB에서 원자적으로 예약한다.
 - 게스트 코드·hash, 원본 IP, 대화 본문, Provider 연결 정보와 API 키는 게스트 response와 일반 log에 포함하지 않는다.
 - 세부 정책과 오류 code는 [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)를 따른다.

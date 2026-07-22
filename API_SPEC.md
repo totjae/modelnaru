@@ -247,7 +247,7 @@ Request:
 - `POST /api/auth/guest/session`: `{ "accessCode": string }`을 검증하고 독립 게스트 session cookie와 CSRF cookie 발급
 - `GET /api/admin/access`: 사용자·게스트 모델 권한, 제한, 게스트 설정과 활성 session 수 조회
 - `PUT /api/admin/access/users/:id`: 사용자 계정 전체 제한과 모델 allowlist·모델별 제한 교체
-- `PUT /api/admin/access/guest`: 게스트 코드·수명·용량·전체/세션 제한·모델 allowlist 교체와 기존 session 전체 종료 선택
+- `PUT /api/admin/access/guest`: 게스트 코드·수명·용량·전체/세션 제한·모델 allowlist를 교체하고 기존 게스트 session 전체 종료
 - `GET /api/access/models`: 현재 일반 사용자 또는 게스트에게 허용된 활성 모델 조회
 
 관리자 변경 API는 관리자 session과 CSRF를 요구한다. 제한 예약 로직은 `ACCESS_DAILY_LIMIT_REACHED`(`429`)와 적용 범위 `scope`를 반환하며 실제 AI 요청 endpoint가 추가될 때 upstream 호출 직전에 연결한다.

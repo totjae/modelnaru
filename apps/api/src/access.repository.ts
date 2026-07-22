@@ -69,7 +69,6 @@ export interface GuestAccessUpdateInput extends AccessUpdateInput {
   isEnabled: boolean;
   maximumActiveSessions: number;
   resetTimezone: string;
-  terminateExistingSessions: boolean;
 }
 
 interface RawAccessModelRow {
@@ -165,6 +164,9 @@ export class AccessRepository {
         c.is_enabled AS connection_enabled
       FROM provider_models m
       JOIN provider_connections c ON c.id = m.provider_connection_id
+      WHERE c.is_enabled = true
+        AND m.is_enabled = true
+        AND m.is_available = true
       ORDER BY lower(c.name), m.model_id
     `;
     const users = await sql<RawUserAccessRow[]>`
@@ -252,7 +254,7 @@ export class AccessRepository {
         SELECT id FROM users WHERE id = ${userId} FOR UPDATE
       `;
       if (!users[0]) throw new AccessSubjectNotFoundError();
-      await this.assertModelsExist(
+      await this.assertModelsAssignable(
         transaction,
         input.permissions.map((permission) => permission.providerModelId),
       );
@@ -291,7 +293,7 @@ export class AccessRepository {
     audit: ProviderAuditContext,
   ): Promise<void> {
     await this.database.getClient().begin(async (transaction) => {
-      await this.assertModelsExist(
+      await this.assertModelsAssignable(
         transaction,
         input.permissions.map((permission) => permission.providerModelId),
       );
@@ -329,9 +331,7 @@ export class AccessRepository {
           )
         `;
       }
-      if (input.terminateExistingSessions) {
-        await transaction`DELETE FROM guest_principals`;
-      }
+      await transaction`DELETE FROM guest_principals`;
       await writeAudit(transaction, {
         action: 'guest.settings_updated',
         after: {
@@ -343,7 +343,7 @@ export class AccessRepository {
           maximumActiveSessions: input.maximumActiveSessions,
           modelCount: input.permissions.length,
           sessionDailyRequestLimit: input.dailyRequestLimit,
-          terminatedExistingSessions: input.terminateExistingSessions,
+          terminatedExistingSessions: true,
         },
         audit,
         targetId: null,
@@ -492,13 +492,19 @@ export class AccessRepository {
     });
   }
 
-  private async assertModelsExist(
+  private async assertModelsAssignable(
     transaction: DatabaseTransaction,
     ids: string[],
   ): Promise<void> {
     if (ids.length === 0) return;
     const rows = await transaction<[{ id: string }]>`
-      SELECT id FROM provider_models WHERE id IN ${transaction(ids)}
+      SELECT m.id
+      FROM provider_models m
+      JOIN provider_connections c ON c.id = m.provider_connection_id
+      WHERE m.id IN ${transaction(ids)}
+        AND c.is_enabled = true
+        AND m.is_enabled = true
+        AND m.is_available = true
     `;
     if (rows.length !== new Set(ids).size) {
       throw new AccessSubjectNotFoundError();

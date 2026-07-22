@@ -52,6 +52,7 @@ ModelNaru(모델나루)는 여러 LLM 제공자를 한곳에서 등록하고, �
 - [AI 연동 명세](./AI_INTEGRATION_SPEC.md)
 - [Provider 등록 명세](./PROVIDER_REGISTRATION_SPEC.md)
 - [게스트 체험 명세](./GUEST_ACCESS_SPEC.md)
+- [Web UI 명세](./WEB_UI_SPEC.md)
 - [관리자 로그 명세](./ADMIN_LOGGING_SPEC.md)
 - [기술 스택과 대체안](./TECH_STACK_OPTIONS.md)
 - [운영 환경 프로필](./DEPLOYMENT_PROFILE.md)
