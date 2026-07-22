@@ -187,7 +187,59 @@ Request:
 - `404 USER_NOT_FOUND`: 대상 사용자 없음
 - `409 USERNAME_CONFLICT`: 관리자 또는 기존 사용자와 ID 충돌
 
-## 7. 오류·경계 조건
+## 7. 관리자 Provider 관리 API
+
+모든 endpoint는 관리자 session을 요구하고 상태 변경 요청은 CSRF를 검증한다. Provider 목록 response에는 API 키, ciphertext, nonce, 인증 tag가 포함되지 않는다.
+
+### `GET /api/admin/provider-templates`
+
+`provider-manager-v1.10.0.js`를 기준으로 보존한 전체 카탈로그를 반환한다. 각 항목의 `canRegister`로 현재 등록 지원 여부를 표시한다. 첫 구현에서 `llm-gateway`, `openai`, `anthropic`, `google`만 true다.
+
+### `GET /api/admin/provider-connections`
+
+등록된 연결과 모델 목록을 반환한다. 자격증명은 마지막 네 글자 hint만 조건부로 반환한다.
+
+### `POST /api/admin/provider-connections`
+
+```json
+{
+  "templateId": "llm-gateway",
+  "name": "Main Gateway",
+  "apiKey": "administrator-entered-api-key"
+}
+```
+
+서버는 고정 HTTPS endpoint에서 자격증명을 시험하고 모델 목록을 조회한 뒤 AES-256-GCM으로 암호화해 연결과 모델을 같은 transaction에 저장한다. LLM Gateway는 인증이 필요한 `GET /v1/key`로 키를 먼저 검증하고 공개 모델 목록은 별도로 조회한다. 신규 모델은 관리자가 선택할 때까지 기본 비활성화한다.
+
+### `PATCH /api/admin/provider-connections/:id`
+
+`name`, `isEnabled` 중 하나 이상을 변경한다. 이름은 대소문자를 무시해 unique다.
+
+### `DELETE /api/admin/provider-connections/:id`
+
+기존 메시지 snapshot과 향후 log 참조를 보존하기 위해 물리 삭제하지 않고 연결을 비활성화한다. 성공은 `204 No Content`다.
+
+### `POST /api/admin/provider-connections/:id/models/sync`
+
+암호화 자격증명을 서버에서 복호화해 모델 목록을 다시 조회한다. 기존 모델의 활성 설정은 유지하고 더 이상 조회되지 않는 모델은 `isAvailable: false`로 보존한다.
+
+### `PATCH /api/admin/provider-models/:id`
+
+`{ "isEnabled": boolean }`로 사용 가능한 모델의 전체 활성 상태를 변경한다.
+
+공통 오류:
+
+- `400 PROVIDER_INPUT_INVALID`: body 또는 UUID 형식 오류
+- `404 PROVIDER_NOT_FOUND`: 연결 또는 모델 없음
+- `409 PROVIDER_CONNECTION_CONFLICT`: 연결 이름 충돌
+- `422 PROVIDER_TEMPLATE_UNAVAILABLE`: 아직 등록 불가능한 카탈로그 항목
+- `422 PROVIDER_AUTH_FAILED`: upstream 자격증명 거부
+- `422 PROVIDER_RESPONSE_INVALID`: 모델 목록 형식 오류 또는 빈 목록
+- `429 PROVIDER_RATE_LIMITED`: upstream 모델 조회 제한
+- `502 PROVIDER_NETWORK_ERROR`: DNS·TLS·timeout·연결 실패
+- `502 PROVIDER_UPSTREAM_ERROR`: 그 밖의 upstream HTTP 오류
+
+## 8. 오류·경계 조건
 
 - 존재하지 않는 endpoint는 `404`를 반환한다.
 - readiness에는 DB URL, query, 오류 message와 stack을 포함하지 않는다.
@@ -195,8 +247,9 @@ Request:
 - 인증 오류 body는 `{ "error": { "code": string, "message": string } }` 형식을 사용한다.
 - 인증 cookie의 Domain은 지정하지 않아 현재 host 전용으로 제한한다.
 - 사용자 관리 response와 감사 기록에는 password 또는 password hash를 포함하지 않는다.
+- Provider 오류 response에는 upstream 본문, endpoint 내부 정보와 API 키를 포함하지 않는다.
 
-## 8. 검증·인수 조건
+## 9. 검증·인수 조건
 
 - 두 health endpoint의 controller test가 통과한다.
 - gateway를 통과한 `/api/health/live` 요청이 API response를 반환한다.
@@ -210,9 +263,13 @@ Request:
 - 인증되지 않은 요청과 CSRF가 없는 사용자 변경 요청이 거부된다.
 - 사용자 생성·수정·비활성화·비밀번호 변경·삭제가 감사 기록에 남는다.
 - 비밀번호 변경·비활성화·사용자명 변경 시 기존 사용자 session이 폐기된다.
+- 관리자만 Provider 카탈로그·연결을 조회하고 CSRF 검증 후 등록·동기화·상태 변경할 수 있다.
+- API 키는 모델 조회 request에만 사용하고 DB에는 AES-256-GCM ciphertext만 저장한다.
+- 모델 동기화 실패 시 기존 모델과 활성 설정을 보존한다.
 
-## 9. 미결정·보류 항목
+## 10. 미결정·보류 항목
 
 - 공통 request ID 형식은 관리자 log 단계에서 확정한다.
 - OpenAPI 문서는 현재 공개하지 않으며, 도입 시 관리자 session을 요구한다.
 - TOTP 복구 code는 CLI·DB 저장 구조와 함께 후속 보안 단계에서 구현한다.
+- API 키 교체, 사용자별 모델 권한 API와 Provider별 고급 설정은 다음 Provider 하위 단계에서 추가한다.

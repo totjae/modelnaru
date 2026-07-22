@@ -72,4 +72,18 @@ describe('migration plan', () => {
     expect(sql).not.toContain('password_hash');
     expect(sql).not.toContain('token_hash');
   });
+
+  it('defines encrypted provider credentials, models and user permissions', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0003_provider_registry.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE provider_connections');
+    expect(sql).toContain('credential_ciphertext bytea NOT NULL');
+    expect(sql).toContain('octet_length(credential_nonce) = 12');
+    expect(sql).toContain('CREATE TABLE provider_models');
+    expect(sql).toContain('CREATE TABLE user_model_permissions');
+    expect(sql).not.toMatch(/api_key|password_hash|secret_access_key/iu);
+  });
 });

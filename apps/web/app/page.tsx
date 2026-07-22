@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { csrfToken } from './client-auth';
+import { ProviderManager } from './provider-manager';
 import { UserManager } from './user-manager';
 
 type Principal =
@@ -152,6 +153,7 @@ export default function HomePage() {
         </header>
         {error && <div className="banner error-banner">{error}</div>}
         <UserManager />
+        <ProviderManager />
       </main>
     );
   }

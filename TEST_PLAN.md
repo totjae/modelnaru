@@ -56,23 +56,35 @@
 
 ## 6. 일반 사용자 인증 단계 시험 항목
 
-| ID                 | 종류 | 대상                | 인수 조건                                                     | 상태   |
-| ------------------ | ---- | ------------------- | ------------------------------------------------------------- | ------ |
-| USER-AUTH-UNIT-001 | 단위 | 사용자 login        | TOTP 없이 Argon2id 비밀번호로 user session 생성               | 통과   |
-| USER-AUTH-UNIT-002 | 단위 | 계정 상태           | 미존재·오류 비밀번호·비활성 계정을 같은 인증 오류로 거부      | 통과   |
-| USER-AUTH-UNIT-003 | 단위 | session credential  | UUID·credential version 검증과 변경 session 폐기              | 통과   |
-| USER-AUTH-SEC-001  | 보안 | 관리자 endpoint     | user session의 관리자 API 접근을 `AUTH_ADMIN_REQUIRED`로 거부 | 통과   |
-| USER-AUTH-INT-001  | 통합 | PostgreSQL session  | user_id 연결·최대 3개·idle/absolute 만료·logout 폐기          | 미검증 |
-| USER-AUTH-E2E-001  | E2E  | HTTPS 사용자 로그인 | 실제 login·새로고침 유지·관리자 화면 차단·logout              | 미검증 |
+| ID                 | 종류 | 대상                | 인수 조건                                                     | 상태      |
+| ------------------ | ---- | ------------------- | ------------------------------------------------------------- | --------- |
+| USER-AUTH-UNIT-001 | 단위 | 사용자 login        | TOTP 없이 Argon2id 비밀번호로 user session 생성               | 통과      |
+| USER-AUTH-UNIT-002 | 단위 | 계정 상태           | 미존재·오류 비밀번호·비활성 계정을 같은 인증 오류로 거부      | 통과      |
+| USER-AUTH-UNIT-003 | 단위 | session credential  | UUID·credential version 검증과 변경 session 폐기              | 통과      |
+| USER-AUTH-SEC-001  | 보안 | 관리자 endpoint     | user session의 관리자 API 접근을 `AUTH_ADMIN_REQUIRED`로 거부 | 통과      |
+| USER-AUTH-INT-001  | 통합 | PostgreSQL session  | user_id 연결·최대 3개·idle/absolute 만료·logout 폐기          | 부분 통과 |
+| USER-AUTH-E2E-001  | E2E  | HTTPS 사용자 로그인 | 실제 login·새로고침 유지·관리자 화면 차단·logout              | 통과      |
 
-## 7. 실행 환경
+## 7. Provider 등록 기반 시험 항목
+
+| ID                  | 종류 | 대상                    | 인수 조건                                         | 상태   |
+| ------------------- | ---- | ----------------------- | ------------------------------------------------- | ------ |
+| PROVIDER-UNIT-001   | 단위 | 전체 카탈로그           | ID 중복·잘못된 URL 없음, 참고 서비스 이름 보존    | 통과   |
+| PROVIDER-UNIT-002   | 단위 | 자격증명 암호화         | AES-256-GCM round-trip·변조·잘못된 key 거부       | 통과   |
+| PROVIDER-UNIT-003   | 단위 | 모델 조회 fixture       | 네 Provider header·URL·OpenAI·Google 응답 정규화  | 통과   |
+| PROVIDER-UNIT-004   | 단위 | 등록 service·controller | 평문 비저장·입력·준비 중 template 거부            | 통과   |
+| PROVIDER-STATIC-001 | 정적 | 3차 migration           | ciphertext·nonce·tag·모델·사용자 권한 제약        | 통과   |
+| PROVIDER-INT-001    | 통합 | PostgreSQL transaction  | 연결·모델·감사 기록 commit과 재동기화 보존        | 미검증 |
+| PROVIDER-E2E-001    | E2E  | LLM Gateway 실제 키     | 등록·모델 조회·암호화 재사용·모델 활성화·비활성화 | 미검증 |
+
+## 8. 실행 환경
 
 - 개발 검증: Windows, Codex bundled Node.js 24.14.0, pnpm 11.9.0
 - 목표 배포: Ubuntu 24.04.4 LTS, Docker Compose
 - Ubuntu 통합 검증: Ubuntu 24.04.4 LTS, Intel N100, RAM 16GB, Docker Compose, 외부 Nginx HTTPS
 - 개발 host에는 Docker CLI가 없어 DB 중단과 migration 재실행 검증은 Ubuntu server에서 수행한다.
 
-## 8. 실행 명령
+## 9. 실행 명령
 
 ```text
 pnpm format:check
@@ -82,14 +94,14 @@ pnpm test
 pnpm build
 ```
 
-## 9. 실제 결과
+## 10. 실제 결과
 
 2026-07-22 개발 환경에서 다음 결과를 확인했다.
 
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 47개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 60개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -100,16 +112,19 @@ pnpm build
 - 사용자 관리 guard·입력·Argon2id·오류 mapping·session 폐기·감사 snapshot과 삭제 익명화 단위시험 통과
 - 일반 사용자 Argon2id login, 비활성 계정 거부, UUID 기반 session과 관리자 권한 차단 단위시험 통과
 - Ubuntu HTTPS 사용자 관리에서 생성·수정·비활성·활성·비밀번호 변경·삭제와 `0002_user_management_audit.sql` 이벤트 및 삭제 identity 제거 확인
+- Ubuntu HTTPS에서 일반 사용자 login·새로고침·logout을 확인하고, 동일 계정 네 번째 login 시 가장 오래된 session이 `session_limit`으로 폐기되며 활성 session 3개만 유지되는 것을 PostgreSQL에서 확인
+- Provider 전체 카탈로그, AES-256-GCM, 네 API 키 인증 header·모델 fixture, 입력·평문 비노출과 3차 migration 정적 시험 통과
+- LLM Gateway 인증 endpoint 실패 시 공개 모델 목록 조회와 저장을 중단하는 시험 통과
 
 2026-07-22 Ubuntu 최초 migration 실행은 internal backend network에서 Corepack이 `pnpm`을 내려받으려다 DNS `EAI_AGAIN`으로 실패했다. PostgreSQL은 healthy였고 migration 적용 전 실패하여 schema 손상은 없었다. Runtime command를 build된 JavaScript의 직접 `node` 실행으로 변경한 뒤 재배포하여 `0001_auth_foundation.sql` 적용, migrate exit code 0, API·Web·PostgreSQL·Valkey healthy와 readiness `database: ok`를 확인했다. Migration 재실행과 `schema_migrations` 직접 조회, DB 중단 시 readiness 503 확인은 남아 있다.
 
-## 10. 오류·경계 조건
+## 11. 오류·경계 조건
 
 - 외부 provider가 필요한 시험은 fixture 기반 contract test와 실제 credential smoke test를 구분한다.
 - Docker를 실행하지 않은 정적 Compose 검토는 통합 시험 통과로 기록하지 않는다.
 - Windows에서 통과한 파일 권한 시험은 Linux `0600` 검증을 대체하지 않는다.
 
-## 11. 미결정·보류 항목
+## 12. 미결정·보류 항목
 
 - 실제 Ubuntu HTTPS 관리자 login 검증 후 Playwright E2E 자동화 범위를 확정한다.
-- provider 단계에서 실제 gateway별 contract test를 별도 문서에 기록한다.
+- 실제 gateway별 credential smoke test 결과를 `PROVIDER_CONTRACT_TESTS.md`에 기록한다.

@@ -34,6 +34,7 @@
 | 시험 계획·결과     | [TEST_PLAN.md](./TEST_PLAN.md)                                   | 단위·통합·빌드·배포 시험 항목과 실제 실행 결과                    |
 | 설계 결정 기록     | [DECISIONS.md](./DECISIONS.md)                                   | 확정된 구조, 선택한 대안, 이유, 영향과 변경 이력                  |
 | Database 상세 명세 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)                       | table, column, 관계, index, migration과 삭제 정책                 |
+| Provider 계약 시험 | [PROVIDER_CONTRACT_TESTS.md](./PROVIDER_CONTRACT_TESTS.md)       | provider별 fixture·모델 조회·연결 시험과 실제 자격증명 검증 결과  |
 
 ## 3. 개발하면서 작성할 상세 문서
 

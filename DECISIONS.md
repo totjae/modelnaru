@@ -95,6 +95,15 @@
 - 대안: 관리자와 사용자 login endpoint·cookie를 분리, username을 사용자 account key로 사용.
 - 영향: 관리자 전용 guard가 principal type을 별도로 검사한다. 일반 사용자는 현재 활성 상태와 credential version을 매 session 인증에서 확인한다.
 
+### ADR-011: 고정 Provider 카탈로그와 AES-256-GCM 자격증명 저장
+
+- 상태: 확정
+- 결정일: 2026-07-22
+- 결정: 참고 파일의 전체 서비스 이름은 내장 카탈로그에 보존하고 계약이 준비된 템플릿만 등록 가능하게 한다. API 키는 배포 secret의 32-byte master key와 레코드별 nonce를 사용하는 AES-256-GCM으로 암호화한다.
+- 이유: 원격 registry나 관리자 임의 endpoint를 실행하지 않으면서 필요한 LLM Gateway 간편 등록을 먼저 제공하고, DB 유출만으로 API 키를 복구할 수 없게 하기 위함이다.
+- 대안: API 키를 config 파일에 저장, DB 평문·단순 hash 저장, 원격 provider JSON을 즉시 신뢰, 외부 secret manager 사용.
+- 영향: master key 없이는 기존 자격증명을 복호화할 수 없다. 첫 구현은 고정 HTTPS endpoint·redirect 거부·timeout을 사용하며 key rotation 도구와 전용 인증 Provider는 후속 구현한다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

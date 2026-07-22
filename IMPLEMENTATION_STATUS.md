@@ -12,22 +12,22 @@
 
 ## 현재 상태
 
-| 영역                 | 상태      | 비고                                                                           |
-| -------------------- | --------- | ------------------------------------------------------------------------------ |
-| 상위 요구사항        | 명세 완료 | 전체 요구·provider·log·기술·배포·config 문서 존재                              |
-| 개발 문서 관리 지침  | 명세 완료 | root `AGENTS.md`, 문서 색인·갱신 기준·신규 문서 등록 형식                      |
-| 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                      |
-| 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                              |
-| `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                               |
-| 데이터베이스         | 검증 완료 | users·sessions·audit_logs migration Ubuntu 적용과 감사 조회 확인               |
-| 인증·session         | 구현 완료 | 관리자 TOTP와 일반 사용자 비밀번호 login·공통 session·CSRF, 사용자 실검증 필요 |
-| 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료            |
-| provider registry    | 계획      | 전체 catalog snapshot과 검증 등급                                              |
-| AI streaming         | 계획      | 공통 ChatEvent와 취소                                                          |
-| 대화·branch·요약     | 계획      | 상태 전이 상세 문서 필요                                                       |
-| 파일 처리            | 계획      | 텍스트·PDF·이미지, OCR은 보류                                                  |
-| 관리자 log           | 구현 중   | 사용자 관리 audit_logs 원장 구현, 조회·retention과 다른 category는 계획        |
-| Ubuntu 배포          | 검증 완료 | Ubuntu Compose·외부 Nginx·HTTPS·gateway·health 실통신 확인                     |
-| 외부 backup          | 보류      | 초기에는 구성하지 않음                                                         |
+| 영역                 | 상태      | 비고                                                                               |
+| -------------------- | --------- | ---------------------------------------------------------------------------------- |
+| 상위 요구사항        | 명세 완료 | 전체 요구·provider·log·기술·배포·config 문서 존재                                  |
+| 개발 문서 관리 지침  | 명세 완료 | root `AGENTS.md`, 문서 색인·갱신 기준·신규 문서 등록 형식                          |
+| 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                          |
+| 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                                  |
+| `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                   |
+| 데이터베이스         | 구현 완료 | 인증·감사 migration 검증, provider registry 3차 migration Ubuntu 적용 필요         |
+| 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인 |
+| 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                |
+| provider registry    | 구현 완료 | 전체 catalog, 네 API 키 등록·암호화·모델 동기화·Web UI, 실제 key 검증 필요         |
+| AI streaming         | 계획      | 공통 ChatEvent와 취소                                                              |
+| 대화·branch·요약     | 계획      | 상태 전이 상세 문서 필요                                                           |
+| 파일 처리            | 계획      | 텍스트·PDF·이미지, OCR은 보류                                                      |
+| 관리자 log           | 구현 중   | 사용자 관리 audit_logs 원장 구현, 조회·retention과 다른 category는 계획            |
+| Ubuntu 배포          | 검증 완료 | Ubuntu Compose·외부 Nginx·HTTPS·gateway·health 실통신 확인                         |
+| 외부 backup          | 보류      | 초기에는 구성하지 않음                                                             |
 
 이 문서는 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)의 절차에 따라 각 개발 작업에서 갱신한다.

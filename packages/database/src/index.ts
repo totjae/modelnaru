@@ -6,6 +6,7 @@ import type { LoadedConfig } from '@modelnaru/config';
 
 export type DatabaseClient = Sql<Record<string, never>>;
 export type DatabaseTransaction = TransactionSql<Record<string, never>>;
+export type { JSONValue } from 'postgres';
 
 export async function readDatabaseUrl(loaded: LoadedConfig): Promise<string> {
   const databaseUrl = (

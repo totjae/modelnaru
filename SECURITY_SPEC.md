@@ -82,6 +82,18 @@
 - session 인증 시 현재 사용자 row가 없거나 비활성화됐으면 거부한다.
 - 일반 사용자 session으로 관리자 API를 요청하면 `AUTH_ADMIN_REQUIRED` 403을 반환한다.
 
+### 6.6 Provider 자격증명과 outbound 요청
+
+- Provider API 키는 config가 가리키는 32-byte master key로 AES-256-GCM 암호화한다.
+- 레코드마다 CSPRNG 12-byte nonce를 만들고 고정 AAD와 16-byte 인증 tag로 변조를 검증한다.
+- master key는 read-only secret 파일에서 읽고 DB, response와 log에 저장하지 않는다.
+- API 목록에는 ciphertext·nonce·tag를 포함하지 않고 충분히 긴 키의 마지막 네 글자 hint만 표시한다.
+- 첫 구현은 서버에 고정된 HTTPS base URL과 모델 목록 경로만 호출하며 관리자 임의 URL·header 입력을 허용하지 않는다.
+- 공개 모델 목록을 제공하는 LLM Gateway는 인증 전용 `GET /v1/key`가 성공한 경우에만 자격증명을 저장한다.
+- 모델 조회 redirect를 거부하고 15초 timeout과 5MiB 응답 제한을 적용한다.
+- upstream 오류 본문을 response나 일반 log에 포함하지 않는다.
+- Provider 변경 API는 관리자 session·CSRF를 요구하고 비밀값 없는 감사 이벤트를 같은 transaction에 기록한다.
+
 ## 7. 오류·경계 조건
 
 - 설정 parse 오류, 허용 범위를 벗어난 제한값, 필수 secret 파일 부재는 시작 실패 사유다.
@@ -100,6 +112,6 @@
 ## 9. 미결정·보류 항목
 
 - 장기 session token rotation은 보류하며 logout·credential 변경·만료 시 폐기한다.
-- provider credential envelope encryption 구현은 provider registry 단계에서 결정한다.
+- master key rotation과 기존 ciphertext 재암호화 도구는 후속 운영 보안 단계에서 구현한다.
 - 로그인 실패 제한을 Valkey 공유 제한으로 전환하는 것은 다중 API instance 도입 시 수행한다.
 - 관리자 TOTP 복구 code는 아직 구현하지 않는다.

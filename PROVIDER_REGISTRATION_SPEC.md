@@ -167,6 +167,8 @@ type ProviderTemplate = {
 
 LLM Gateway는 다음 검수된 템플릿을 서버에 내장한다.
 
+등록 시 인증이 필요한 `GET /v1/key`를 먼저 호출해 API 키를 검증한다. 모델 목록 endpoint는 키 없이도 공개될 수 있으므로 모델 목록 조회 성공만으로 키가 유효하다고 판단하지 않는다.
+
 ```json
 {
   "id": "llm-gateway",
@@ -512,3 +514,13 @@ Provider Manager에는 모델 그룹, manual·sequential·on-error 전략과 조
 - 사용량 API와 잔액 표시
 - provider-hosted web search 고도화
 - MCP, hook과 외부 도구 플러그인
+
+## 21. 현재 구현 상태
+
+- `provider-manager-v1.10.0.js`와 이 문서의 전체 서비스 이름을 서버 내장 카탈로그로 보존했다.
+- LLM Gateway, OpenAI, Anthropic, Google AI Studio는 고정 HTTPS 템플릿, API 키 연결 시험과 모델 목록 동기화를 지원한다.
+- 나머지 제공자는 카탈로그에 `준비 중` 또는 `시험 예정`으로 표시하며 아직 자격증명을 받지 않는다.
+- API 키는 AES-256-GCM으로 암호화하고 연결 목록에는 선택적 마지막 네 글자 hint만 반환한다.
+- 신규 모델은 기본 비활성화하며 관리자가 모델별로 활성화할 수 있다.
+- 연결 물리 삭제 대신 비활성화하고 동기화에서 사라진 모델도 unavailable 상태로 보존한다.
+- 사용자별 모델 권한 table은 준비됐지만 API·UI 연결, API 키 교체와 고급 parameter 설정은 다음 하위 단계다.

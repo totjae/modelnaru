@@ -8,13 +8,23 @@ import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
 import { DatabaseService } from './database.service.js';
 import { HealthController } from './health.controller.js';
+import { ProviderCredentialService } from './provider-credentials.js';
+import { ProviderDiscoveryService } from './provider-discovery.js';
+import { ProvidersController } from './providers.controller.js';
+import { ProvidersRepository } from './providers.repository.js';
+import { ProvidersService } from './providers.service.js';
 import { DATABASE_HEALTH } from './tokens.js';
 import { UsersController } from './users.controller.js';
 import { UsersRepository } from './users.repository.js';
 import { UsersService } from './users.service.js';
 
 @Module({
-  controllers: [HealthController, AuthController, UsersController],
+  controllers: [
+    HealthController,
+    AuthController,
+    UsersController,
+    ProvidersController,
+  ],
   providers: [
     modelNaruConfigProvider,
     DatabaseService,
@@ -25,6 +35,10 @@ import { UsersService } from './users.service.js';
     AdminMutationGuard,
     UsersRepository,
     UsersService,
+    ProviderCredentialService,
+    ProviderDiscoveryService,
+    ProvidersRepository,
+    ProvidersService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },
   ],
 })

@@ -184,7 +184,7 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `reason`, `ip_hash`, `user_agent_summary`
 - `request_id`
 
-사용자 관리 단계에서는 이 구조의 `audit_logs` table과 사용자 생성·수정·비활성화·비밀번호 변경·삭제 기록을 먼저 구현한다. password·password hash는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 다른 log category는 관리자 log 단계까지 보류한다.
+사용자 관리 단계에서는 이 구조의 `audit_logs` table과 사용자 생성·수정·비활성화·비밀번호 변경·삭제 기록을 먼저 구현한다. Provider 단계에서는 연결 생성·변경·비활성화, 모델 동기화·활성 상태 변경도 같은 원장에 기록한다. password·password hash·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 다른 log category는 관리자 log 단계까지 보류한다.
 
 ### `security_logs`
 

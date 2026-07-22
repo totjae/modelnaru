@@ -104,6 +104,26 @@ docker compose exec postgres \
 
 일반 사용자 row는 `principal_type = 'user'`, `user_id`가 설정돼야 한다. 지원 자료에는 cookie나 token 원문을 포함하지 않는다.
 
+### 6.4 Provider 등록 점검
+
+관리자 화면에서 LLM Gateway를 선택하고 연결 이름과 실제 API 키를 입력한다. 등록 성공 시 모델 목록이 나타나고 API 키는 다시 표시되지 않아야 한다. 시험 모델 하나를 활성화하고 모델 동기화, 연결 비활성화·활성화를 확인한다.
+
+```bash
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT template_id, name, credential_hint, is_enabled, status, last_model_sync_at FROM provider_connections ORDER BY created_at DESC;"
+
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT model_id, is_enabled, is_available FROM provider_models ORDER BY model_id LIMIT 30;"
+
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT action, target_type, occurred_at FROM audit_logs WHERE action LIKE 'provider.%' ORDER BY occurred_at DESC LIMIT 20;"
+```
+
+DB와 API log 출력에 API 키 원문이 없어야 한다. 지원 요청에는 `credential_ciphertext`, nonce, tag와 master key도 첨부하지 않는다. 실제 LLM Gateway 결과는 `PROVIDER_CONTRACT_TESTS.md`에 성공 여부만 기록한다.
+
 ## 7. Update와 rollback
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.
