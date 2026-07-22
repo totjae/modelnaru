@@ -1,8 +1,18 @@
 import { Module } from '@nestjs/common';
 
+import {
+  AdminAccessController,
+  PrincipalAccessController,
+} from './access.controller.js';
+import { AccessRepository } from './access.repository.js';
+import { AccessService } from './access.service.js';
 import { modelNaruConfigProvider } from './config.provider.js';
 import { AuthController } from './auth.controller.js';
-import { AdminMutationGuard, AdminSessionGuard } from './auth.guard.js';
+import {
+  AdminMutationGuard,
+  AdminSessionGuard,
+  AuthenticatedSessionGuard,
+} from './auth.guard.js';
 import { AuthRateLimiter } from './auth.rate-limiter.js';
 import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
@@ -24,6 +34,8 @@ import { UsersService } from './users.service.js';
     AuthController,
     UsersController,
     ProvidersController,
+    AdminAccessController,
+    PrincipalAccessController,
   ],
   providers: [
     modelNaruConfigProvider,
@@ -33,12 +45,15 @@ import { UsersService } from './users.service.js';
     AuthService,
     AdminSessionGuard,
     AdminMutationGuard,
+    AuthenticatedSessionGuard,
     UsersRepository,
     UsersService,
     ProviderCredentialService,
     ProviderDiscoveryService,
     ProvidersRepository,
     ProvidersService,
+    AccessRepository,
+    AccessService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },
   ],
 })

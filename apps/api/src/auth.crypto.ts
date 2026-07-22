@@ -34,7 +34,7 @@ export function createAdminCredentialFingerprint(input: {
 
 export function createKeyedMetadataHash(
   key: Uint8Array,
-  domain: 'ip' | 'login-rate',
+  domain: 'guest-join-rate' | 'ip' | 'login-rate',
   value: string,
 ): Buffer {
   return createHmac('sha256', key)

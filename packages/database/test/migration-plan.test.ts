@@ -86,4 +86,19 @@ describe('migration plan', () => {
     expect(sql).toContain('CREATE TABLE user_model_permissions');
     expect(sql).not.toMatch(/api_key|password_hash|secret_access_key/iu);
   });
+
+  it('defines guest principals, access policy and atomic daily counters', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0004_access_and_guest.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain("principal_type IN ('admin', 'user', 'guest')");
+    expect(sql).toContain('CREATE TABLE guest_settings');
+    expect(sql).toContain('CREATE TABLE guest_principals');
+    expect(sql).toContain('CREATE TABLE guest_model_permissions');
+    expect(sql).toContain('CREATE TABLE daily_usage_counters');
+    expect(sql).toContain('PRIMARY KEY (usage_date, counter_key)');
+    expect(sql).not.toContain('access_code text');
+  });
 });

@@ -9,7 +9,9 @@ import {
 import { AuthRateLimiter } from '../src/auth.rate-limiter.js';
 import type {
   AuthRepository,
+  CreateGuestSessionInput,
   CreateSessionInput,
+  GuestSettingsRow,
   SessionRow,
   UserCredentialRow,
 } from '../src/auth.repository.js';
@@ -17,9 +19,17 @@ import { AuthService, type AuthError } from '../src/auth.service.js';
 
 const totpSecret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 let passwordHash = '';
+let guestCodeHash = '';
 
 beforeAll(async () => {
   passwordHash = await hash('correct-password', {
+    algorithm: 2 as Algorithm,
+    memoryCost: 19_456,
+    outputLen: 32,
+    parallelism: 1,
+    timeCost: 2,
+  });
+  guestCodeHash = await hash('guest-access-code', {
     algorithm: 2 as Algorithm,
     memoryCost: 19_456,
     outputLen: 32,
@@ -52,6 +62,7 @@ function rowFrom(input: CreateSessionInput): SessionRow {
     accountKey: input.accountKey,
     credentialFingerprint: input.credentialFingerprint,
     csrfTokenHash: input.csrfTokenHash,
+    guestId: input.guestId ?? null,
     id: '00000000-0000-4000-8000-000000000001',
     idleExpiresAt: input.idleExpiresAt,
     lastSeenAt: new Date(),
@@ -76,6 +87,45 @@ function user(overrides: Partial<UserCredentialRow> = {}): UserCredentialRow {
 
 function createRepository() {
   return {
+    createGuestSession: vi.fn((input: CreateGuestSessionInput) =>
+      Promise.resolve({
+        guest: {
+          absoluteExpiresAt: input.absoluteExpiresAt,
+          credentialFingerprint: input.credentialFingerprint,
+          deletedAt: null,
+          id: '20000000-0000-4000-8000-000000000001',
+          idleExpiresAt: input.idleExpiresAt,
+        },
+        session: rowFrom({
+          absoluteExpiresAt: input.absoluteExpiresAt,
+          accountKey: 'guest:20000000-0000-4000-8000-000000000001',
+          credentialFingerprint: input.credentialFingerprint,
+          csrfTokenHash: input.csrfTokenHash,
+          guestId: '20000000-0000-4000-8000-000000000001',
+          idleExpiresAt: input.idleExpiresAt,
+          ipHash: input.ipHash,
+          maximumActiveSessions: 1,
+          principalType: 'guest',
+          tokenHash: input.tokenHash,
+          userAgentHash: input.userAgentHash,
+          userId: null,
+        }),
+      }),
+    ),
+    getGuestSettings: vi.fn((): Promise<GuestSettingsRow> =>
+      Promise.resolve({
+        absoluteTimeoutHours: 24,
+        accessCodeHash: guestCodeHash,
+        fileUploadEnabled: false,
+        globalDailyRequestLimit: 100,
+        idleTimeoutMinutes: 60,
+        isEnabled: true,
+        maximumActiveSessions: 10,
+        resetTimezone: 'Asia/Seoul',
+        sessionDailyRequestLimit: 20,
+        updatedAt: new Date(1_000),
+      }),
+    ),
     createSession: vi.fn((input: CreateSessionInput) =>
       Promise.resolve(rowFrom(input)),
     ),
@@ -147,6 +197,59 @@ describe('AuthService', () => {
         userId: user().id,
       }),
     );
+  });
+
+  it('creates an isolated guest principal for a valid access code', async () => {
+    const repository = createRepository();
+    const service = new AuthService(
+      loadedConfig(),
+      repository as unknown as AuthRepository,
+      new AuthRateLimiter(),
+    );
+
+    const session = await service.joinGuest({
+      accessCode: 'guest-access-code',
+      ipAddress: '203.0.113.20',
+      userAgent: 'guest-agent',
+    });
+
+    expect(session.principal).toEqual({
+      id: '20000000-0000-4000-8000-000000000001',
+      type: 'guest',
+    });
+    expect(repository.createGuestSession).toHaveBeenCalledOnce();
+    expect(session.idleExpiresAt.getTime()).toBe(3_659_000);
+    expect(session.absoluteExpiresAt.getTime()).toBe(86_459_000);
+  });
+
+  it('rejects guest access when the feature is disabled', async () => {
+    const repository = createRepository();
+    repository.getGuestSettings.mockResolvedValue({
+      absoluteTimeoutHours: 24,
+      accessCodeHash: null,
+      fileUploadEnabled: false,
+      globalDailyRequestLimit: 100,
+      idleTimeoutMinutes: 60,
+      isEnabled: false,
+      maximumActiveSessions: 10,
+      resetTimezone: 'Asia/Seoul',
+      sessionDailyRequestLimit: 20,
+      updatedAt: new Date(1_000),
+    });
+    const service = new AuthService(
+      loadedConfig(),
+      repository as unknown as AuthRepository,
+      new AuthRateLimiter(),
+    );
+
+    await expect(
+      service.joinGuest({
+        accessCode: 'guest-access-code',
+        ipAddress: '203.0.113.20',
+        userAgent: 'guest-agent',
+      }),
+    ).rejects.toMatchObject({ code: 'GUEST_DISABLED', status: 403 });
+    expect(repository.createGuestSession).not.toHaveBeenCalled();
   });
 
   it('rejects disabled users without revealing the reason', async () => {

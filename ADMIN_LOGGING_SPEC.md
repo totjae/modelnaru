@@ -16,6 +16,8 @@
 - API 키 등록·교체·삭제
 - 모델 동기화와 모델 활성화 변경
 - 사용자별 모델 권한 변경
+- 게스트 체험 활성화·코드 교체·모델 권한·호출 제한 변경
+- 게스트 session 개별·전체 강제 종료
 - 파일 보관 기간 등 시스템 설정 변경
 - provider template import·업데이트 승인
 - 로그 보관 정책 변경
@@ -33,6 +35,8 @@
 - 권한 없는 대화·파일·모델 접근 시도
 - CSRF 검증 실패
 - 로그인 속도 제한 발생
+- 게스트 코드 실패·session 생성 제한·용량 초과
+- 사용자·게스트 일일 호출 제한 거부
 - 차단된 파일 업로드
 - SSRF 방어로 차단된 provider URL
 - 의심스러운 관리자 API 호출
@@ -184,7 +188,7 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `reason`, `ip_hash`, `user_agent_summary`
 - `request_id`
 
-사용자 관리 단계에서는 이 구조의 `audit_logs` table과 사용자 생성·수정·비활성화·비밀번호 변경·삭제 기록을 먼저 구현한다. Provider 단계에서는 연결 생성·변경·비활성화, 모델 동기화·활성 상태 변경도 같은 원장에 기록한다. password·password hash·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 다른 log category는 관리자 log 단계까지 보류한다.
+현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`와 `guest.settings_updated`를 기록한다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
 
 ### `security_logs`
 
@@ -236,6 +240,8 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 로그 삭제 작업은 하루 1회 실행하고 삭제 건수와 실패 여부를 시스템 이벤트로 남긴다.
 
 사용자 삭제 시 AI 요청·파일 처리 로그의 사용자 식별자는 익명화한다. 대화 ID, 메시지 ID와 파일 ID는 제거한다. 관리자 감사 로그는 무결성을 위해 보존하되 삭제된 사용자 표시명 대신 비가역 식별자를 사용한다.
+
+게스트 log에는 무작위 guest ID의 축약값만 사용한다. 게스트 코드 원문·hash와 원본 IP는 저장·표시하지 않으며 session 만료 데이터 삭제 후 운영 집계에 필요한 비식별 수치만 보존한다.
 
 ## 8. IP와 개인정보
 
@@ -301,4 +307,5 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - 설정된 기간이 지난 로그가 자동 삭제된다.
 - 사용자 삭제 후 운영 로그의 사용자·대화·파일 식별자가 익명화된다.
 - 관리자 로그 조회와 내보내기가 감사 기록에 남는다.
+- 게스트 참가·만료·호출 제한·임시 데이터 정리 이벤트가 본문과 코드 없이 기록된다.
 - 로그 저장 실패가 AI 응답 자체를 불필요하게 실패시키지 않으며 시스템 경고가 남는다.

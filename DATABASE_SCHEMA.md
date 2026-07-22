@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 대화, message, 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 대화, message, 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
 
 ## 3. Migration 규칙
 
@@ -138,16 +138,27 @@ Index:
 
 ## 9. `user_model_permissions`
 
-사용자와 Provider 모델의 명시적 허용 상태 및 향후 parameter policy JSON을 저장한다. `(user_id, provider_model_id)` 복합 PK이며 사용자 또는 모델 삭제 시 cascade한다. 이 migration에서는 구조만 만들고 관리자 권한 API·UI는 다음 Provider 하위 단계에서 연결한다.
+사용자와 Provider 모델의 명시적 허용 상태, nullable 모델별 일일 호출 제한과 향후 parameter policy JSON을 저장한다. `(user_id, provider_model_id)` 복합 PK이며 사용자 또는 모델 삭제 시 cascade한다.
 
-## 10. 오류·경계 조건
+## 10. 게스트·일일 사용량
+
+`0004_access_and_guest.sql`은 [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)에 따라 `guest_settings`, `guest_principals`, `guest_model_permissions`와 `daily_usage_counters`를 추가한다. `sessions`는 `principal_type = 'guest'`일 때만 설정되는 nullable `guest_id` FK를 갖는다.
+
+- 게스트 설정은 singleton이며 코드 원문 대신 Argon2id hash만 저장한다.
+- 일반 사용자와 게스트 모델 권한에는 nullable 모델별 일일 호출 제한을 둔다.
+- 일반 사용자 계정 전체 일일 제한도 nullable 값으로 저장한다.
+- 일일 counter는 현지 날짜·주체 범위·모델의 unique key와 원자적 upsert를 사용한다.
+- 게스트 주체 삭제 시 session과 임시 대화 데이터가 cascade되도록 한다.
+- 대화 table은 `user_id`와 `guest_id` 중 정확히 하나만 설정되도록 제약한다.
+
+## 11. 오류·경계 조건
 
 - 적용 기록은 있는데 repository에 migration 파일이 없으면 downgrade 또는 불완전 배포로 보고 실패한다.
 - 기존 migration checksum이 다르면 파일 변조로 보고 실패한다.
 - migration 실패 시 해당 파일의 transaction을 rollback하고 API를 시작하지 않는다.
 - DB URL과 password는 migration log에 출력하지 않는다.
 
-## 11. 검증·인수 조건
+## 12. 검증·인수 조건
 
 - migration 계획 정렬·checksum 단위시험 통과
 - SQL에 users·sessions 제약과 필수 index가 존재
@@ -160,8 +171,10 @@ Index:
 - Provider credential nonce·auth tag 길이와 HTTPS base URL 제약이 존재
 - Provider 모델 unique·cascade와 사용자 모델 권한 복합 PK가 존재
 - Provider 감사 snapshot에 API 키·ciphertext·nonce·tag가 없음
+- 게스트 소유권의 user·guest 상호 배타 제약과 만료 삭제 관계가 존재
+- 날짜별 호출 counter의 unique 제약과 동시 원자적 예약 시험 통과
 
-## 12. 미결정·보류 항목
+## 13. 미결정·보류 항목
 
 - 대화·branch·첨부 삭제 관계는 채팅과 파일 상세 명세 작성 후 추가한다.
 - 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.

@@ -16,10 +16,33 @@ import {
   AuthError,
   AuthService,
   type AuthenticatedAdminSession,
+  type AuthenticatedSession,
 } from './auth.service.js';
 
 export interface AdminRequest extends RequestLike {
   adminSession?: AuthenticatedAdminSession;
+}
+
+export interface AuthenticatedRequest extends RequestLike {
+  authenticatedSession?: AuthenticatedSession;
+}
+
+@Injectable()
+export class AuthenticatedSessionGuard implements CanActivate {
+  constructor(private readonly auth: AuthService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const cookies = parseCookies(firstHeader(request.headers.cookie));
+    try {
+      request.authenticatedSession = await this.auth.authenticate(
+        cookies.get(SESSION_COOKIE),
+      );
+      return true;
+    } catch (error) {
+      return asHttpException(error);
+    }
+  }
 }
 
 function asHttpException(error: unknown): never {

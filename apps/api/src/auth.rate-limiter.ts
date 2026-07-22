@@ -5,9 +5,35 @@ interface FailureState {
   failures: number;
 }
 
+interface WindowState {
+  count: number;
+  resetAt: number;
+}
+
 @Injectable()
 export class AuthRateLimiter {
   private readonly states = new Map<string, FailureState>();
+  private readonly windows = new Map<string, WindowState>();
+
+  consumeWindow(
+    key: string,
+    maximum: number,
+    windowMilliseconds: number,
+    now = Date.now(),
+  ): number {
+    const previous = this.windows.get(key);
+    const state =
+      !previous || previous.resetAt <= now
+        ? { count: 0, resetAt: now + windowMilliseconds }
+        : previous;
+    if (state.count >= maximum) {
+      return Math.max(1, Math.ceil((state.resetAt - now) / 1_000));
+    }
+    this.windows.delete(key);
+    this.windows.set(key, { ...state, count: state.count + 1 });
+    this.prune();
+    return 0;
+  }
 
   retryAfterSeconds(key: string, now = Date.now()): number {
     const state = this.states.get(key);
@@ -40,6 +66,13 @@ export class AuthRateLimiter {
         return;
       }
       this.states.delete(oldest);
+    }
+    while (this.windows.size > 1_000) {
+      const oldest = this.windows.keys().next().value;
+      if (!oldest) {
+        return;
+      }
+      this.windows.delete(oldest);
     }
   }
 }

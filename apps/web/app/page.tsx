@@ -2,12 +2,15 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 
+import { AccessManager } from './access-manager';
 import { csrfToken } from './client-auth';
 import { ProviderManager } from './provider-manager';
 import { UserManager } from './user-manager';
+import { WorkspaceModels } from './workspace-models';
 
 type Principal =
   | { type: 'admin'; username: string }
+  | { id: string; type: 'guest' }
   | {
       displayName: string | null;
       id: string;
@@ -22,21 +25,35 @@ interface SessionResponse {
 export default function HomePage() {
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [checking, setChecking] = useState(true);
-  const [loginMode, setLoginMode] = useState<'admin' | 'user'>('user');
+  const [guestEnabled, setGuestEnabled] = useState(false);
+  const [loginMode, setLoginMode] = useState<'admin' | 'guest' | 'user'>(
+    'user',
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/auth/session', {
-      credentials: 'same-origin',
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as SessionResponse;
+    Promise.all([
+      fetch('/api/auth/session', {
+        credentials: 'same-origin',
+        signal: controller.signal,
+      }).then(async (response) =>
+        response.ok ? ((await response.json()) as SessionResponse) : null,
+      ),
+      fetch('/api/auth/guest/status', {
+        credentials: 'same-origin',
+        signal: controller.signal,
+      }).then(async (response) =>
+        response.ok
+          ? ((await response.json()) as { enabled: boolean })
+          : { enabled: false },
+      ),
+    ])
+      .then(([session, guest]) => {
+        setPrincipal(session?.principal ?? null);
+        setGuestEnabled(guest.enabled);
       })
-      .then((session) => setPrincipal(session?.principal ?? null))
       .catch(() => undefined)
       .finally(() => setChecking(false));
     return () => controller.abort();
@@ -48,6 +65,25 @@ export default function HomePage() {
     setError('');
     const data = new FormData(event.currentTarget);
     try {
+      if (loginMode === 'guest') {
+        const response = await fetch('/api/auth/guest/session', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode: data.get('accessCode') }),
+        });
+        if (!response.ok) {
+          setError(
+            response.status === 429
+              ? '현재 게스트 참가가 많거나 시도 횟수를 초과했습니다.'
+              : '게스트 코드를 확인하세요.',
+          );
+          return;
+        }
+        const session = (await response.json()) as SessionResponse;
+        setPrincipal(session.principal);
+        return;
+      }
       const payload: Record<string, FormDataEntryValue | null> = {
         username: data.get('username'),
         password: data.get('password'),
@@ -89,6 +125,14 @@ export default function HomePage() {
       });
       if (!response.ok) throw new Error('logout failed');
       setPrincipal(null);
+      const guestResponse = await fetch('/api/auth/guest/status', {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (guestResponse.ok) {
+        const guest = (await guestResponse.json()) as { enabled: boolean };
+        setGuestEnabled(guest.enabled);
+      }
     } catch {
       setError('로그아웃하지 못했습니다. 새로고침 후 다시 시도하세요.');
     } finally {
@@ -97,7 +141,8 @@ export default function HomePage() {
   }
 
   if (!checking && principal) {
-    if (principal.type === 'user') {
+    if (principal.type === 'user' || principal.type === 'guest') {
+      const isGuest = principal.type === 'guest';
       return (
         <main className="user-shell">
           <header className="admin-header user-header">
@@ -107,11 +152,15 @@ export default function HomePage() {
               </div>
               <div>
                 <p className="eyebrow">MODELNARU · WORKSPACE</p>
-                <h1>{principal.displayName || principal.username}님의 공간</h1>
+                <h1>
+                  {isGuest
+                    ? '게스트 체험 공간'
+                    : `${principal.displayName || principal.username}님의 공간`}
+                </h1>
               </div>
             </div>
             <div className="admin-session">
-              <span>{principal.username}</span>
+              <span>{isGuest ? '임시 게스트' : principal.username}</span>
               <button type="button" onClick={logout} disabled={submitting}>
                 {submitting ? '처리 중…' : '로그아웃'}
               </button>
@@ -122,12 +171,16 @@ export default function HomePage() {
             className="workspace-empty"
             aria-labelledby="workspace-title"
           >
-            <p className="card-label">PRIVATE WORKSPACE</p>
+            <p className="card-label">
+              {isGuest ? 'ISOLATED GUEST WORKSPACE' : 'PRIVATE WORKSPACE'}
+            </p>
             <h2 id="workspace-title">로그인되었습니다</h2>
             <p>
-              이 계정의 대화와 설정은 다른 사용자와 분리됩니다. 다음 개발
-              단계에서 Provider와 대화방이 이 공간에 연결됩니다.
+              {isGuest
+                ? '이 임시 공간은 다른 게스트와 분리되며 로그아웃하거나 세션이 만료되면 삭제됩니다.'
+                : '이 계정의 대화와 설정은 다른 사용자와 분리됩니다.'}
             </p>
+            <WorkspaceModels />
           </section>
         </main>
       );
@@ -154,6 +207,7 @@ export default function HomePage() {
         {error && <div className="banner error-banner">{error}</div>}
         <UserManager />
         <ProviderManager />
+        <AccessManager />
       </main>
     );
   }
@@ -208,39 +262,82 @@ export default function HomePage() {
               >
                 관리자
               </button>
+              {guestEnabled && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={loginMode === 'guest'}
+                  className={loginMode === 'guest' ? 'active' : ''}
+                  onClick={() => {
+                    setLoginMode('guest');
+                    setError('');
+                  }}
+                >
+                  게스트
+                </button>
+              )}
             </div>
             <p className="card-label">
-              {loginMode === 'admin' ? 'ADMIN SIGN IN' : 'USER SIGN IN'}
+              {loginMode === 'admin'
+                ? 'ADMIN SIGN IN'
+                : loginMode === 'guest'
+                  ? 'GUEST ACCESS'
+                  : 'USER SIGN IN'}
             </p>
-            <h2>{loginMode === 'admin' ? '관리자 로그인' : '사용자 로그인'}</h2>
+            <h2>
+              {loginMode === 'admin'
+                ? '관리자 로그인'
+                : loginMode === 'guest'
+                  ? '게스트로 체험하기'
+                  : '사용자 로그인'}
+            </h2>
             <p className="card-copy">
               {loginMode === 'admin'
                 ? '서버 설정에 등록한 관리자 계정으로 로그인하세요.'
-                : '관리자가 등록한 사용자 계정으로 로그인하세요.'}
+                : loginMode === 'guest'
+                  ? '공유받은 코드를 입력하면 다른 사람과 분리된 임시 공간이 만들어집니다.'
+                  : '관리자가 등록한 사용자 계정으로 로그인하세요.'}
             </p>
 
-            <label htmlFor="username">
-              {loginMode === 'admin' ? '관리자 ID' : '사용자 ID'}
-            </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              minLength={3}
-              maxLength={64}
-              required
-            />
+            {loginMode === 'guest' ? (
+              <>
+                <label htmlFor="guest-code">게스트 코드</label>
+                <input
+                  id="guest-code"
+                  name="accessCode"
+                  type="password"
+                  autoComplete="off"
+                  minLength={12}
+                  maxLength={128}
+                  required
+                />
+              </>
+            ) : (
+              <>
+                <label htmlFor="username">
+                  {loginMode === 'admin' ? '관리자 ID' : '사용자 ID'}
+                </label>
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={64}
+                  required
+                />
 
-            <label htmlFor="password">비밀번호</label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              maxLength={1024}
-              required
-            />
+                <label htmlFor="password">비밀번호</label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  maxLength={1024}
+                  required
+                />
+              </>
+            )}
 
             {loginMode === 'admin' && (
               <>

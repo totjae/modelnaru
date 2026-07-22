@@ -49,6 +49,15 @@ interface LoginBody {
   username: string;
 }
 
+function parseGuestAccessCode(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return undefined;
+  const value = (body as Record<string, unknown>).accessCode;
+  return typeof value === 'string' && value.length >= 12 && value.length <= 128
+    ? value
+    : undefined;
+}
+
 export function firstHeader(
   value: string | string[] | undefined,
 ): string | undefined {
@@ -124,6 +133,52 @@ export class AuthController {
     try {
       const session = await this.auth.login({
         ...input,
+        ipAddress: request.ip ?? request.socket?.remoteAddress ?? '',
+        userAgent: firstHeader(request.headers['user-agent']) ?? '',
+      });
+      this.setCookies(
+        response,
+        session.sessionToken!,
+        session.csrfToken!,
+        session.absoluteExpiresAt,
+      );
+      return this.responseBody(session);
+    } catch (error) {
+      this.throwHttpError(error, response);
+    }
+  }
+
+  @Get('guest/status')
+  async guestStatus(
+    @Res({ passthrough: true }) response: ResponseLike,
+  ): Promise<{ enabled: boolean }> {
+    response.setHeader('Cache-Control', 'no-store');
+    return this.auth.guestStatus();
+  }
+
+  @Post('guest/session')
+  @HttpCode(HttpStatus.OK)
+  async guestSession(
+    @Body() body: unknown,
+    @Req() request: RequestLike,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ): Promise<Record<string, unknown>> {
+    response.setHeader('Cache-Control', 'no-store');
+    const accessCode = parseGuestAccessCode(body);
+    if (!accessCode) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'GUEST_INPUT_INVALID',
+            message: 'Guest access input is invalid.',
+          },
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    try {
+      const session = await this.auth.joinGuest({
+        accessCode,
         ipAddress: request.ip ?? request.socket?.remoteAddress ?? '',
         userAgent: firstHeader(request.headers['user-agent']) ?? '',
       });

@@ -15,4 +15,13 @@ describe('AuthRateLimiter', () => {
     limiter.reset('key');
     expect(limiter.retryAfterSeconds('key', 1_000)).toBe(0);
   });
+
+  it('limits successful guest session creations within a fixed window', () => {
+    const limiter = new AuthRateLimiter();
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      expect(limiter.consumeWindow('guest', 5, 3_600_000, 1_000)).toBe(0);
+    }
+    expect(limiter.consumeWindow('guest', 5, 3_600_000, 1_000)).toBe(3_600);
+    expect(limiter.consumeWindow('guest', 5, 3_600_000, 3_601_000)).toBe(0);
+  });
 });

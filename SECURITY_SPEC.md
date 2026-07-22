@@ -94,6 +94,17 @@
 - upstream 오류 본문을 response나 일반 log에 포함하지 않는다.
 - Provider 변경 API는 관리자 session·CSRF를 요구하고 비밀값 없는 감사 이벤트를 같은 transaction에 기록한다.
 
+### 6.7 게스트 체험
+
+- 게스트 기능은 기본 비활성이고 Argon2id로 hash한 12자 이상 공유 코드가 있어야 활성화할 수 있다.
+- 코드 인증마다 사용자 계정과 분리된 무작위 임시 주체를 발급하며 모든 소유권 조회에 server session의 `guest_id`를 사용한다.
+- 게스트 cookie·CSRF·proxy 신뢰 기준은 일반 사용자와 동일하다.
+- 코드 시도는 IP HMAC 기준 5회/15분, session 생성은 5회/시간을 기본 제한으로 적용한다.
+- 게스트 session은 기본 1시간 idle·24시간 absolute 만료이며 로그아웃·만료·관리자 종료 뒤 임시 데이터를 삭제한다.
+- session당·모델별·전체 게스트 호출 제한은 upstream 전송 전에 DB에서 원자적으로 예약한다.
+- 게스트 코드·hash, 원본 IP, 대화 본문, Provider 연결 정보와 API 키는 게스트 response와 일반 log에 포함하지 않는다.
+- 세부 정책과 오류 code는 [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)를 따른다.
+
 ## 7. 오류·경계 조건
 
 - 설정 parse 오류, 허용 범위를 벗어난 제한값, 필수 secret 파일 부재는 시작 실패 사유다.
@@ -108,6 +119,8 @@
 - Compose에서 gateway 외 port가 host에 publish되지 않는다.
 - `show` 명령 결과에 민감값이 나타나지 않는다.
 - 인증 cookie 속성, TOTP window, session 만료·폐기와 CSRF 거부 시험이 통과한다.
+- 같은 공유 코드를 사용한 게스트 사이의 session·대화·첨부 소유권 격리 시험이 통과한다.
+- 게스트 코드·session 생성 속도 제한과 일일 호출 제한이 동시 요청에서도 우회되지 않는다.
 
 ## 9. 미결정·보류 항목
 

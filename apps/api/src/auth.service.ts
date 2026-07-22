@@ -15,6 +15,8 @@ import {
 import { AuthRateLimiter } from './auth.rate-limiter.js';
 import {
   AuthRepository,
+  GuestCapacityError,
+  GuestSettingsChangedError,
   type SessionRow,
   type UserCredentialRow,
 } from './auth.repository.js';
@@ -25,7 +27,11 @@ export type AuthErrorCode =
   | 'AUTH_CSRF_INVALID'
   | 'AUTH_INVALID_CREDENTIALS'
   | 'AUTH_RATE_LIMITED'
-  | 'AUTH_SESSION_REQUIRED';
+  | 'AUTH_SESSION_REQUIRED'
+  | 'GUEST_AUTH_FAILED'
+  | 'GUEST_CAPACITY_REACHED'
+  | 'GUEST_DISABLED'
+  | 'GUEST_RATE_LIMITED';
 
 export class AuthError extends Error {
   constructor(
@@ -48,6 +54,7 @@ export interface LoginInput {
 
 export type AuthenticatedPrincipal =
   | { type: 'admin'; username: string }
+  | { id: string; type: 'guest' }
   | {
       displayName: string | null;
       id: string;
@@ -146,6 +153,7 @@ export class AuthService {
       tokenHash: sha256(sessionToken),
       userAgentHash: input.userAgent ? sha256(input.userAgent) : null,
       userId: session.principal.type === 'user' ? session.principal.id : null,
+      guestId: null,
     });
 
     return {
@@ -156,6 +164,113 @@ export class AuthService {
       row,
       sessionToken,
     };
+  }
+
+  async guestStatus(): Promise<{ enabled: boolean }> {
+    const settings = await this.repository.getGuestSettings();
+    return { enabled: settings.isEnabled && Boolean(settings.accessCodeHash) };
+  }
+
+  async joinGuest(input: {
+    accessCode: string;
+    ipAddress: string;
+    userAgent: string;
+  }): Promise<AuthenticatedSession> {
+    const rateKey = createKeyedMetadataHash(
+      this.adminCredentialFingerprint,
+      'guest-join-rate',
+      input.ipAddress,
+    ).toString('hex');
+    const retryAfter = this.rateLimiter.consumeWindow(
+      `guest-attempt:${rateKey}`,
+      5,
+      15 * 60 * 1_000,
+    );
+    if (retryAfter > 0) {
+      throw new AuthError(
+        'GUEST_RATE_LIMITED',
+        429,
+        'Too many guest access attempts. Try again later.',
+        retryAfter,
+      );
+    }
+    const settings = await this.repository.getGuestSettings();
+    if (!settings.isEnabled || !settings.accessCodeHash) {
+      throw new AuthError('GUEST_DISABLED', 403, 'Guest access is disabled.');
+    }
+    const codeMatches = await verify(settings.accessCodeHash, input.accessCode)
+      .then(Boolean)
+      .catch(() => false);
+    if (!codeMatches) {
+      throw new AuthError(
+        'GUEST_AUTH_FAILED',
+        401,
+        'Guest access code is invalid.',
+      );
+    }
+
+    const creationRetryAfter = this.rateLimiter.consumeWindow(
+      `guest-creation:${rateKey}`,
+      5,
+      60 * 60 * 1_000,
+    );
+    if (creationRetryAfter > 0) {
+      throw new AuthError(
+        'GUEST_RATE_LIMITED',
+        429,
+        'Too many guest sessions were created. Try again later.',
+        creationRetryAfter,
+      );
+    }
+
+    const now = Date.now();
+    const absoluteExpiresAt = new Date(
+      now + settings.absoluteTimeoutHours * 3_600_000,
+    );
+    const idleExpiresAt = new Date(
+      Math.min(
+        now + settings.idleTimeoutMinutes * 60_000,
+        absoluteExpiresAt.getTime(),
+      ),
+    );
+    const sessionToken = createOpaqueToken();
+    const csrfToken = createOpaqueToken();
+    try {
+      const created = await this.repository.createGuestSession({
+        absoluteExpiresAt,
+        credentialFingerprint: sha256(createOpaqueToken()),
+        csrfTokenHash: sha256(csrfToken),
+        expectedSettingsUpdatedAt: settings.updatedAt,
+        idleExpiresAt,
+        ipHash: input.ipAddress ? this.hashIpAddress(input.ipAddress) : null,
+        tokenHash: sha256(sessionToken),
+        userAgentHash: input.userAgent ? sha256(input.userAgent) : null,
+      });
+      return {
+        absoluteExpiresAt,
+        csrfToken,
+        idleExpiresAt,
+        principal: { id: created.guest.id, type: 'guest' },
+        row: created.session,
+        sessionToken,
+      };
+    } catch (error) {
+      if (error instanceof GuestCapacityError) {
+        throw new AuthError(
+          'GUEST_CAPACITY_REACHED',
+          429,
+          'Guest capacity has been reached.',
+        );
+      }
+      if (error instanceof GuestSettingsChangedError) {
+        throw new AuthError(
+          'GUEST_AUTH_FAILED',
+          401,
+          'Guest access settings changed. Try again.',
+        );
+      }
+      throw error;
+    }
   }
 
   hashIpAddress(ipAddress: string | undefined): Buffer | null {
@@ -200,12 +315,15 @@ export class AuthService {
 
     const idleExpiresAt = new Date(
       Math.min(
-        now.getTime() +
-          this.loadedConfig.config.sessions.idleTimeoutHours * 3_600_000,
+        now.getTime() + current.idleTimeoutMilliseconds,
         row.absoluteExpiresAt.getTime(),
       ),
     );
-    if (!(await this.repository.touchSession(row.id, idleExpiresAt))) {
+    const touched =
+      row.principalType === 'guest' && row.guestId
+        ? await this.repository.touchGuest(row.guestId, idleExpiresAt, row.id)
+        : await this.repository.touchSession(row.id, idleExpiresAt);
+    if (!touched) {
       throw this.sessionRequired();
     }
     return {
@@ -236,7 +354,11 @@ export class AuthService {
     sessionToken: string | undefined;
   }): Promise<void> {
     const session = await this.authenticateWithCsrf(input);
-    await this.repository.revokeSession(session.row.id, 'logout');
+    if (session.row.principalType === 'guest' && session.row.guestId) {
+      await this.repository.deleteGuest(session.row.guestId);
+    } else {
+      await this.repository.revokeSession(session.row.id, 'logout');
+    }
   }
 
   async authenticateWithCsrf(input: {
@@ -326,16 +448,31 @@ export class AuthService {
   private async resolveCurrentPrincipal(row: SessionRow): Promise<{
     accountKey: string;
     credentialFingerprint: Buffer;
+    idleTimeoutMilliseconds: number;
     principal: AuthenticatedPrincipal;
   } | null> {
     if (row.principalType === 'admin') {
       return {
         accountKey: this.adminAccountKey,
         credentialFingerprint: this.adminCredentialFingerprint,
+        idleTimeoutMilliseconds:
+          this.loadedConfig.config.sessions.idleTimeoutHours * 3_600_000,
         principal: {
           type: 'admin',
           username: this.loadedConfig.config.admin.username,
         },
+      };
+    }
+    if (row.principalType === 'guest') {
+      if (!row.guestId) return null;
+      const guest = await this.repository.findGuestById(row.guestId);
+      if (!guest || guest.deletedAt) return null;
+      const settings = await this.repository.getGuestSettings();
+      return {
+        accountKey: `guest:${guest.id}`,
+        credentialFingerprint: guest.credentialFingerprint,
+        idleTimeoutMilliseconds: settings.idleTimeoutMinutes * 60_000,
+        principal: { id: guest.id, type: 'guest' },
       };
     }
     if (!row.userId) return null;
@@ -347,6 +484,8 @@ export class AuthService {
     return {
       accountKey: `user:${user.id}`,
       credentialFingerprint: userCredentialFingerprint(user),
+      idleTimeoutMilliseconds:
+        this.loadedConfig.config.sessions.idleTimeoutHours * 3_600_000,
       principal: {
         displayName: user.displayName,
         id: user.id,

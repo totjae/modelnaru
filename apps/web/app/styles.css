@@ -791,6 +791,120 @@ h1 {
   gap: 9px;
 }
 
+.access-management {
+  margin-top: 32px;
+}
+
+.access-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.access-panel {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.access-panel h3 {
+  margin: 0 0 10px;
+}
+
+.access-panel form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.access-panel select,
+.access-panel input {
+  width: 100%;
+}
+
+.access-models {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgb(0 0 0 / 12%);
+}
+
+.access-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.access-model-row > label {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.access-model-row > label input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.access-model-row span,
+.workspace-models span {
+  display: grid;
+  min-width: 0;
+}
+
+.access-model-row strong,
+.access-model-row small {
+  overflow-wrap: anywhere;
+}
+
+.access-model-row small,
+.workspace-models small {
+  color: var(--muted);
+}
+
+.access-model-row.unavailable {
+  opacity: 0.58;
+}
+
+.access-number-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.access-number-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.warning-check {
+  color: #f0c78a;
+}
+
+.workspace-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.workspace-models span {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 3%);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -841,6 +955,10 @@ h1 {
   .user-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .access-grid {
+    grid-template-columns: 1fr;
   }
 
   .row-actions {
@@ -896,6 +1014,11 @@ h1 {
 
   .create-user-form > button {
     width: 100%;
+  }
+
+  .access-number-grid,
+  .access-model-row {
+    grid-template-columns: 1fr;
   }
 }
 

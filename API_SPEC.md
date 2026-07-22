@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-현재 health endpoint, 고정 관리자와 일반 사용자 인증, 관리자 전용 사용자 관리 API를 포함한다. Provider·대화 API는 각 구현 단계에서 이 문서에 추가한다.
+현재 health endpoint, 고정 관리자·일반 사용자·게스트 인증, 관리자 전용 사용자·Provider·모델 접근 관리 API를 포함한다. 대화 API는 구현 단계에서 이 문서에 추가한다.
 
 ## 3. 공통 규칙
 
@@ -239,7 +239,22 @@ Request:
 - `502 PROVIDER_NETWORK_ERROR`: DNS·TLS·timeout·연결 실패
 - `502 PROVIDER_UPSTREAM_ERROR`: 그 밖의 upstream HTTP 오류
 
-## 8. 오류·경계 조건
+## 8. 게스트·모델 권한 API
+
+상세 정책은 [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)에서 관리한다. 현재 구현 endpoint는 다음과 같다.
+
+- `GET /api/auth/guest/status`: 인증 없이 게스트 활성 여부만 반환
+- `POST /api/auth/guest/session`: `{ "accessCode": string }`을 검증하고 독립 게스트 session cookie와 CSRF cookie 발급
+- `GET /api/admin/access`: 사용자·게스트 모델 권한, 제한, 게스트 설정과 활성 session 수 조회
+- `PUT /api/admin/access/users/:id`: 사용자 계정 전체 제한과 모델 allowlist·모델별 제한 교체
+- `PUT /api/admin/access/guest`: 게스트 코드·수명·용량·전체/세션 제한·모델 allowlist 교체와 기존 session 전체 종료 선택
+- `GET /api/access/models`: 현재 일반 사용자 또는 게스트에게 허용된 활성 모델 조회
+
+관리자 변경 API는 관리자 session과 CSRF를 요구한다. 제한 예약 로직은 `ACCESS_DAILY_LIMIT_REACHED`(`429`)와 적용 범위 `scope`를 반환하며 실제 AI 요청 endpoint가 추가될 때 upstream 호출 직전에 연결한다.
+
+게스트 status API는 활성 여부 외 내부 제한과 코드 정보를 노출하지 않는다. 게스트 참가 오류는 `GUEST_DISABLED`(`403`), `GUEST_AUTH_FAILED`(`401`), `GUEST_RATE_LIMITED`(`429`), `GUEST_CAPACITY_REACHED`(`429`)를 사용한다.
+
+## 9. 오류·경계 조건
 
 - 존재하지 않는 endpoint는 `404`를 반환한다.
 - readiness에는 DB URL, query, 오류 message와 stack을 포함하지 않는다.
@@ -249,7 +264,7 @@ Request:
 - 사용자 관리 response와 감사 기록에는 password 또는 password hash를 포함하지 않는다.
 - Provider 오류 response에는 upstream 본문, endpoint 내부 정보와 API 키를 포함하지 않는다.
 
-## 9. 검증·인수 조건
+## 10. 검증·인수 조건
 
 - 두 health endpoint의 controller test가 통과한다.
 - gateway를 통과한 `/api/health/live` 요청이 API response를 반환한다.
@@ -267,7 +282,7 @@ Request:
 - API 키는 모델 조회 request에만 사용하고 DB에는 AES-256-GCM ciphertext만 저장한다.
 - 모델 동기화 실패 시 기존 모델과 활성 설정을 보존한다.
 
-## 10. 미결정·보류 항목
+## 11. 미결정·보류 항목
 
 - 공통 request ID 형식은 관리자 log 단계에서 확정한다.
 - OpenAPI 문서는 현재 공개하지 않으며, 도입 시 관리자 session을 요구한다.
