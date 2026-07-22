@@ -5,9 +5,15 @@ import {
   createTotpSecret,
   createTotpUri,
   encodeBase32,
+  validAdminPassword,
 } from '../src/helpers.js';
 
 describe('admin CLI helpers', () => {
+  it('requires an administrator password of at least ten characters', () => {
+    expect(validAdminPassword('123456789')).toBe(false);
+    expect(validAdminPassword('1234567890')).toBe(true);
+  });
+
   it('encodes RFC 4648 base32 without padding', () => {
     expect(encodeBase32(new TextEncoder().encode('foobar'))).toBe('MZXW6YTBOI');
   });

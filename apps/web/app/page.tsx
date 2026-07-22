@@ -236,7 +236,7 @@ export default function HomePage() {
             <span className="spinner" /> 세션 확인 중
           </div>
         ) : (
-          <form className="auth-card" onSubmit={login}>
+          <form className={`auth-card auth-${loginMode}`} onSubmit={login}>
             <div className="login-mode" role="tablist" aria-label="로그인 유형">
               <button
                 type="button"
@@ -307,7 +307,7 @@ export default function HomePage() {
                   name="accessCode"
                   type="password"
                   autoComplete="off"
-                  minLength={12}
+                  minLength={6}
                   maxLength={128}
                   required
                 />

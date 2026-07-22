@@ -70,7 +70,7 @@ describe('UsersController', () => {
         {
           displayName: '  User One  ',
           isEnabled: true,
-          password: 'long-enough-password',
+          password: '12345678',
           username: 'user1',
         },
         request(),
@@ -81,7 +81,7 @@ describe('UsersController', () => {
       {
         displayName: 'User One',
         isEnabled: true,
-        password: 'long-enough-password',
+        password: '12345678',
         username: 'user1',
       },
       {

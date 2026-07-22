@@ -135,4 +135,54 @@ describe('AuthController', () => {
     ).rejects.toBeInstanceOf(HttpException);
     expect(auth.login).not.toHaveBeenCalled();
   });
+
+  it('accepts a six-character guest access code', async () => {
+    const auth = {
+      joinGuest: vi.fn(() =>
+        Promise.resolve({
+          absoluteExpiresAt: new Date(Date.now() + 86_400_000),
+          csrfToken: 'csrf-token',
+          idleExpiresAt: new Date(Date.now() + 3_600_000),
+          principal: {
+            id: '20000000-0000-4000-8000-000000000001',
+            type: 'guest',
+          },
+          row: {},
+          sessionToken: 'session-token',
+        }),
+      ),
+    };
+    const controller = new AuthController(
+      auth as unknown as AuthService,
+      loadedConfig,
+    );
+
+    await expect(
+      controller.guestSession(
+        { accessCode: 'abc123' },
+        { headers: {}, ip: '203.0.113.10' },
+        response(),
+      ),
+    ).resolves.toMatchObject({ principal: { type: 'guest' } });
+    expect(auth.joinGuest).toHaveBeenCalledWith(
+      expect.objectContaining({ accessCode: 'abc123' }),
+    );
+  });
+
+  it('rejects a guest access code shorter than six characters', async () => {
+    const auth = { joinGuest: vi.fn() };
+    const controller = new AuthController(
+      auth as unknown as AuthService,
+      loadedConfig,
+    );
+
+    await expect(
+      controller.guestSession(
+        { accessCode: '12345' },
+        { headers: {} },
+        response(),
+      ),
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(auth.joinGuest).not.toHaveBeenCalled();
+  });
 });

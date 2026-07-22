@@ -23,7 +23,7 @@
 | 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인   |
 | 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                  |
 | provider registry    | 구현 완료 | 전체 catalog·암호화·모델 동기화·Web UI, Ubuntu LLM Gateway·OpenAI 실제 key 확인      |
-| Web UI 기반          | 구현 중   | 시스템·라이트·다크 전환과 제한적 7색 강조 token 적용, 채팅 레이아웃은 후속           |
+| Web UI 기반          | 구현 중   | 시스템·라이트·다크 전환과 기능별 7색 단색 token 적용, 채팅 레이아웃은 후속           |
 | 모델 권한·호출 제한  | 구현 완료 | 사용자·게스트 allowlist·일일 제한 관리자 UI와 DB 원자적 예약 구현, AI 호출 연결 대기 |
 | 게스트 체험          | 구현 중   | 공유 코드·독립 session·권한·할당량·관리 UI 구현, 대화 소유권·만료 파일 정리는 후속   |
 | AI streaming         | 계획      | 공통 ChatEvent와 취소                                                                |

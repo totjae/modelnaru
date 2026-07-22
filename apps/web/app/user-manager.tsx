@@ -263,7 +263,7 @@ export function UserManager() {
             id="new-password"
             name="password"
             type="password"
-            minLength={12}
+            minLength={8}
             maxLength={1024}
             required
           />
@@ -274,7 +274,7 @@ export function UserManager() {
             id="new-password-confirm"
             name="passwordConfirm"
             type="password"
-            minLength={12}
+            minLength={8}
             maxLength={1024}
             required
           />
@@ -403,7 +403,7 @@ export function UserManager() {
               id="reset-password"
               name="password"
               type="password"
-              minLength={12}
+              minLength={8}
               maxLength={1024}
               autoComplete="new-password"
               required
@@ -413,7 +413,7 @@ export function UserManager() {
               id="reset-password-confirm"
               name="passwordConfirm"
               type="password"
-              minLength={12}
+              minLength={8}
               maxLength={1024}
               autoComplete="new-password"
               required

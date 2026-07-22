@@ -53,7 +53,7 @@ function parseGuestAccessCode(body: unknown): string | undefined {
   if (!body || typeof body !== 'object' || Array.isArray(body))
     return undefined;
   const value = (body as Record<string, unknown>).accessCode;
-  return typeof value === 'string' && value.length >= 12 && value.length <= 128
+  return typeof value === 'string' && value.length >= 6 && value.length <= 128
     ? value
     : undefined;
 }

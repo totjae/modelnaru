@@ -13,6 +13,7 @@
 - 실제 `config.yaml`, `.runtime.env`, `secrets/`, `data/`는 Git에서 제외한다.
 - `config.yaml`은 production에서 `0600`, `secrets/`는 `0700`을 권장한다.
 - 관리자 비밀번호는 Argon2id PHC 문자열만 저장한다. 평문은 argument, log 또는 history에 전달하지 않는다.
+- 관리자 비밀번호는 최소 10자이고 TOTP는 항상 필수다. 일반 사용자 비밀번호는 최소 8자다.
 - TOTP secret은 Base32로 생성하며 public deployment에서는 `admin.requireTotp: true`가 아니면 검증에 실패한다.
 - provider master key와 DB URL은 별도 파일을 참조하며 애플리케이션 log에 출력하지 않는다.
 - 관리자 CLI의 설정 출력은 password hash와 TOTP secret을 항상 마스킹한다.
@@ -96,7 +97,7 @@
 
 ### 6.7 게스트 체험
 
-- 게스트 기능은 기본 비활성이고 Argon2id로 hash한 12자 이상 공유 코드가 있어야 활성화할 수 있다.
+- 게스트 기능은 기본 비활성이고 Argon2id로 hash한 6자 이상 공유 코드가 있어야 활성화할 수 있다.
 - 코드 인증마다 사용자 계정과 분리된 무작위 임시 주체를 발급하며 모든 소유권 조회에 server session의 `guest_id`를 사용한다.
 - 게스트 cookie·CSRF·proxy 신뢰 기준은 일반 사용자와 동일하다.
 - 코드 시도는 IP HMAC 기준 5회/15분, session 생성은 5회/시간을 기본 제한으로 적용한다.

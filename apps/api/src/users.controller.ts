@@ -68,7 +68,7 @@ function parseReason(value: unknown): string | null | undefined {
 
 function validPassword(value: unknown): value is string {
   return (
-    typeof value === 'string' && value.length >= 12 && value.length <= 1_024
+    typeof value === 'string' && value.length >= 8 && value.length <= 1_024
   );
 }
 

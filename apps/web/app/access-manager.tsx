@@ -224,7 +224,7 @@ export function AccessManager() {
       setNotice('게스트 체험 설정을 저장했습니다.');
     } catch {
       setError(
-        '게스트 설정을 저장하지 못했습니다. 처음 활성화할 때는 12자 이상의 코드를 입력하세요.',
+        '게스트 설정을 저장하지 못했습니다. 처음 활성화할 때는 6자 이상의 코드를 입력하세요.',
       );
     } finally {
       setBusy(null);
@@ -330,12 +330,12 @@ export function AccessManager() {
                 id="guest-access-code"
                 name="accessCode"
                 type="password"
-                minLength={12}
+                minLength={6}
                 maxLength={128}
                 placeholder={
                   state.guest.accessCodeConfigured
                     ? '변경할 때만 입력'
-                    : '12자 이상 필수'
+                    : '6자 이상 필수'
                 }
                 autoComplete="new-password"
               />

@@ -2,6 +2,10 @@ import { randomBytes } from 'node:crypto';
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
+export function validAdminPassword(value: string): boolean {
+  return value.length >= 10;
+}
+
 export function encodeBase32(input: Uint8Array): string {
   let bits = 0;
   let value = 0;

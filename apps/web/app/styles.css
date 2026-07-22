@@ -11,12 +11,12 @@
   --muted: #686870;
   --accent: #111114;
   --accent-contrast: #ffffff;
-  --danger: #c93636;
-  --danger-border: rgba(201, 54, 54, 0.26);
-  --danger-fill: rgba(201, 54, 54, 0.09);
-  --warning: #8a5a00;
-  --warning-border: rgba(138, 90, 0, 0.28);
-  --warning-fill: rgba(240, 178, 58, 0.1);
+  --danger: var(--red);
+  --danger-border: color-mix(in srgb, var(--red) 28%, transparent);
+  --danger-fill: color-mix(in srgb, var(--red) 9%, transparent);
+  --warning: var(--orange);
+  --warning-border: color-mix(in srgb, var(--orange) 28%, transparent);
+  --warning-fill: color-mix(in srgb, var(--orange) 10%, transparent);
   --subtle-fill: rgba(0, 0, 0, 0.035);
   --subtle-fill-strong: rgba(0, 0, 0, 0.065);
   --selected-surface: #f2f2f4;
@@ -24,16 +24,14 @@
   --ambient-two: rgba(91, 140, 255, 0.055);
   --backdrop: rgba(0, 0, 0, 0.55);
   --shadow: rgba(0, 0, 0, 0.14);
-  --spectrum: linear-gradient(
-    105deg,
-    #ff4d4d 0%,
-    #ff9f43 16%,
-    #ffe66d 32%,
-    #5ee173 48%,
-    #46d9d2 64%,
-    #5b8cff 80%,
-    #b66dff 100%
-  );
+  --red: #d63c3c;
+  --orange: #d97706;
+  --yellow: #a16207;
+  --green: #16833d;
+  --cyan: #0783a3;
+  --blue: #2563eb;
+  --violet: #7c3aed;
+  --primary: var(--blue);
 }
 
 :root[data-theme='dark'] {
@@ -49,12 +47,12 @@
   --muted: #9a9aa2;
   --accent: #f4f4f5;
   --accent-contrast: #09090b;
-  --danger: #ff8f8f;
-  --danger-border: rgba(255, 143, 143, 0.26);
-  --danger-fill: rgba(131, 42, 35, 0.18);
-  --warning: #f0c78a;
-  --warning-border: rgba(240, 199, 138, 0.24);
-  --warning-fill: rgba(240, 199, 138, 0.07);
+  --danger: var(--red);
+  --danger-border: color-mix(in srgb, var(--red) 28%, transparent);
+  --danger-fill: color-mix(in srgb, var(--red) 12%, transparent);
+  --warning: var(--orange);
+  --warning-border: color-mix(in srgb, var(--orange) 28%, transparent);
+  --warning-fill: color-mix(in srgb, var(--orange) 9%, transparent);
   --subtle-fill: rgba(255, 255, 255, 0.035);
   --subtle-fill-strong: rgba(255, 255, 255, 0.065);
   --selected-surface: #171718;
@@ -62,6 +60,13 @@
   --ambient-two: rgba(91, 140, 255, 0.045);
   --backdrop: rgba(0, 0, 0, 0.82);
   --shadow: rgba(0, 0, 0, 0.42);
+  --red: #ff5c5c;
+  --orange: #ff9f43;
+  --yellow: #f2d45c;
+  --green: #5ee173;
+  --cyan: #46d9d2;
+  --blue: #6b98ff;
+  --violet: #bd7cff;
 }
 
 * {
@@ -106,13 +111,11 @@ select {
   width: 58px;
   height: 58px;
   margin-bottom: 32px;
-  border: 1px solid transparent;
+  border: 1px solid var(--violet);
   border-radius: 17px;
   place-items: center;
-  background:
-    linear-gradient(var(--surface-strong), var(--surface-strong)) padding-box,
-    var(--spectrum) border-box;
-  color: var(--accent);
+  background: var(--surface-strong);
+  color: var(--violet);
   font-size: 13px;
   font-weight: 750;
   letter-spacing: -0.04em;
@@ -121,7 +124,7 @@ select {
 .eyebrow,
 .card-label {
   margin: 0 0 18px;
-  color: var(--accent);
+  color: var(--blue);
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.16em;
@@ -162,8 +165,8 @@ h1 {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--spectrum);
-  box-shadow: 0 0 16px rgba(91, 140, 255, 0.38);
+  background: var(--green);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--green) 55%, transparent);
 }
 
 .auth-panel {
@@ -171,17 +174,32 @@ h1 {
 }
 
 .auth-card {
+  --section-accent: var(--blue);
   display: flex;
   min-height: 520px;
   padding: clamp(28px, 4vw, 42px);
-  border: 1px solid transparent;
+  border: 1px solid var(--section-accent);
   border-radius: 26px;
-  background:
-    linear-gradient(var(--surface), var(--surface)) padding-box,
-    var(--spectrum) border-box;
+  background: var(--surface);
   box-shadow: 0 30px 90px var(--shadow);
   backdrop-filter: blur(24px);
   flex-direction: column;
+}
+
+.auth-card.auth-user {
+  --section-accent: var(--cyan);
+}
+
+.auth-card.auth-admin {
+  --section-accent: var(--orange);
+}
+
+.auth-card.auth-guest {
+  --section-accent: var(--yellow);
+}
+
+.auth-card .card-label {
+  color: var(--section-accent);
 }
 
 .auth-card h2 {
@@ -220,11 +238,10 @@ h1 {
 }
 
 .auth-card input:focus {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--field), var(--field)) padding-box,
-    var(--spectrum) border-box;
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+  border-color: var(--section-accent);
+  background: var(--field);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--section-accent) 18%, transparent);
 }
 
 .totp-input {
@@ -239,8 +256,8 @@ h1 {
   margin-top: 28px;
   border: 0;
   border-radius: 12px;
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--section-accent);
+  color: #ffffff;
   cursor: pointer;
   font-weight: 750;
   transition:
@@ -278,12 +295,9 @@ h1 {
 }
 
 .auth-card .login-mode button.active {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--selected-surface), var(--selected-surface))
-      padding-box,
-    var(--spectrum) border-box;
-  color: var(--accent);
+  border: 1px solid var(--section-accent);
+  background: var(--selected-surface);
+  color: var(--section-accent);
 }
 
 .form-error {
@@ -379,6 +393,16 @@ h1 {
   border-radius: 14px;
 }
 
+.admin-shell .compact-mark {
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.user-shell .compact-mark {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
 .admin-header .eyebrow {
   margin-bottom: 5px;
 }
@@ -412,21 +436,26 @@ h1 {
 .quiet-button:hover,
 .row-actions button:hover,
 .modal-actions button:hover {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--selected-surface), var(--selected-surface))
-      padding-box,
-    var(--spectrum) border-box;
+  border-color: var(--blue);
+  background: var(--selected-surface);
 }
 
 .user-management {
   margin-top: 46px;
 }
 
+.user-management .card-label {
+  color: var(--cyan);
+}
+
 .provider-management {
   margin-top: 72px;
   padding-top: 54px;
   border-top: 1px solid var(--line);
+}
+
+.provider-management .card-label {
+  color: var(--violet);
 }
 
 .provider-catalog {
@@ -514,11 +543,9 @@ h1 {
 
 .provider-create-form input:focus,
 .provider-create-form select:focus {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--field), var(--field)) padding-box,
-    var(--spectrum) border-box;
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+  border-color: var(--violet);
+  background: var(--field);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 18%, transparent);
 }
 
 .provider-create-form > button {
@@ -526,8 +553,8 @@ h1 {
   padding: 0 17px;
   border: 0;
   border-radius: 10px;
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--violet);
+  color: #ffffff;
   cursor: pointer;
   font-weight: 750;
   white-space: nowrap;
@@ -689,11 +716,9 @@ h1 {
 
 .create-user-form input:focus,
 .modal-card input:focus {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--field), var(--field)) padding-box,
-    var(--spectrum) border-box;
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+  border-color: var(--cyan);
+  background: var(--field);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 18%, transparent);
 }
 
 .check-field {
@@ -709,7 +734,7 @@ h1 {
 .check-field input {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
+  accent-color: var(--blue);
 }
 
 .create-user-form > button,
@@ -718,8 +743,8 @@ h1 {
   padding: 0 17px;
   border: 0;
   border-radius: 10px;
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--cyan);
+  color: #ffffff;
   cursor: pointer;
   font-weight: 750;
   white-space: nowrap;
@@ -740,9 +765,9 @@ h1 {
 }
 
 .success-banner {
-  border-color: var(--line);
-  background: var(--subtle-fill-strong);
-  color: var(--text-soft);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  background: color-mix(in srgb, var(--green) 9%, transparent);
+  color: var(--green);
 }
 
 .empty-state {
@@ -801,12 +826,9 @@ h1 {
 }
 
 .account-status.active {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--selected-surface), var(--selected-surface))
-      padding-box,
-    var(--spectrum) border-box;
-  color: var(--accent);
+  border: 1px solid var(--green);
+  background: var(--selected-surface);
+  color: var(--green);
 }
 
 .row-actions {
@@ -867,6 +889,10 @@ h1 {
   margin-top: 32px;
 }
 
+.access-management .card-label {
+  color: var(--blue);
+}
+
 .access-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -890,6 +916,25 @@ h1 {
   margin-top: 16px;
 }
 
+.access-panel form > button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cyan);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.guest-panel h3 {
+  color: var(--yellow);
+}
+
+.guest-panel form > button {
+  background: var(--yellow);
+  color: #17120a;
+}
+
 .access-panel select,
 .access-panel input {
   width: 100%;
@@ -908,11 +953,19 @@ h1 {
 
 .access-panel select:focus,
 .access-panel input:not([type='checkbox']):focus {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--field), var(--field)) padding-box,
-    var(--spectrum) border-box;
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+  border-color: var(--blue);
+  background: var(--field);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent);
+}
+
+.guest-panel select:focus,
+.guest-panel input:not([type='checkbox']):focus {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yellow) 18%, transparent);
+}
+
+.guest-panel input[type='checkbox'] {
+  accent-color: var(--yellow);
 }
 
 .access-panel .check-field input {
@@ -1022,13 +1075,11 @@ h1 {
   z-index: 30;
   display: flex;
   padding: 5px 6px 5px 11px;
-  border: 1px solid transparent;
+  border: 1px solid var(--violet);
   border-radius: 12px;
   align-items: center;
   gap: 7px;
-  background:
-    linear-gradient(var(--surface-strong), var(--surface-strong)) padding-box,
-    var(--spectrum) border-box;
+  background: var(--surface-strong);
   box-shadow: 0 10px 32px var(--shadow);
   color: var(--muted);
   font-size: 11px;

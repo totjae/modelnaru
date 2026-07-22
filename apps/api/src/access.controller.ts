@@ -127,7 +127,7 @@ function guestAccessBody(body: unknown) {
     !absoluteTimeoutHours ||
     (accessCode !== undefined &&
       (typeof accessCode !== 'string' ||
-        accessCode.length < 12 ||
+        accessCode.length < 6 ||
         accessCode.length > 128))
   ) {
     return undefined;

@@ -23,6 +23,7 @@ import {
   createRuntimeEnvironment,
   createTotpSecret,
   createTotpUri,
+  validAdminPassword,
 } from './helpers.js';
 
 const command = process.argv[2] ?? 'help';
@@ -46,9 +47,9 @@ async function hashPassword(value: string): Promise<string> {
 
 async function promptPassword(): Promise<string> {
   const first = await password({
-    message: '관리자 비밀번호 (12자 이상)',
+    message: '관리자 비밀번호 (10자 이상)',
     mask: '*',
-    validate: (value) => value.length >= 12 || '12자 이상 입력하세요.',
+    validate: (value) => validAdminPassword(value) || '10자 이상 입력하세요.',
   });
   const second = await password({
     message: '관리자 비밀번호 확인',

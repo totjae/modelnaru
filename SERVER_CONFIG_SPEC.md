@@ -105,6 +105,7 @@ providerSecrets:
 
 - `admin.username`: 고정 관리자 ID
 - `admin.passwordHash`: Argon2id로 생성한 비밀번호 hash
+- 관리자 CLI는 최소 10자 비밀번호만 허용하며 `admin.requireTotp`는 항상 `true`다.
 - `admin.totpSecret`: TOTP용 Base32 secret
 - `admin.requireTotp`: 인터넷 공개 환경에서는 반드시 `true`
 
