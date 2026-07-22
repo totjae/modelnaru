@@ -12,6 +12,7 @@ import {
 import { csrfToken } from './client-auth';
 import { selectConversationModel } from './chat-model-selection';
 import { responseAlternatives } from './chat-response-navigation';
+import { isNearScrollEnd } from './chat-scroll';
 
 interface AllowedModel {
   connectionName: string;
@@ -189,6 +190,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [topP, setTopP] = useState('');
   const [maxOutputTokens, setMaxOutputTokens] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const followLatestRef = useRef(true);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
   const modelsRef = useRef<AllowedModel[]>([]);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -257,6 +260,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   }, [load]);
 
   async function createConversation() {
+    followLatestRef.current = true;
     setBusy(true);
     setError('');
     try {
@@ -277,6 +281,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
 
   async function selectConversation(id: string) {
     if (busy) return;
+    followLatestRef.current = true;
     setSelectedId(id);
     setError('');
     try {
@@ -288,6 +293,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
 
   async function activateBranch(branchId: string) {
     if (!selectedId || busy || branchId === detail?.activeBranchId) return;
+    followLatestRef.current = true;
     setBusy(true);
     setError('');
     setNotice('');
@@ -363,6 +369,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       );
       setConversations(remaining);
       const next = remaining[0]?.id ?? null;
+      followLatestRef.current = true;
       setSelectedId(next);
       setDetail(null);
       setMessages([]);
@@ -399,6 +406,15 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const activeAlternativeIndex = alternatives.findIndex(
     (alternative) => alternative.branchId === detail?.activeBranchId,
   );
+
+  useEffect(() => {
+    if (!followLatestRef.current) return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      const list = messageListRef.current;
+      if (list) list.scrollTop = list.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [messages]);
 
   async function streamAssistant(
     response: Response,
@@ -470,6 +486,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     const rawContent = data.get('message');
     const content = typeof rawContent === 'string' ? rawContent.trim() : '';
     if (!content) return;
+    followLatestRef.current = true;
     const temporaryUserId = `user-${Date.now()}`;
     const temporaryAssistantId = `assistant-${Date.now()}`;
     setMessages((current) => [
@@ -525,6 +542,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     ) {
       return;
     }
+    followLatestRef.current = true;
     const temporaryAssistantId = `regenerated-${Date.now()}`;
     setMessages((current) =>
       current.map((currentMessage) =>
@@ -703,7 +721,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
               </details>
             </div>
 
-            <div className="message-list" aria-live="polite">
+            <div
+              className="message-list"
+              aria-live="polite"
+              ref={messageListRef}
+              onScroll={(event) => {
+                followLatestRef.current = isNearScrollEnd(event.currentTarget);
+              }}
+            >
               {messages.length === 0 ? (
                 <div className="chat-welcome compact">
                   <h2>{detail.title}</h2>

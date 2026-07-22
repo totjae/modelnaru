@@ -1347,7 +1347,7 @@ h1 {
 
 .response-navigation button:disabled,
 .regenerate-button:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.3;
 }
 

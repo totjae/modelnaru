@@ -111,6 +111,7 @@
 | CHAT-REGEN-E2E-001  | E2E  | HTTPS 답변 재생성   | 원본 보존·성공 시 활성화·실패 시 유지·분기 왕복·후속 문맥      | 계획 |
 | CHAT-REGEN-LAST-001 | 단위 | 재생성 대상 제한    | 마지막 assistant만 허용하고 과거·생성 중 답변 거부             | 통과 |
 | CHAT-NAV-001        | 단위 | 인라인 답변 탐색    | 동일 질문의 branch 자체 답변만 후보로 구성                     | 통과 |
+| CHAT-SCROLL-001     | 단위 | 최신 답변 자동 추적 | 하단 임계값 안에서는 추적하고 과거 내용 열람 시 추적 중단      | 통과 |
 
 ## 10. 실행 환경
 
@@ -136,7 +137,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 100개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 102개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -160,6 +161,7 @@ pnpm build
 - 활성 분기의 마지막 허용 모델 복원, 권한 제외 모델 무시와 fallback을 Web 단위시험으로 확인
 - 부모 경로 공유형 분기 합성, 반복 재생성, 잘못된 fork 거부와 재생성 전용 실행·API 입력·분기 활성화 service 단위시험 통과
 - 마지막 assistant 답변만 재생성 대상으로 허용하고 동일 질문의 실제 branch 답변만 인라인 탐색 후보로 구성하는 단위시험 통과
+- 메시지 목록 하단 96px 자동 추적 경계와 사용자가 위로 스크롤한 경우의 추적 중단 단위시험 통과
 - Ubuntu HTTPS에서 Gemini·OpenAI 호환 모델 응답, 모델별 snapshot·token usage 저장, 새로고침 후 대화 복원과 assistant 취소 상태 저장을 확인했으며 대화별 모델 선택 복원은 수정 후 재배포 검증 대기
 - Ubuntu에서 `0003_provider_registry.sql` 적용과 LLM Gateway·OpenAI 실제 키 등록·모델 조회·동기화·활성 변경·감사 기록을 확인
 
