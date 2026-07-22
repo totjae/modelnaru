@@ -915,8 +915,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 required
               />
               <small>
-                0은 전체 대화입니다. 값이 크면 더 많은 이전 문맥을 모델에
-                전달합니다.
+                0은 전체 대화입니다.
+                <br />
+                값이 크면 더 많은 이전 문맥을 모델에 전달합니다.
               </small>
             </label>
             <label>

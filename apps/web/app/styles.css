@@ -111,7 +111,7 @@ select {
   width: 58px;
   height: 58px;
   margin-bottom: 32px;
-  border: 1.25px solid color-mix(in srgb, var(--violet) 62%, transparent);
+  border: 2px solid color-mix(in srgb, var(--violet) 62%, transparent);
   border-radius: 17px;
   overflow: hidden;
   place-items: center;
@@ -411,6 +411,68 @@ h1 {
 .admin-header h1 {
   font-size: 27px;
   letter-spacing: -0.045em;
+}
+
+.user-shell {
+  padding-top: 18px;
+}
+
+.user-header {
+  display: grid;
+  padding-bottom: 12px;
+  align-items: center;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.user-header .admin-brand {
+  min-width: 0;
+  gap: 10px;
+}
+
+.user-header .compact-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  flex: 0 0 auto;
+}
+
+.user-header .admin-brand > div:last-child {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.user-header .eyebrow {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.user-header h1 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-header .admin-session {
+  width: auto;
+  gap: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.user-header .admin-session button {
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
+.user-shell .chat-workspace {
+  margin-top: 16px;
 }
 
 .admin-session {
@@ -1619,6 +1681,58 @@ h1 {
   .admin-session {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .user-shell {
+    padding-top: 14px;
+  }
+
+  .user-header {
+    padding-bottom: 10px;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .user-header .admin-brand {
+    gap: 7px;
+  }
+
+  .user-header .compact-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  .user-header .admin-brand > div:last-child {
+    gap: 6px;
+  }
+
+  .user-header .eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .user-header h1 {
+    font-size: 14px;
+  }
+
+  .user-header .admin-session {
+    width: auto;
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .user-header .admin-session span {
+    display: block;
+    max-width: 58px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .user-header .admin-session button {
+    min-height: 30px;
+    padding-inline: 8px;
+    font-size: 11px;
   }
 
   .create-user-form {
