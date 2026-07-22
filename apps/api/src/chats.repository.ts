@@ -40,6 +40,7 @@ export interface MessageRecord {
   modelIdSnapshot: string | null;
   outputTokens: number | null;
   parentMessageId: string | null;
+  providerModelId: string | null;
   providerTemplateIdSnapshot: string | null;
   requestParameters: Record<string, unknown>;
   role: 'assistant' | 'summary' | 'user';
@@ -96,6 +97,7 @@ interface RawMessageRow {
   model_id_snapshot: string | null;
   output_tokens: number | null;
   parent_message_id: string | null;
+  provider_model_id: string | null;
   provider_template_id_snapshot: string | null;
   request_parameters: Record<string, unknown>;
   role: MessageRecord['role'];
@@ -131,6 +133,7 @@ function mapMessage(row: RawMessageRow): MessageRecord {
     modelIdSnapshot: row.model_id_snapshot,
     outputTokens: row.output_tokens,
     parentMessageId: row.parent_message_id,
+    providerModelId: row.provider_model_id,
     providerTemplateIdSnapshot: row.provider_template_id_snapshot,
     requestParameters: row.request_parameters,
     role: row.role,
@@ -231,7 +234,8 @@ export class ChatsRepository {
     `;
     const messageRows = await sql<RawMessageRow[]>`
       SELECT id, branch_id, parent_message_id, sequence_number, role, status,
-        content, provider_template_id_snapshot, model_id_snapshot,
+        content, provider_model_id, provider_template_id_snapshot,
+        model_id_snapshot,
         request_parameters, input_tokens, output_tokens, error_code,
         created_at, updated_at, completed_at
       FROM messages

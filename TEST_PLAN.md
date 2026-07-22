@@ -105,6 +105,7 @@
 | CHAT-CONTEXT-001   | 단위 | 컨텍스트 한도       | 초과 시 quota 예약 전 실패 상태와 표준 오류 저장               | 통과 |
 | CHAT-CANCEL-001    | 통합 | 중지·연결 종료      | upstream abort와 assistant `cancelled`·부분 본문 보존          | 계획 |
 | CHAT-E2E-001       | E2E  | HTTPS 텍스트 채팅   | 실제 허용 모델로 생성·stream·저장·새로고침·모델 변경           | 계획 |
+| CHAT-MODEL-001     | 단위 | 모델 선택 복원      | 마지막 허용 모델 복원·권한 제외 시 현재/첫 모델 fallback       | 통과 |
 
 ## 10. 실행 환경
 
@@ -130,7 +131,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 86개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 89개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -151,6 +152,8 @@ pnpm build
 - Provider 핵심 4개 우선·나머지 알파벳순 정렬과 5차 migration의 대화 소유권·branch·message 상태 제약 정적 시험 통과
 - 대화 CRUD 기본값·입력 범위, 관리자 workspace 차단과 소유권 not-found 변환 단위시험 통과
 - OpenAI 호환·Anthropic·Gemini 요청 builder, 분할 SSE parser와 컨텍스트 초과 시 quota 예약 방지 단위시험 통과
+- 활성 분기의 마지막 허용 모델 복원, 권한 제외 모델 무시와 fallback을 Web 단위시험으로 확인
+- Ubuntu HTTPS에서 Gemini·OpenAI 호환 모델 응답, 모델별 snapshot·token usage 저장, 새로고침 후 대화 복원과 assistant 취소 상태 저장을 확인했으며 대화별 모델 선택 복원은 수정 후 재배포 검증 대기
 - Ubuntu에서 `0003_provider_registry.sql` 적용과 LLM Gateway·OpenAI 실제 키 등록·모델 조회·동기화·활성 변경·감사 기록을 확인
 
 2026-07-22 Ubuntu 최초 migration 실행은 internal backend network에서 Corepack이 `pnpm`을 내려받으려다 DNS `EAI_AGAIN`으로 실패했다. PostgreSQL은 healthy였고 migration 적용 전 실패하여 schema 손상은 없었다. Runtime command를 build된 JavaScript의 직접 `node` 실행으로 변경한 뒤 재배포하여 `0001_auth_foundation.sql` 적용, migrate exit code 0, API·Web·PostgreSQL·Valkey healthy와 readiness `database: ok`를 확인했다. Migration 재실행과 `schema_migrations` 직접 조회, DB 중단 시 readiness 503 확인은 남아 있다.

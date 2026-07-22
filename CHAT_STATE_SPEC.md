@@ -38,7 +38,7 @@
 | 컨텍스트 토큰 한도 | `100000`         | 1,000~2,000,000  | 초과 시 후속 요약 정책 적용                        |
 | 활성 분기          | 생성된 root 분기 | 같은 대화의 분기 | 다음 요청에서 사용할 메시지 경로                   |
 
-모델은 대화에 고정하지 않는다. 매 AI 요청에서 허용된 모델을 선택하며, 각 assistant 메시지에 실제 Provider template ID와 모델 ID snapshot을 저장한다.
+모델은 대화에 고정하지 않는다. 매 AI 요청에서 허용된 모델을 선택하며, 각 assistant 메시지에 실제 Provider model UUID, Provider template ID와 모델 ID snapshot을 저장한다. 대화를 다시 열면 활성 분기의 마지막 assistant 메시지가 사용한 Provider model UUID를 선택창에 복원한다. 해당 모델이 삭제·비활성화·권한 회수된 경우에는 현재 허용 모델을 유지하거나 첫 허용 모델로 대체한다.
 
 ### 3.3 분기
 

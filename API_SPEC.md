@@ -303,6 +303,8 @@ Request:
 
 대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `messages`를 포함한다.
 
+각 message는 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 허용 모델을 다시 선택하기 위한 `providerModelId`를 포함한다. Web은 활성 분기의 마지막 assistant message가 참조하는 모델이 현재도 허용된 경우 해당 모델을 복원한다.
+
 ### `PATCH /api/conversations/:id`
 
 생성 API의 네 설정 중 하나 이상을 같은 범위로 수정한다. 성공은 수정된 대화 객체다.

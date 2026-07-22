@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { csrfToken } from './client-auth';
+import { selectConversationModel } from './chat-model-selection';
 
 interface AllowedModel {
   connectionName: string;
@@ -36,6 +37,7 @@ interface ChatMessage {
   errorCode: string | null;
   id: string;
   modelIdSnapshot: string | null;
+  providerModelId: string | null;
   role: 'assistant' | 'summary' | 'user';
   sequenceNumber: number;
   status: 'cancelled' | 'completed' | 'failed' | 'pending' | 'streaming';
@@ -154,6 +156,7 @@ function temporaryMessage(
     errorCode: null,
     id,
     modelIdSnapshot: null,
+    providerModelId: null,
     role,
     sequenceNumber: Number.MAX_SAFE_INTEGER,
     status: role === 'user' ? 'completed' : 'pending',
@@ -176,6 +179,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [topP, setTopP] = useState('');
   const [maxOutputTokens, setMaxOutputTokens] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const modelsRef = useRef<AllowedModel[]>([]);
 
   const loadDetail = useCallback(async (id: string) => {
     const response = await fetch(`/api/conversations/${id}`, {
@@ -187,11 +191,13 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     const active = value.branches.find(
       (branch) => branch.id === value.activeBranchId,
     );
+    const activeMessages = (active?.messages ?? []).filter(
+      (message) => message.role === 'user' || message.role === 'assistant',
+    );
     setDetail(value);
-    setMessages(
-      (active?.messages ?? []).filter(
-        (message) => message.role === 'user' || message.role === 'assistant',
-      ),
+    setMessages(activeMessages);
+    setSelectedModel((current) =>
+      selectConversationModel(activeMessages, modelsRef.current, current),
     );
   }, []);
 
@@ -219,8 +225,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         const conversationBody = (await conversationResponse.json()) as {
           conversations: ConversationSummary[];
         };
+        modelsRef.current = modelBody.models;
         setModels(modelBody.models);
-        setSelectedModel((current) => current || modelBody.models[0]?.id || '');
         setConversations(conversationBody.conversations);
         const nextId = preferredId || conversationBody.conversations[0]?.id;
         if (nextId) {
