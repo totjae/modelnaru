@@ -156,6 +156,44 @@ async function writeAudit(
 export class AccessRepository {
   constructor(private readonly database: DatabaseService) {}
 
+  async assertModelAllowed(
+    principal: Extract<AuthenticatedPrincipal, { type: 'guest' | 'user' }>,
+    providerModelId: string,
+  ): Promise<void> {
+    const sql = this.database.getClient();
+    const rows =
+      principal.type === 'user'
+        ? await sql<{ id: string }[]>`
+            SELECT m.id
+            FROM user_model_permissions p
+            JOIN users u ON u.id = p.user_id
+            JOIN provider_models m ON m.id = p.provider_model_id
+            JOIN provider_connections c ON c.id = m.provider_connection_id
+            WHERE p.user_id = ${principal.id}
+              AND p.provider_model_id = ${providerModelId}
+              AND p.is_allowed = true AND u.is_enabled = true
+              AND m.is_enabled = true AND m.is_available = true
+              AND c.is_enabled = true
+            LIMIT 1
+          `
+        : await sql<{ id: string }[]>`
+            SELECT m.id
+            FROM guest_model_permissions p
+            JOIN guest_settings g ON g.singleton = true
+            JOIN guest_principals gp ON gp.id = ${principal.id}
+            JOIN provider_models m ON m.id = p.provider_model_id
+            JOIN provider_connections c ON c.id = m.provider_connection_id
+            WHERE p.provider_model_id = ${providerModelId}
+              AND p.is_allowed = true AND g.is_enabled = true
+              AND gp.deleted_at IS NULL AND gp.idle_expires_at > now()
+              AND gp.absolute_expires_at > now()
+              AND m.is_enabled = true AND m.is_available = true
+              AND c.is_enabled = true
+            LIMIT 1
+          `;
+    if (!rows[0]) throw new AccessModelNotAllowedError();
+  }
+
   async adminState(): Promise<AdminAccessState> {
     const sql = this.database.getClient();
     const models = await sql<RawAccessModelRow[]>`

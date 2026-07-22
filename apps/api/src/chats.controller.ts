@@ -14,19 +14,27 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
+import { ChatExecutionService } from './chat-execution.service.js';
+import { ChatMessageStateError } from './chat-messages.repository.js';
+import type { ChatEvent, ChatParameters } from './chat-streaming.js';
 import {
   AuthenticatedMutationGuard,
   type AuthenticatedRequest,
   AuthenticatedSessionGuard,
 } from './auth.guard.js';
 import { ChatError, ChatsService } from './chats.service.js';
-import type {
-  CreateConversationInput,
-  UpdateConversationInput,
+import {
+  ConversationNotFoundError,
+  type CreateConversationInput,
+  type UpdateConversationInput,
 } from './chats.repository.js';
 
 interface ResponseLike {
+  end?(): void;
+  flushHeaders?(): void;
+  on?(event: 'close', listener: () => void): void;
   setHeader(name: string, value: string): void;
+  write?(chunk: string): boolean;
 }
 
 const UUID =
@@ -117,9 +125,71 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
   return Object.keys(output).length > 0 ? output : undefined;
 }
 
+function parseParameters(value: unknown): ChatParameters | undefined {
+  if (value === undefined) return {};
+  const input = recordBody(value);
+  if (!input) return undefined;
+  const allowed = new Set(['maxOutputTokens', 'temperature', 'topP']);
+  if (Object.keys(input).some((key) => !allowed.has(key))) return undefined;
+  const output: ChatParameters = {};
+  if (input.maxOutputTokens !== undefined) {
+    if (!validInteger(input.maxOutputTokens, 1, 131_072)) return undefined;
+    output.maxOutputTokens = input.maxOutputTokens;
+  }
+  if (input.temperature !== undefined) {
+    if (
+      typeof input.temperature !== 'number' ||
+      !Number.isFinite(input.temperature) ||
+      input.temperature < 0 ||
+      input.temperature > 2
+    ) {
+      return undefined;
+    }
+    output.temperature = input.temperature;
+  }
+  if (input.topP !== undefined) {
+    if (
+      typeof input.topP !== 'number' ||
+      !Number.isFinite(input.topP) ||
+      input.topP < 0 ||
+      input.topP > 1
+    ) {
+      return undefined;
+    }
+    output.topP = input.topP;
+  }
+  return output;
+}
+
+function parseMessage(body: unknown):
+  | {
+      content: string;
+      parameters: ChatParameters;
+      providerModelId: string;
+    }
+  | undefined {
+  const input = recordBody(body);
+  if (!input || typeof input.content !== 'string') return undefined;
+  const content = input.content.trim();
+  const parameters = parseParameters(input.parameters);
+  if (
+    content.length < 1 ||
+    content.length > 200_000 ||
+    typeof input.providerModelId !== 'string' ||
+    !UUID.test(input.providerModelId) ||
+    !parameters
+  ) {
+    return undefined;
+  }
+  return { content, parameters, providerModelId: input.providerModelId };
+}
+
 @Controller('conversations')
 export class ChatsController {
-  constructor(private readonly chats: ChatsService) {}
+  constructor(
+    private readonly chats: ChatsService,
+    private readonly execution: ChatExecutionService,
+  ) {}
 
   @Get()
   @UseGuards(AuthenticatedSessionGuard)
@@ -217,6 +287,76 @@ export class ChatsController {
     }
   }
 
+  @Post(':id/messages')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthenticatedMutationGuard)
+  async message(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: ResponseLike,
+  ): Promise<void> {
+    const input = parseMessage(body);
+    if (!UUID.test(id) || !input) this.invalidInput();
+    response.setHeader('Cache-Control', 'no-cache, no-store');
+    response.setHeader('Connection', 'keep-alive');
+    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders?.();
+    const disconnected = new AbortController();
+    let completed = false;
+    response.on?.('close', () => {
+      if (!completed) disconnected.abort();
+    });
+    const emit = (event: ChatEvent) => {
+      response.write?.(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    await this.execution.execute(
+      {
+        ...input,
+        conversationId: id,
+        principal: request.authenticatedSession!.principal,
+      },
+      emit,
+      disconnected.signal,
+    );
+    completed = true;
+    response.end?.();
+  }
+
+  @Post(':id/messages/:messageId/cancel')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AuthenticatedMutationGuard)
+  async cancel(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ): Promise<void> {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id) || !UUID.test(messageId)) this.invalidInput();
+    try {
+      await this.execution.cancel(
+        request.authenticatedSession!.principal,
+        id,
+        messageId,
+      );
+    } catch (error) {
+      if (error instanceof ChatMessageStateError) {
+        throw new HttpException(
+          {
+            error: {
+              code: 'CHAT_NOT_CANCELLABLE',
+              message: 'The response is not active.',
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      this.mapError(error);
+    }
+  }
+
   private invalidInput(): never {
     throw new HttpException(
       {
@@ -230,6 +370,17 @@ export class ChatsController {
   }
 
   private mapError(error: unknown): never {
+    if (error instanceof ConversationNotFoundError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_NOT_FOUND',
+            message: 'Conversation not found.',
+          },
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
     if (error instanceof ChatError) {
       throw new HttpException(
         { error: { code: error.code, message: error.message } },

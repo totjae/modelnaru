@@ -90,6 +90,8 @@
 - master key는 read-only secret 파일에서 읽고 DB, response와 log에 저장하지 않는다.
 - API 목록에는 ciphertext·nonce·tag를 포함하지 않고 충분히 긴 키의 마지막 네 글자 hint만 표시한다.
 - 첫 구현은 서버에 고정된 HTTPS base URL과 모델 목록 경로만 호출하며 관리자 임의 URL·header 입력을 허용하지 않는다.
+- 채팅 요청도 저장된 base URL을 그대로 신뢰하지 않고 내장 template의 고정 HTTPS URL과 일치할 때만 전송한다.
+- 사용자 채팅 parameter는 `temperature`, `topP`, `maxOutputTokens`의 숫자 범위만 허용하며 임의 header·URL·JSON 필드는 upstream에 전달하지 않는다.
 - 공개 모델 목록을 제공하는 LLM Gateway는 인증 전용 `GET /v1/key`가 성공한 경우에만 자격증명을 저장한다.
 - 모델 조회 redirect를 거부하고 15초 timeout과 5MiB 응답 제한을 적용한다.
 - upstream 오류 본문을 response나 일반 log에 포함하지 않는다.
@@ -123,6 +125,7 @@
 - 인증 cookie 속성, TOTP window, session 만료·폐기와 CSRF 거부 시험이 통과한다.
 - 같은 공유 코드를 사용한 게스트 사이의 session·대화·첨부 소유권 격리 시험이 통과한다.
 - 게스트 코드·session 생성 속도 제한과 일일 호출 제한이 동시 요청에서도 우회되지 않는다.
+- 채팅 mutation과 취소는 session·CSRF·대화 소유권을 검증하며 응답 event에 API 키와 upstream 오류 본문이 없다.
 
 ## 9. 미결정·보류 항목
 

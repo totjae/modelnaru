@@ -301,7 +301,7 @@ Request:
 
 ### `GET /api/conversations/:id`
 
-대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `messages`를 포함한다. 메시지 전송 API가 추가되기 전에는 root branch의 `messages`가 빈 배열이다.
+대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `messages`를 포함한다.
 
 ### `PATCH /api/conversations/:id`
 
@@ -311,12 +311,57 @@ Request:
 
 대화·분기·메시지를 hard delete한다. 성공은 `204 No Content`다. 사용자 또는 게스트 주체 삭제 시에도 FK cascade로 같은 데이터가 삭제된다.
 
+### `POST /api/conversations/:id/messages`
+
+CSRF 검증 후 사용자 메시지와 pending assistant 메시지를 저장하고 `text/event-stream`으로 응답한다.
+
+```json
+{
+  "content": "안녕하세요",
+  "providerModelId": "30000000-0000-4000-8000-000000000001",
+  "parameters": {
+    "temperature": 0.7,
+    "topP": 0.9,
+    "maxOutputTokens": 4096
+  }
+}
+```
+
+- `content`: 공백 제거 후 1~200,000자
+- `providerModelId`: 현재 주체에게 허용된 활성 모델 UUID
+- `temperature`: 선택, 0~2
+- `topP`: 선택, 0~1
+- `maxOutputTokens`: 선택, 1~131,072
+- 선언되지 않은 parameter key는 거부한다.
+- 모델 권한과 대화 소유권을 확인하고 컨텍스트 한도를 검사한 뒤 upstream 직전에 일일 호출량을 예약한다.
+- 저장된 모델의 context window와 최대 출력 token 정보가 있으면 사용자 설정값보다 우선하는 상한으로 적용한다.
+- 컨텍스트 계산은 tokenizer 연결 전까지 Unicode 문자당 최대 1 token으로 보수적으로 추정한다. 한도 초과 시 호출량을 예약하지 않고 실패 메시지를 저장한다.
+
+SSE의 각 `data`는 다음 공통 이벤트 중 하나다.
+
+```text
+{ "type": "start", "messageId": "...", "modelId": "..." }
+{ "type": "text_delta", "text": "응답 조각" }
+{ "type": "usage", "inputTokens": 10, "outputTokens": 20 }
+{ "type": "done", "durationMs": 1234, "stopReason": "stop" }
+{ "type": "error", "code": "...", "message": "...", "retryable": false }
+```
+
+Provider API 키, endpoint 내부 정보와 upstream 오류 본문은 이벤트에 포함하지 않는다.
+
+### `POST /api/conversations/:id/messages/:messageId/cancel`
+
+현재 주체가 생성 중인 assistant 메시지의 in-memory `AbortController`를 중단한다. 성공은 `204 No Content`다. 단일 서버 재시작 등으로 활성 요청이 메모리에 없더라도 DB가 pending·streaming이면 `cancelled`로 전환한다.
+
 공통 오류:
 
 - `400 CHAT_INPUT_INVALID`: UUID, body 또는 설정 범위 오류
 - `401 AUTH_SESSION_REQUIRED`: 유효한 session 없음
 - `403 AUTH_CSRF_INVALID`: mutation의 CSRF 검증 실패
 - `404 CHAT_NOT_FOUND`: 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
+- `409 CHAT_NOT_CANCELLABLE`: 완료됐거나 진행 중이 아닌 메시지
+
+스트림 내부 오류 code에는 `CHAT_CONTEXT_LIMIT_EXCEEDED`, `CHAT_MODEL_UNAVAILABLE`, `CHAT_PROVIDER_AUTH_FAILED`, `CHAT_PROVIDER_RATE_LIMITED`, `CHAT_PROVIDER_NETWORK_ERROR`, `CHAT_PROVIDER_RESPONSE_INVALID`, `CHAT_PROVIDER_UPSTREAM_ERROR`, `CHAT_CANCELLED`이 있다.
 
 ## 10. 오류·경계 조건
 
@@ -347,10 +392,12 @@ Request:
 - 모델 동기화 실패 시 기존 모델과 활성 설정을 보존한다.
 - 대화 생성 시 root 분기와 활성 분기가 같은 transaction에서 생성된다.
 - 일반 사용자와 게스트는 자신의 대화만 조회·수정·삭제할 수 있고 mutation은 CSRF를 요구한다.
+- OpenAI 호환·Anthropic·Gemini 스트림을 공통 SSE 이벤트로 전달하고 최종 본문·사용량·상태를 저장한다.
+- 취소와 브라우저 연결 종료가 upstream 요청까지 전파되고 부분 본문은 `cancelled`로 보존된다.
 
 ## 12. 미결정·보류 항목
 
 - 공통 request ID 형식은 관리자 log 단계에서 확정한다.
 - OpenAPI 문서는 현재 공개하지 않으며, 도입 시 관리자 session을 요구한다.
 - TOTP 복구 code는 CLI·DB 저장 구조와 함께 후속 보안 단계에서 구현한다.
-- API 키 교체, 사용자별 모델 권한 API와 Provider별 고급 설정은 다음 Provider 하위 단계에서 추가한다.
+- API 키 교체와 Provider별 고급 설정은 채팅·파일 처리 이후 Provider 하위 단계에서 추가한다.

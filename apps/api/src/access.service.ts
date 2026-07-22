@@ -122,6 +122,24 @@ export class AccessService {
     }
   }
 
+  async assertModelAllowed(
+    principal: AuthenticatedPrincipal,
+    providerModelId: string,
+  ): Promise<void> {
+    if (principal.type === 'admin') {
+      throw new AccessError(
+        'ACCESS_MODEL_FORBIDDEN',
+        404,
+        'The model is not available.',
+      );
+    }
+    try {
+      await this.repository.assertModelAllowed(principal, providerModelId);
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
   private validTimezone(value: string): boolean {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: value }).format();

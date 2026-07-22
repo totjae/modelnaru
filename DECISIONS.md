@@ -121,6 +121,15 @@
 - 이유: 실제 사용 빈도가 높은 제공자를 빠르게 찾을 수 있게 하고, Provider 범위를 넓히기 전에 대화 저장·스트리밍·첨부 처리의 공통 기반을 안정화하기 위함이다.
 - 영향: LLM Gateway는 등록 가능 상태를 유지하지만 고정 상단 대상에서는 제외된다. 준비 중 Provider는 카탈로그에 남아 있으며 구현 우선순위만 연기한다.
 
+### ADR-014: 고정 Provider endpoint와 POST SSE 채팅
+
+- 상태: 확정
+- 결정일: 2026-07-22
+- 결정: 채팅은 CSRF로 보호한 `POST /api/conversations/:id/messages` 응답에서 공통 SSE event를 전송한다. outbound URL·인증 header·request protocol은 내장 Provider template에서만 선택한다.
+- 이유: 긴 사용자 입력과 parameter를 URL에 노출하지 않고 같은 요청에서 검증·메시지 저장·스트리밍을 시작하며, 관리자 또는 사용자가 임의 outbound 목적지를 만들지 못하게 하기 위함이다.
+- 대안: POST로 request ID를 만든 뒤 별도 GET EventSource 연결, WebSocket, Provider 응답 완료 후 단일 JSON 반환.
+- 영향: 내부 gateway와 host Nginx 모두 실제 메시지 endpoint의 buffering을 꺼야 한다. 단일 API process에서는 in-memory AbortController로 즉시 중지하며 다중 instance 도입 전 공유 취소 신호가 필요하다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

@@ -3,10 +3,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { AccessManager } from './access-manager';
+import { ChatWorkspace } from './chat-workspace';
 import { csrfToken } from './client-auth';
 import { ProviderManager } from './provider-manager';
 import { UserManager } from './user-manager';
-import { WorkspaceModels } from './workspace-models';
 
 type Principal =
   | { type: 'admin'; username: string }
@@ -167,21 +167,7 @@ export default function HomePage() {
             </div>
           </header>
           {error && <div className="banner error-banner">{error}</div>}
-          <section
-            className="workspace-empty"
-            aria-labelledby="workspace-title"
-          >
-            <p className="card-label">
-              {isGuest ? 'ISOLATED GUEST WORKSPACE' : 'PRIVATE WORKSPACE'}
-            </p>
-            <h2 id="workspace-title">로그인되었습니다</h2>
-            <p>
-              {isGuest
-                ? '이 임시 공간은 다른 게스트와 분리되며 로그아웃하거나 세션이 만료되면 삭제됩니다.'
-                : '이 계정의 대화와 설정은 다른 사용자와 분리됩니다.'}
-            </p>
-            <WorkspaceModels />
-          </section>
+          <ChatWorkspace isGuest={isGuest} />
         </main>
       );
     }

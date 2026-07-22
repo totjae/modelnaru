@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AuthenticatedRequest } from '../src/auth.guard.js';
+import type { ChatExecutionService } from '../src/chat-execution.service.js';
 import { ChatsController } from '../src/chats.controller.js';
 import type { ChatsService } from '../src/chats.service.js';
 
@@ -20,11 +21,15 @@ function request(): AuthenticatedRequest {
 }
 
 const response = () => ({ setHeader: vi.fn() });
+const execution = {} as ChatExecutionService;
 
 describe('ChatsController', () => {
   it('creates a conversation with the documented defaults', async () => {
     const chats = { create: vi.fn(() => Promise.resolve({ id: 'created' })) };
-    const controller = new ChatsController(chats as unknown as ChatsService);
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
 
     await expect(controller.create({}, request(), response())).resolves.toEqual(
       { id: 'created' },
@@ -39,7 +44,10 @@ describe('ChatsController', () => {
 
   it('accepts zero as unlimited history and rejects an undersized context', async () => {
     const chats = { create: vi.fn() };
-    const controller = new ChatsController(chats as unknown as ChatsService);
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
 
     await expect(
       controller.create(
@@ -53,7 +61,10 @@ describe('ChatsController', () => {
 
   it('requires a non-empty update and a valid conversation id', async () => {
     const chats = { update: vi.fn() };
-    const controller = new ChatsController(chats as unknown as ChatsService);
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
 
     await expect(
       controller.update('not-a-uuid', {}, request(), response()),

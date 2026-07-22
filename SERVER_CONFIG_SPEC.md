@@ -197,7 +197,7 @@ server {
         proxy_send_timeout 600s;
     }
 
-    location ^~ /api/chat/ {
+    location ~ ^/api/conversations/[^/]+/messages(?:$|/) {
         proxy_pass http://apichat_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -223,7 +223,7 @@ server {
 }
 ```
 
-실제 endpoint 경로가 상세 API 명세에서 바뀌면 Nginx location도 같이 변경한다. 스트리밍 endpoint에는 `proxy_buffering off`를 적용한다.
+실제 endpoint 경로가 상세 API 명세에서 바뀌면 Nginx location도 같이 변경한다. 현재 스트리밍 endpoint인 `/api/conversations/:id/messages`와 취소 하위 경로에는 `proxy_buffering off`를 적용한다. 내부 gateway와 host Nginx 양쪽에 같은 기준을 적용한다.
 
 파일은 한 요청에 하나씩 최대 10MB를 업로드하고 성공한 attachment ID를 메시지에 최대 10개 연결한다. 따라서 Nginx의 단일 요청 허용 크기는 12MB로 충분하다. 브라우저는 여러 파일을 최대 2개씩 병렬 업로드한다.
 

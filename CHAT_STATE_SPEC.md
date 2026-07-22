@@ -69,15 +69,17 @@
 
 ### 3.5 기본 API 단계
 
-첫 하위 단계에서는 다음 API를 제공한다.
+현재 다음 API를 제공한다.
 
 - `GET /api/conversations`: 현재 주체의 대화 목록
 - `POST /api/conversations`: 대화와 root 분기 생성
 - `GET /api/conversations/:id`: 활성 분기와 저장된 메시지를 포함한 상세 조회
 - `PATCH /api/conversations/:id`: 제목·시스템 프롬프트·컨텍스트 설정 변경
 - `DELETE /api/conversations/:id`: 대화 hard delete
+- `POST /api/conversations/:id/messages`: user·assistant 메시지를 저장하고 SSE로 AI 응답 전송
+- `POST /api/conversations/:id/messages/:messageId/cancel`: 진행 중인 upstream 요청 취소
 
-메시지 전송·스트리밍·취소·재생성 endpoint는 AI 실행 연결 단계에서 추가한다. 모든 mutation은 CSRF 검증을 요구한다.
+메시지 전송은 `content`, `providerModelId`와 검증된 `temperature`, `topP`, `maxOutputTokens`만 받는다. 모델 권한을 먼저 확인하고 컨텍스트 한도를 검사한 뒤 일일 호출량을 예약한다. 브라우저 연결 종료 또는 취소 API 요청은 같은 `AbortController`를 통해 upstream 연결도 중단한다. 재생성 endpoint는 후속 단계에서 추가한다. 모든 mutation은 CSRF 검증을 요구한다.
 
 ## 4. 오류·예외 또는 경계 조건
 
@@ -85,9 +87,11 @@
 - `AUTH_SESSION_REQUIRED`(`401`): session 없음·만료
 - `AUTH_CSRF_INVALID`(`403`): mutation의 CSRF 검증 실패
 - `CHAT_NOT_FOUND`(`404`): 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
+- `CHAT_CONTEXT_LIMIT_EXCEEDED`: 요약을 사용할 수 없는 상태에서 설정한 컨텍스트 한도 초과
+- `CHAT_NOT_CANCELLABLE`(`409`): 이미 완료됐거나 진행 중이 아닌 메시지 취소
 - 활성 분기와 대화의 관계가 일치하지 않으면 DB 제약으로 거부한다.
-- 브라우저 연결이 끊겨도 즉시 완료로 처리하지 않고 후속 취소·orphan 정리 정책이 상태를 확정한다.
-- 같은 client mutation의 중복 전송 방지는 메시지 endpoint 도입 시 idempotency key로 확정한다.
+- 브라우저 연결이 끊기면 현재 단일 API process의 upstream 요청을 중단하고 assistant 메시지를 `cancelled`로 저장한다.
+- 같은 client mutation의 중복 전송 방지는 후속 idempotency key 단계에서 확정한다.
 
 ## 5. 검증·인수 조건
 
@@ -97,6 +101,8 @@
 - 사용자와 게스트 삭제 시 대화·분기·메시지가 cascade 삭제된다.
 - 기본값은 이전 메시지 무제한(`0`)과 컨텍스트 100,000 token이다.
 - 대화 중 서로 다른 Provider 모델 snapshot을 가진 assistant 메시지를 저장할 수 있다.
+- OpenAI 호환·Anthropic·Gemini SSE를 공통 이벤트로 변환하고 완료·실패·취소 상태를 저장한다.
+- 허용되지 않은 모델은 메시지를 만들기 전에 거부하고 컨텍스트 초과는 quota 예약 전에 중단한다.
 - 재생성 결과는 기존 답변을 덮어쓰지 않는 새 분기로 저장할 수 있다.
 - controller·service 단위시험, migration 정적 시험, typecheck와 production build가 통과한다.
 

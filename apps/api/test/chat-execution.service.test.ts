@@ -1,0 +1,80 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import type { AccessService } from '../src/access.service.js';
+import type { AuthenticatedPrincipal } from '../src/auth.service.js';
+import { ChatExecutionService } from '../src/chat-execution.service.js';
+import type { ChatMessagesRepository } from '../src/chat-messages.repository.js';
+import type { ChatProviderService } from '../src/chat-provider.service.js';
+import { providerTemplateById } from '../src/provider-catalog.js';
+
+const principal: AuthenticatedPrincipal = {
+  displayName: null,
+  id: '10000000-0000-4000-8000-000000000001',
+  type: 'user',
+  username: 'user1',
+};
+
+describe('ChatExecutionService', () => {
+  it('stops before quota reservation when context exceeds the configured limit', async () => {
+    const access = {
+      assertModelAllowed: vi.fn(() => Promise.resolve()),
+      reserveDailyRequest: vi.fn(),
+    };
+    const providers = {
+      resolve: vi.fn(() =>
+        Promise.resolve({
+          apiKey: 'secret',
+          baseUrl: 'https://api.openai.com/v1',
+          modelId: 'gpt-test',
+          providerModelId: '20000000-0000-4000-8000-000000000001',
+          template: providerTemplateById('openai')!,
+        }),
+      ),
+    };
+    const messages = {
+      assertConversation: vi.fn(() => Promise.resolve()),
+      beginTurn: vi.fn(() =>
+        Promise.resolve({
+          assistantMessageId: '30000000-0000-4000-8000-000000000001',
+          context: [{ content: 'too long', role: 'user' }],
+          contextTokenLimit: 2,
+          systemPrompt: '',
+          userMessageId: '40000000-0000-4000-8000-000000000001',
+        }),
+      ),
+      finishIncomplete: vi.fn(() => Promise.resolve()),
+    };
+    const service = new ChatExecutionService(
+      access as unknown as AccessService,
+      providers as unknown as ChatProviderService,
+      messages as unknown as ChatMessagesRepository,
+    );
+    const events: unknown[] = [];
+
+    await service.execute(
+      {
+        content: 'too long',
+        conversationId: '50000000-0000-4000-8000-000000000001',
+        parameters: {},
+        principal,
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      (event) => events.push(event),
+    );
+
+    expect(access.reserveDailyRequest).not.toHaveBeenCalled();
+    expect(messages.finishIncomplete).toHaveBeenCalledWith(
+      '30000000-0000-4000-8000-000000000001',
+      expect.objectContaining({
+        errorCode: 'CHAT_CONTEXT_LIMIT_EXCEEDED',
+        status: 'failed',
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        code: 'CHAT_CONTEXT_LIMIT_EXCEEDED',
+        type: 'error',
+      }),
+    );
+  });
+});

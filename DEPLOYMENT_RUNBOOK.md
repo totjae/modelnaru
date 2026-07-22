@@ -39,7 +39,7 @@ cd /home/totquf4171/modelnaru
 
 ## 5. Nginx 연결
 
-host Nginx의 `chat.mihoservice.xyz` server block에서 upstream을 `127.0.0.1:32432`로 지정한다. TLS 인증서는 `/etc/letsencrypt/live/chat.mihoservice.xyz/`에 있고 Certbot 자동 갱신을 사용한다. streaming endpoint에는 buffering과 cache를 끄고, 파일 endpoint의 `client_max_body_size`는 protocol overhead를 고려해 `12m` 이상으로 둔다. 상세 예시는 `SERVER_CONFIG_SPEC.md`를 따른다.
+host Nginx의 `chat.mihoservice.xyz` server block에서 upstream을 `127.0.0.1:32432`로 지정한다. TLS 인증서는 `/etc/letsencrypt/live/chat.mihoservice.xyz/`에 있고 Certbot 자동 갱신을 사용한다. `/api/conversations/:id/messages` streaming endpoint에는 buffering과 cache를 끄고, 파일 endpoint의 `client_max_body_size`는 protocol overhead를 고려해 `12m` 이상으로 둔다. 상세 예시는 `SERVER_CONFIG_SPEC.md`를 따른다.
 
 ## 6. 점검
 

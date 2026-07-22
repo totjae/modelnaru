@@ -19,6 +19,9 @@ import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
 import { DatabaseService } from './database.service.js';
 import { ChatsController } from './chats.controller.js';
+import { ChatExecutionService } from './chat-execution.service.js';
+import { ChatMessagesRepository } from './chat-messages.repository.js';
+import { ChatProviderService } from './chat-provider.service.js';
 import { ChatsRepository } from './chats.repository.js';
 import { ChatsService } from './chats.service.js';
 import { HealthController } from './health.controller.js';
@@ -62,6 +65,9 @@ import { UsersService } from './users.service.js';
     AccessService,
     ChatsRepository,
     ChatsService,
+    ChatMessagesRepository,
+    ChatProviderService,
+    ChatExecutionService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },
   ],
 })
