@@ -45,6 +45,26 @@ export class AuthenticatedSessionGuard implements CanActivate {
   }
 }
 
+@Injectable()
+export class AuthenticatedMutationGuard implements CanActivate {
+  constructor(private readonly auth: AuthService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const cookies = parseCookies(firstHeader(request.headers.cookie));
+    try {
+      request.authenticatedSession = await this.auth.authenticateWithCsrf({
+        csrfCookie: cookies.get(CSRF_COOKIE),
+        csrfHeader: firstHeader(request.headers['x-csrf-token']),
+        sessionToken: cookies.get(SESSION_COOKIE),
+      });
+      return true;
+    } catch (error) {
+      return asHttpException(error);
+    }
+  }
+}
+
 function asHttpException(error: unknown): never {
   if (error instanceof AuthError) {
     throw new HttpException(

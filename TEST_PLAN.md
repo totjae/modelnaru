@@ -92,14 +92,24 @@
 | GUEST-CLEANUP-001   | 통합 | 임시 데이터 삭제  | logout·만료·관리자 종료 후 기한 내 연쇄 삭제                     | 계획 |
 | GUEST-E2E-001       | E2E  | HTTPS 게스트 체험 | 코드 참가·독립 대화·호출 제한·logout                             | 계획 |
 
-## 9. 실행 환경
+## 9. 채팅 기반 시험 항목
+
+| ID                 | 종류 | 대상                | 인수 조건                                                      | 상태 |
+| ------------------ | ---- | ------------------- | -------------------------------------------------------------- | ---- |
+| CHAT-STATIC-001    | 정적 | 5차 migration       | 소유권·cascade·root branch·상태·순서·모델 snapshot 제약        | 통과 |
+| CHAT-UNIT-001      | 단위 | service·controller  | 기본값·입력 범위·관리자 거부·소유권 not-found mapping          | 통과 |
+| CHAT-INT-001       | 통합 | PostgreSQL CRUD     | 사용자·게스트 격리와 생성 transaction·수정·삭제                | 계획 |
+| CHAT-SECURITY-001  | 보안 | session·CSRF·소유권 | 다른 주체 ID 비노출, 모든 mutation CSRF 적용                   | 계획 |
+| PROVIDER-ORDER-001 | 단위 | Provider catalog    | 핵심 4개 고정 상단, LLM Gateway 포함 나머지 표시 이름 알파벳순 | 통과 |
+
+## 10. 실행 환경
 
 - 개발 검증: Windows, Codex bundled Node.js 24.14.0, pnpm 11.9.0
 - 목표 배포: Ubuntu 24.04.4 LTS, Docker Compose
 - Ubuntu 통합 검증: Ubuntu 24.04.4 LTS, Intel N100, RAM 16GB, Docker Compose, 외부 Nginx HTTPS
 - 개발 host에는 Docker CLI가 없어 DB 중단과 migration 재실행 검증은 Ubuntu server에서 수행한다.
 
-## 10. 실행 명령
+## 11. 실행 명령
 
 ```text
 pnpm format:check
@@ -109,14 +119,14 @@ pnpm test
 pnpm build
 ```
 
-## 11. 실제 결과
+## 12. 실제 결과
 
 2026-07-22 개발 환경에서 다음 결과를 확인했다.
 
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 72개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 81개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -134,17 +144,19 @@ pnpm build
 - 관리자 10자·일반 사용자 8자·게스트 코드 6자 최소 길이 정책과 API 경계값 시험 통과
 - 게스트 코드 hash 전달, IANA timezone 검증과 일일 quota 오류 변환 단위시험 통과
 - 4차 migration의 게스트 소유권·일일 counter 제약 정적 시험 통과
+- Provider 핵심 4개 우선·나머지 알파벳순 정렬과 5차 migration의 대화 소유권·branch·message 상태 제약 정적 시험 통과
+- 대화 CRUD 기본값·입력 범위, 관리자 workspace 차단과 소유권 not-found 변환 단위시험 통과
 - Ubuntu에서 `0003_provider_registry.sql` 적용과 LLM Gateway·OpenAI 실제 키 등록·모델 조회·동기화·활성 변경·감사 기록을 확인
 
 2026-07-22 Ubuntu 최초 migration 실행은 internal backend network에서 Corepack이 `pnpm`을 내려받으려다 DNS `EAI_AGAIN`으로 실패했다. PostgreSQL은 healthy였고 migration 적용 전 실패하여 schema 손상은 없었다. Runtime command를 build된 JavaScript의 직접 `node` 실행으로 변경한 뒤 재배포하여 `0001_auth_foundation.sql` 적용, migrate exit code 0, API·Web·PostgreSQL·Valkey healthy와 readiness `database: ok`를 확인했다. Migration 재실행과 `schema_migrations` 직접 조회, DB 중단 시 readiness 503 확인은 남아 있다.
 
-## 12. 오류·경계 조건
+## 13. 오류·경계 조건
 
 - 외부 provider가 필요한 시험은 fixture 기반 contract test와 실제 credential smoke test를 구분한다.
 - Docker를 실행하지 않은 정적 Compose 검토는 통합 시험 통과로 기록하지 않는다.
 - Windows에서 통과한 파일 권한 시험은 Linux `0600` 검증을 대체하지 않는다.
 
-## 13. 미결정·보류 항목
+## 14. 미결정·보류 항목
 
 - 실제 Ubuntu HTTPS 관리자 login 검증 후 Playwright E2E 자동화 범위를 확정한다.
 - Anthropic·Google 실제 credential smoke test 결과를 `PROVIDER_CONTRACT_TESTS.md`에 기록한다.

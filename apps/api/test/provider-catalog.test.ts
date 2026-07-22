@@ -38,4 +38,22 @@ describe('provider catalog', () => {
     expect(providerTemplateById('llm-gateway')?.canRegister).toBe(true);
     expect(providerTemplateById('bedrock')?.canRegister).toBe(false);
   });
+
+  it('pins the primary vendors first and sorts the remaining catalog by name', () => {
+    expect(providerCatalog.slice(0, 4).map((template) => template.id)).toEqual([
+      'openai',
+      'anthropic',
+      'google',
+      'vertex',
+    ]);
+    const remainder = providerCatalog.slice(4).map((template) => template.name);
+    expect(remainder).toEqual(
+      [...remainder].sort((left, right) =>
+        left.localeCompare(right, 'en', { sensitivity: 'base' }),
+      ),
+    );
+    expect(
+      providerCatalog.findIndex((template) => template.id === 'llm-gateway'),
+    ).toBeGreaterThan(3);
+  });
 });

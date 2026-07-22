@@ -11,12 +11,16 @@ import { AuthController } from './auth.controller.js';
 import {
   AdminMutationGuard,
   AdminSessionGuard,
+  AuthenticatedMutationGuard,
   AuthenticatedSessionGuard,
 } from './auth.guard.js';
 import { AuthRateLimiter } from './auth.rate-limiter.js';
 import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
 import { DatabaseService } from './database.service.js';
+import { ChatsController } from './chats.controller.js';
+import { ChatsRepository } from './chats.repository.js';
+import { ChatsService } from './chats.service.js';
 import { HealthController } from './health.controller.js';
 import { ProviderCredentialService } from './provider-credentials.js';
 import { ProviderDiscoveryService } from './provider-discovery.js';
@@ -36,6 +40,7 @@ import { UsersService } from './users.service.js';
     ProvidersController,
     AdminAccessController,
     PrincipalAccessController,
+    ChatsController,
   ],
   providers: [
     modelNaruConfigProvider,
@@ -46,6 +51,7 @@ import { UsersService } from './users.service.js';
     AdminSessionGuard,
     AdminMutationGuard,
     AuthenticatedSessionGuard,
+    AuthenticatedMutationGuard,
     UsersRepository,
     UsersService,
     ProviderCredentialService,
@@ -54,6 +60,8 @@ import { UsersService } from './users.service.js';
     ProvidersService,
     AccessRepository,
     AccessService,
+    ChatsRepository,
+    ChatsService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },
   ],
 })

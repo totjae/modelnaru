@@ -101,4 +101,23 @@ describe('migration plan', () => {
     expect(sql).toContain('PRIMARY KEY (usage_date, counter_key)');
     expect(sql).not.toContain('access_code text');
   });
+
+  it('defines isolated conversations, branches and message state', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0005_chat_foundation.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE conversations');
+    expect(sql).toContain('CONSTRAINT conversations_owner_check');
+    expect(sql).toContain('CREATE TABLE conversation_branches');
+    expect(sql).toContain('conversation_branches_root_unique');
+    expect(sql).toContain('CREATE TABLE messages');
+    expect(sql).toContain("role IN ('user', 'assistant', 'summary')");
+    expect(sql).toContain(
+      "status IN ('pending', 'streaming', 'completed', 'failed', 'cancelled')",
+    );
+    expect(sql).toContain('DEFAULT 100000');
+    expect(sql).toContain('ON DELETE CASCADE');
+  });
 });

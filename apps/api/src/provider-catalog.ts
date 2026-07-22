@@ -301,10 +301,37 @@ const futureTemplates: Array<
   },
 ];
 
-export const providerCatalog: readonly ProviderTemplate[] = Object.freeze([
-  ...registrableTemplates,
-  ...futureTemplates.map((template) => ({ ...template, canRegister: false })),
+const featuredOrder = new Map([
+  ['openai', 0],
+  ['anthropic', 1],
+  ['google', 2],
+  ['vertex', 3],
 ]);
+
+export function compareProviderTemplates(
+  left: ProviderTemplate,
+  right: ProviderTemplate,
+): number {
+  const leftPriority = featuredOrder.get(left.id);
+  const rightPriority = featuredOrder.get(right.id);
+  if (leftPriority !== undefined || rightPriority !== undefined) {
+    return (
+      (leftPriority ?? Number.MAX_SAFE_INTEGER) -
+      (rightPriority ?? Number.MAX_SAFE_INTEGER)
+    );
+  }
+  return (
+    left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }) ||
+    left.id.localeCompare(right.id, 'en')
+  );
+}
+
+export const providerCatalog: readonly ProviderTemplate[] = Object.freeze(
+  [
+    ...registrableTemplates,
+    ...futureTemplates.map((template) => ({ ...template, canRegister: false })),
+  ].sort(compareProviderTemplates),
+);
 
 export function providerTemplateById(id: string): ProviderTemplate | undefined {
   return providerCatalog.find((template) => template.id === id);

@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-현재 health endpoint, 고정 관리자·일반 사용자·게스트 인증, 관리자 전용 사용자·Provider·모델 접근 관리 API를 포함한다. 대화 API는 구현 단계에서 이 문서에 추가한다.
+현재 health endpoint, 고정 관리자·일반 사용자·게스트 인증, 관리자 전용 사용자·Provider·모델 접근 관리 API와 기본 대화 CRUD API를 포함한다.
 
 ## 3. 공통 규칙
 
@@ -163,7 +163,7 @@ Request:
 
 - 성공: `201 Created`
 - 사용자명은 3~64자 영문·숫자·점·밑줄·하이픈이며 대소문자를 무시해 unique다.
-- 비밀번호는 12~1,024자이며 Argon2id hash만 저장한다.
+- 비밀번호는 8~1,024자이며 Argon2id hash만 저장한다.
 - 고정 관리자 ID와 대소문자만 다른 사용자 ID도 거부한다.
 
 ### `PATCH /api/admin/users/:id`
@@ -193,7 +193,7 @@ Request:
 
 ### `GET /api/admin/provider-templates`
 
-`provider-manager-v1.10.0.js`를 기준으로 보존한 전체 카탈로그를 반환한다. 각 항목의 `canRegister`로 현재 등록 지원 여부를 표시한다. 첫 구현에서 `llm-gateway`, `openai`, `anthropic`, `google`만 true다.
+`provider-manager-v1.10.0.js`를 기준으로 보존한 전체 카탈로그를 반환한다. 각 항목의 `canRegister`로 현재 등록 지원 여부를 표시한다. OpenAI, Anthropic, Google AI Studio, Vertex AI를 상단에 고정하고 나머지는 표시 이름 알파벳순이다. 첫 구현에서 `llm-gateway`, `openai`, `anthropic`, `google`만 true다.
 
 ### `GET /api/admin/provider-connections`
 
@@ -254,7 +254,71 @@ Request:
 
 게스트 status API는 활성 여부 외 내부 제한과 코드 정보를 노출하지 않는다. 게스트 참가 오류는 `GUEST_DISABLED`(`403`), `GUEST_AUTH_FAILED`(`401`), `GUEST_RATE_LIMITED`(`429`), `GUEST_CAPACITY_REACHED`(`429`)를 사용한다.
 
-## 9. 오류·경계 조건
+## 9. 대화 API
+
+모든 endpoint는 유효한 일반 사용자 또는 게스트 session을 요구하며 mutation은 CSRF 검증도 요구한다. 고정 관리자는 채팅 workspace를 갖지 않는다. 다른 주체 소유 대화와 존재하지 않는 대화는 동일한 `CHAT_NOT_FOUND` 오류를 사용한다.
+
+### `GET /api/conversations`
+
+현재 주체의 대화를 `updatedAt` 내림차순으로 반환한다.
+
+```json
+{
+  "conversations": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "title": "새 대화",
+      "systemPrompt": "",
+      "historyMessageLimit": 0,
+      "contextTokenLimit": 100000,
+      "activeBranchId": "20000000-0000-4000-8000-000000000001",
+      "messageCount": 0,
+      "createdAt": "2026-07-22T00:00:00.000Z",
+      "updatedAt": "2026-07-22T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### `POST /api/conversations`
+
+대화와 root 분기를 한 transaction에서 생성한다. 모든 필드는 선택 사항이다.
+
+```json
+{
+  "title": "새 대화",
+  "systemPrompt": "",
+  "historyMessageLimit": 0,
+  "contextTokenLimit": 100000
+}
+```
+
+- `title`: 공백 제거 후 1~200자, 기본 `새 대화`
+- `systemPrompt`: 최대 100,000자, 기본 빈 문자열
+- `historyMessageLimit`: 0~10,000, `0`은 무제한
+- `contextTokenLimit`: 1,000~2,000,000, 기본 100,000
+- 성공: `201 Created`, 생성한 대화 객체
+
+### `GET /api/conversations/:id`
+
+대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `messages`를 포함한다. 메시지 전송 API가 추가되기 전에는 root branch의 `messages`가 빈 배열이다.
+
+### `PATCH /api/conversations/:id`
+
+생성 API의 네 설정 중 하나 이상을 같은 범위로 수정한다. 성공은 수정된 대화 객체다.
+
+### `DELETE /api/conversations/:id`
+
+대화·분기·메시지를 hard delete한다. 성공은 `204 No Content`다. 사용자 또는 게스트 주체 삭제 시에도 FK cascade로 같은 데이터가 삭제된다.
+
+공통 오류:
+
+- `400 CHAT_INPUT_INVALID`: UUID, body 또는 설정 범위 오류
+- `401 AUTH_SESSION_REQUIRED`: 유효한 session 없음
+- `403 AUTH_CSRF_INVALID`: mutation의 CSRF 검증 실패
+- `404 CHAT_NOT_FOUND`: 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
+
+## 10. 오류·경계 조건
 
 - 존재하지 않는 endpoint는 `404`를 반환한다.
 - readiness에는 DB URL, query, 오류 message와 stack을 포함하지 않는다.
@@ -264,7 +328,7 @@ Request:
 - 사용자 관리 response와 감사 기록에는 password 또는 password hash를 포함하지 않는다.
 - Provider 오류 response에는 upstream 본문, endpoint 내부 정보와 API 키를 포함하지 않는다.
 
-## 10. 검증·인수 조건
+## 11. 검증·인수 조건
 
 - 두 health endpoint의 controller test가 통과한다.
 - gateway를 통과한 `/api/health/live` 요청이 API response를 반환한다.
@@ -281,8 +345,10 @@ Request:
 - 관리자만 Provider 카탈로그·연결을 조회하고 CSRF 검증 후 등록·동기화·상태 변경할 수 있다.
 - API 키는 모델 조회 request에만 사용하고 DB에는 AES-256-GCM ciphertext만 저장한다.
 - 모델 동기화 실패 시 기존 모델과 활성 설정을 보존한다.
+- 대화 생성 시 root 분기와 활성 분기가 같은 transaction에서 생성된다.
+- 일반 사용자와 게스트는 자신의 대화만 조회·수정·삭제할 수 있고 mutation은 CSRF를 요구한다.
 
-## 11. 미결정·보류 항목
+## 12. 미결정·보류 항목
 
 - 공통 request ID 형식은 관리자 log 단계에서 확정한다.
 - OpenAPI 문서는 현재 공개하지 않으며, 도입 시 관리자 session을 요구한다.

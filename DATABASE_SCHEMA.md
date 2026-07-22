@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 대화, message, 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가한다. 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
 
 ## 3. Migration 규칙
 
@@ -151,14 +151,36 @@ Index:
 - 게스트 주체 삭제 시 session과 임시 대화 데이터가 cascade되도록 한다.
 - 대화 table은 `user_id`와 `guest_id` 중 정확히 하나만 설정되도록 제약한다.
 
-## 11. 오류·경계 조건
+## 11. `conversations`
+
+`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다.
+
+- `user_id`와 `guest_id`는 각각 소유 주체 삭제 시 cascade한다.
+- 소유 주체별 `(owner_id, updated_at DESC)` partial index로 목록을 조회한다.
+- `(active_branch_id, id)` 복합 FK는 활성 branch가 같은 대화에 속함을 강제하고, 생성 transaction의 순환 참조를 위해 commit까지 지연한다.
+
+## 12. `conversation_branches`
+
+대화 생성 시 parent가 없는 root branch를 하나 만든다. 대화별 root branch는 partial unique index로 하나만 허용한다. 재생성 branch는 같은 대화의 `parent_branch_id`와 선택한 `forked_from_message_id`를 보존한다. 대화 삭제 시 모든 branch가 cascade 삭제된다.
+
+## 13. `messages`
+
+분기 내 `sequence_number`로 순서를 정하고 `user`, `assistant`, `summary` 역할과 `pending`, `streaming`, `completed`, `failed`, `cancelled` 상태를 저장한다. 실제 호출에 사용된 Provider 모델 FK와 template·model ID snapshot, 검증된 parameter JSON, token usage와 일반화된 오류 code를 저장한다.
+
+- `(branch_id, sequence_number)`는 unique다.
+- branch와 conversation 복합 FK로 다른 대화의 branch에 메시지를 삽입할 수 없다.
+- Provider 모델이 삭제돼도 FK만 `NULL`로 바꾸고 template·model snapshot은 보존한다.
+- 완료 상태와 `completed_at` 존재 여부를 일치시킨다.
+- 대화 또는 branch 삭제 시 cascade한다.
+
+## 14. 오류·경계 조건
 
 - 적용 기록은 있는데 repository에 migration 파일이 없으면 downgrade 또는 불완전 배포로 보고 실패한다.
 - 기존 migration checksum이 다르면 파일 변조로 보고 실패한다.
 - migration 실패 시 해당 파일의 transaction을 rollback하고 API를 시작하지 않는다.
 - DB URL과 password는 migration log에 출력하지 않는다.
 
-## 12. 검증·인수 조건
+## 15. 검증·인수 조건
 
 - migration 계획 정렬·checksum 단위시험 통과
 - SQL에 users·sessions 제약과 필수 index가 존재
@@ -173,8 +195,11 @@ Index:
 - Provider 감사 snapshot에 API 키·ciphertext·nonce·tag가 없음
 - 게스트 소유권의 user·guest 상호 배타 제약과 만료 삭제 관계가 존재
 - 날짜별 호출 counter의 unique 제약과 동시 원자적 예약 시험 통과
+- 대화의 사용자·게스트 상호 배타 소유권과 주체 삭제 cascade가 존재
+- 대화마다 root branch가 하나이며 활성 branch가 같은 대화에 속함
+- 메시지 역할·상태·분기 순서·모델 snapshot 제약이 존재
 
-## 13. 미결정·보류 항목
+## 16. 미결정·보류 항목
 
-- 대화·branch·첨부 삭제 관계는 채팅과 파일 상세 명세 작성 후 추가한다.
+- 첨부 table과 원본 파일 삭제 관계는 파일 상세 명세 작성 후 추가한다.
 - 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.

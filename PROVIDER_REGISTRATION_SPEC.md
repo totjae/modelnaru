@@ -61,7 +61,9 @@
 | `bedrock`        | AWS Bedrock         | Bedrock API Key 또는 AWS IAM      | Anthropic Invoke·OpenAI 호환 |
 | `copilot`        | GitHub Copilot      | OAuth                             | Copilot 전용 연결            |
 
-1차 UI에서는 전체 내장 제공자 catalog를 보존하되 OpenAI, Anthropic, Google AI Studio와 LLM Gateway를 우선 노출한다. Vertex AI, Bedrock, NovelAI, Gemini Express, GitHub Copilot은 “고급 제공자” 그룹으로 분리한다. 전용 adapter가 아직 완료되지 않은 제공자는 숨기지 않고 `준비 중`으로 표시한다.
+1차 UI에서는 전체 내장 제공자 catalog를 보존한다. 표시 순서는 OpenAI(OAI), Anthropic(Claude), Google AI Studio(Gemini/AIS), Vertex AI를 상단에 고정하고, LLM Gateway를 포함한 나머지는 표시 이름의 영문 알파벳순으로 정렬한다. 전용 adapter가 아직 완료되지 않은 제공자는 숨기지 않고 `준비 중`으로 표시한다.
+
+채팅과 파일 처리의 핵심 흐름을 먼저 완성하고 검증할 때까지 새로운 Provider adapter는 추가하지 않는다. 기존 등록 가능 Provider의 결함 수정과 계약 시험은 계속하되, Vertex AI를 포함한 준비 중 Provider의 등록 기능 구현은 파일 처리 이후 단계에서 재개한다.
 
 ### 4.2 템플릿 제공자
 
@@ -524,4 +526,4 @@ Provider Manager에는 모델 그룹, manual·sequential·on-error 전략과 조
 - API 키는 AES-256-GCM으로 암호화하고 연결 목록에는 선택적 마지막 네 글자 hint만 반환한다.
 - 신규 모델은 기본 비활성화하며 관리자가 모델별로 활성화할 수 있다.
 - 연결 물리 삭제 대신 비활성화하고 동기화에서 사라진 모델도 unavailable 상태로 보존한다.
-- 사용자별 모델 권한 table은 준비됐지만 API·UI 연결, API 키 교체와 고급 parameter 설정은 다음 하위 단계다.
+- 사용자·게스트 모델 권한과 일일 호출 제한 API·UI는 구현됐다. API 키 교체와 Provider별 고급 parameter 설정은 채팅·파일 처리 이후 하위 단계다.
