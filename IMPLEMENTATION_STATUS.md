@@ -23,7 +23,7 @@
 | 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인   |
 | 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                  |
 | provider registry    | 구현 완료 | 핵심 4개 우선·나머지 알파벳순 catalog, 암호화·동기화 UI와 실제 key 확인              |
-| Web UI 기반          | 구현 중   | 접이식 3열 채팅·스크롤 설정·자동 추적·무점멸 갱신·인라인 분기 UI, 시각 E2E 대기      |
+| Web UI 기반          | 구현 중   | 보라 MN 아이콘·접이식 3열 채팅·자동 추적·무점멸 갱신·인라인 분기, 시각 E2E 대기      |
 | 모델 권한·호출 제한  | 구현 완료 | 사용자·게스트 allowlist·일일 제한 관리자 UI와 DB 원자적 예약 구현, AI 호출 연결 대기 |
 | 게스트 체험          | 구현 중   | 공유 코드·독립 session·권한·할당량·대화 소유권 구현, 만료 파일 정리는 후속           |
 | AI streaming         | 구현 중   | OpenAI 호환·Anthropic·Gemini SSE 공통 event와 upstream 취소 구현, 실제 key 검증 대기 |

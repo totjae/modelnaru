@@ -1,0 +1,20 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  role="img"
+  aria-labelledby="modelnaru-title modelnaru-description"
+>
+  <title id="modelnaru-title">ModelNaru MN 모노그램</title>
+  <desc id="modelnaru-description">
+    가운데 세로선 없이 M과 N을 한 줄로 연결한 보라색 ModelNaru 심벌
+  </desc>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="#7c3aed" />
+  <path
+    d="M208 720V304L372 520L536 304L800 720V304"
+    fill="none"
+    stroke="#f8f7fc"
+    stroke-width="86"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
