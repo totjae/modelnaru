@@ -1542,6 +1542,10 @@ h1 {
   flex-direction: column;
 }
 
+.chat-sidebar[hidden] {
+  display: none;
+}
+
 .settings-modal-backdrop {
   position: fixed;
   z-index: 80;
@@ -1638,15 +1642,29 @@ h1 {
   gap: 7px;
   margin-top: 16px;
   overflow-y: auto;
+  align-content: start;
   flex: 1;
+  grid-auto-rows: 68px;
 }
 
-.chat-sidebar nav > button {
-  display: grid;
+.conversation-list-item {
+  position: relative;
   width: 100%;
-  padding: 11px 12px;
+  height: 68px;
+  min-height: 68px;
+  overflow: hidden;
   border: 1px solid transparent;
   border-radius: 11px;
+  background: transparent;
+}
+
+.conversation-select {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: 11px 48px 11px 12px;
+  border: 0;
+  border-radius: inherit;
   background: transparent;
   color: var(--text-soft);
   cursor: pointer;
@@ -1654,10 +1672,30 @@ h1 {
   text-align: left;
 }
 
-.chat-sidebar nav > button:hover,
-.chat-sidebar nav > button.active {
+.conversation-list-item:hover,
+.conversation-list-item.active {
   border-color: var(--cyan);
   background: var(--selected-surface);
+}
+
+.conversation-list-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.conversation-list-delete:hover:not(:disabled),
+.conversation-list-delete:focus-visible {
+  border-color: var(--red);
+  color: var(--red);
 }
 
 .chat-sidebar nav small,
@@ -1673,6 +1711,7 @@ h1 {
 }
 
 .chat-main {
+  position: relative;
   display: flex;
   height: 100%;
   min-width: 0;
@@ -1681,8 +1720,37 @@ h1 {
   flex-direction: column;
 }
 
-.chat-main > .banner {
-  margin: 12px 16px 0;
+.chat-toast {
+  position: absolute;
+  z-index: 25;
+  top: 58px;
+  left: 50%;
+  width: max-content;
+  max-width: min(520px, calc(100% - 32px));
+  margin: 0;
+  pointer-events: none;
+  box-shadow: 0 12px 36px var(--shadow);
+  text-align: center;
+  transform: translateX(-50%);
+  animation: chat-toast-life 5s ease both;
+}
+
+@keyframes chat-toast-life {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+
+  5%,
+  90% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
 }
 
 .chat-toolbar {
@@ -2365,8 +2433,9 @@ h1 {
     flex: none;
   }
 
-  .chat-sidebar nav > button {
-    min-width: 150px;
+  .conversation-list-item {
+    width: 170px;
+    min-width: 170px;
   }
 
   .chat-main {

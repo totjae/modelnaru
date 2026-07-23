@@ -448,29 +448,35 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     }
   }
 
-  async function deleteConversation() {
-    if (!selectedId || !window.confirm('이 대화와 메시지를 삭제할까요?'))
+  async function deleteConversation(
+    conversationId: string | null = selectedId,
+  ) {
+    if (!conversationId || !window.confirm('이 대화와 메시지를 삭제할까요?'))
       return;
     setBusy(true);
+    setError('');
     try {
       const response = await mutation(
-        `/api/conversations/${selectedId}`,
+        `/api/conversations/${conversationId}`,
         'DELETE',
       );
       if (!response.ok) throw new Error(await responseMessage(response));
       const remaining = conversations.filter(
-        (conversation) => conversation.id !== selectedId,
+        (conversation) => conversation.id !== conversationId,
       );
       setConversations(remaining);
-      const next = remaining[0]?.id ?? null;
-      followLatestRef.current = true;
-      setSelectedId(next);
-      setDetail(null);
-      setMessages([]);
-      settingsSnapshotRef.current = null;
-      setSettingsDirty(false);
-      setSettingsOpen(false);
-      if (next) await loadDetail(next);
+      if (conversationId === selectedId) {
+        const next = remaining[0]?.id ?? null;
+        followLatestRef.current = true;
+        setSelectedId(next);
+        setDetail(null);
+        setMessages([]);
+        settingsSnapshotRef.current = null;
+        setSettingsDirty(false);
+        setSettingsOpen(false);
+        if (next) await loadDetail(next);
+      }
+      setNotice('대화를 삭제했습니다.');
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -509,6 +515,15 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     });
     return () => window.cancelAnimationFrame(animationFrame);
   }, [messages]);
+
+  useEffect(() => {
+    if (!error && !notice) return;
+    const timeout = window.setTimeout(() => {
+      setError('');
+      setNotice('');
+    }, 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [error, notice]);
 
   async function streamAssistant(
     response: Response,
@@ -725,15 +740,29 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             <p>아직 대화가 없습니다.</p>
           ) : (
             conversations.map((conversation) => (
-              <button
-                className={conversation.id === selectedId ? 'active' : ''}
+              <div
+                className={`conversation-list-item${conversation.id === selectedId ? ' active' : ''}`}
                 key={conversation.id}
-                type="button"
-                onClick={() => selectConversation(conversation.id)}
               >
-                <strong>{conversation.title}</strong>
-                <small>{conversation.messageCount}개 메시지</small>
-              </button>
+                <button
+                  className="conversation-select"
+                  type="button"
+                  onClick={() => selectConversation(conversation.id)}
+                >
+                  <strong>{conversation.title}</strong>
+                  <small>{conversation.messageCount}개 메시지</small>
+                </button>
+                <button
+                  className="conversation-list-delete"
+                  type="button"
+                  aria-label={`${conversation.title} 대화 삭제`}
+                  title="대화 삭제"
+                  onClick={() => void deleteConversation(conversation.id)}
+                  disabled={busy}
+                >
+                  삭제
+                </button>
+              </div>
             ))
           )}
         </nav>
@@ -747,8 +776,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       <div className="chat-main">
         {(error || notice) && (
           <div
-            className={error ? 'banner error-banner' : 'banner success-banner'}
-            role="status"
+            className={`banner chat-toast ${error ? 'error-banner' : 'success-banner'}`}
+            role={error ? 'alert' : 'status'}
+            aria-live={error ? 'assertive' : 'polite'}
           >
             {error || notice}
           </div>
@@ -1052,7 +1082,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   <button
                     type="button"
                     className="danger-button"
-                    onClick={deleteConversation}
+                    onClick={() => void deleteConversation()}
                     disabled={busy}
                   >
                     대화 삭제
