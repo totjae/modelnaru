@@ -161,6 +161,7 @@ Rollback은 이전에 기록한 commit으로 새 worktree나 별도 배포 direc
 - gateway `502`: `web`과 `api` health 및 log 확인
 - API 시작 반복: `admin-tool validate` 실행 후 config와 secret 파일 권한 확인
 - migrate 실패: `docker compose logs migrate postgres`에서 checksum·SQL·연결 오류 확인. 적용된 migration 파일은 수정하지 않음
+- API log에 `Database client is not initialized`가 나타남: lifecycle을 포함한 startup hook이 `DatabaseService.ready()`를 기다리는 현재 image인지 확인하고 rebuild
 - migrate log에 Corepack 또는 registry download가 나타남: runtime command가 build 결과물을 `node`로 직접 실행하는 현재 image인지 확인하고 `./bin/modelnaru start`로 rebuild
 - host에서 접속 불가: `.runtime.env`, gateway port binding과 host Nginx upstream 확인
 - TOTP login 실패: server 시간 동기화 상태와 인증 앱의 현재 code 확인. ID·비밀번호·TOTP 원문은 log에 남기지 않음

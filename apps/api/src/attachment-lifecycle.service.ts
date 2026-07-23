@@ -13,6 +13,7 @@ import {
   AttachmentLifecycleRepository,
   type AttachmentLifecycleSettings,
 } from './attachment-lifecycle.repository.js';
+import { DatabaseService } from './database.service.js';
 import { MODELNARU_CONFIG } from './tokens.js';
 
 export interface AttachmentCleanupResult {
@@ -40,9 +41,13 @@ export class AttachmentLifecycleService
   constructor(
     private readonly repository: AttachmentLifecycleRepository,
     @Inject(MODELNARU_CONFIG) private readonly loaded: LoadedConfig,
+    private readonly database: DatabaseService = {
+      ready: () => Promise.resolve(),
+    } as DatabaseService,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    await this.database.ready();
     await this.repository.initializeRetention(
       this.loaded.config.storage.attachmentRetentionDays,
     );

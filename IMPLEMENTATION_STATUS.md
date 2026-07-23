@@ -19,7 +19,7 @@
 | 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                                                                                                         |
 | 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                                                                                                                 |
 | `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                                                                                                  |
-| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~14차 권한·게스트·채팅·요약·사용량·attachment·수명 관리 migration 로컬 검증                                                                 |
+| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~14차 권한·게스트·채팅·요약·사용량·attachment·수명 관리 migration 로컬 검증, startup hook DB readiness 대기 적용                            |
 | 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인                                                                                |
 | 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                                                                                               |
 | provider registry    | 구현 완료 | 전체 catalog parameter profile, 핵심 4개 등록·암호화·동기화 UI와 실제 key 확인                                                                                    |

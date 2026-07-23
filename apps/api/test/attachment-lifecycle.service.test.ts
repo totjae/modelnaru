@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AttachmentLifecycleRepository } from '../src/attachment-lifecycle.repository.js';
 import { AttachmentLifecycleService } from '../src/attachment-lifecycle.service.js';
+import type { DatabaseService } from '../src/database.service.js';
 
 const roots: string[] = [];
 
@@ -21,6 +22,7 @@ async function fixture() {
   const repository = {
     complete: vi.fn(() => Promise.resolve()),
     fail: vi.fn(() => Promise.resolve()),
+    initializeRetention: vi.fn(() => Promise.resolve()),
     knownStorageKeys: vi.fn(() => Promise.resolve(new Set<string>())),
     purgeExpiredGuests: vi.fn(() => Promise.resolve(0)),
     queueExpired: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
@@ -51,6 +53,36 @@ afterEach(async () => {
 });
 
 describe('AttachmentLifecycleService', () => {
+  it('waits for the database before reading lifecycle settings at startup', async () => {
+    const { repository } = await fixture();
+    const order: string[] = [];
+    const database = {
+      ready: vi.fn(() => {
+        order.push('database');
+        return Promise.resolve();
+      }),
+    };
+    repository.initializeRetention.mockImplementation(() => {
+      order.push('settings');
+      return Promise.resolve();
+    });
+    const loaded = {
+      config: { storage: { attachmentRetentionDays: 30 } },
+      paths: { storageRoot: 'unused' },
+    } as LoadedConfig;
+    const service = new AttachmentLifecycleService(
+      repository as unknown as AttachmentLifecycleRepository,
+      loaded,
+      database as unknown as DatabaseService,
+    );
+
+    await service.onModuleInit();
+    service.onModuleDestroy();
+
+    expect(order).toEqual(['database', 'settings']);
+    expect(repository.initializeRetention).toHaveBeenCalledWith(30);
+  });
+
   it('expires metadata, deletes queued originals and records the result', async () => {
     const { path, repository, service } = await fixture();
 
