@@ -2003,6 +2003,42 @@ h1 {
   white-space: pre-wrap;
 }
 
+.message-attachments,
+.pending-attachments {
+  padding: 0;
+  list-style: none;
+}
+
+.message-attachments {
+  display: flex;
+  margin: 10px 0 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.message-attachments li {
+  display: grid;
+  min-width: 120px;
+  max-width: 240px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--orange) 38%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--orange) 6%, transparent);
+  gap: 2px;
+}
+
+.message-attachments span,
+.message-attachments small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachments small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .chat-message.streaming {
   border-color: var(--violet);
 }
@@ -2092,6 +2128,124 @@ h1 {
   flex: 0 0 auto;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) 96px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+.attachment-composer {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+  grid-column: 1 / -1;
+}
+
+.attachment-add-button {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--orange);
+  border-radius: 9px;
+  align-items: center;
+  color: var(--orange);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.attachment-add-button:hover {
+  background: color-mix(in srgb, var(--orange) 8%, transparent);
+}
+
+.attachment-add-button[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.pending-attachments {
+  display: grid;
+  min-width: 0;
+  max-height: 116px;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+  gap: 5px;
+}
+
+.pending-attachments li {
+  display: grid;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--subtle-fill);
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.pending-attachments li > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.pending-attachments strong,
+.pending-attachments small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-attachments strong {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.pending-attachments small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.pending-attachments label {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.pending-attachments input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--orange);
+}
+
+.pending-attachments button {
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.pending-attachments button:hover:not(:disabled) {
+  border-color: var(--red);
 }
 
 .composer textarea,
@@ -2461,6 +2615,23 @@ h1 {
 
   .composer {
     grid-template-columns: 1fr;
+  }
+
+  .attachment-composer {
+    flex-direction: column;
+  }
+
+  .pending-attachments {
+    width: 100%;
+  }
+
+  .pending-attachments li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pending-attachments label {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .settings-modal-backdrop {

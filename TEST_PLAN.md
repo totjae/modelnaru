@@ -132,6 +132,11 @@
 | CHAT-LIST-001       | 정적 | 대화 목록 행        | 68px 고정 높이·초과 시 스크롤·행별 삭제·현재 대화 전환 처리     | 통과 |
 | CHAT-SETTINGS-001   | 정적 | 대화 설정 모달      | 기본 닫힘·큰 모달·Esc·바깥 클릭·미저장 확인·모바일 전체 화면    | 통과 |
 | CHAT-HEADER-001     | 정적 | 채팅 상단 헤더      | 브랜드·공간·ID·로그아웃 한 줄 배치와 좁은 화면 말줄임           | 통과 |
+| FILE-STATIC-001     | 정적 | 11차 migration      | 대화 cascade·message 복합 FK·UUID key·추출문·상태·만료 index    | 통과 |
+| FILE-TEXT-001       | 단위 | 텍스트 추출         | 경로형 이름·확장자·MIME·UTF-8/16·NUL·글자 상한·context 합성     | 통과 |
+| FILE-STORAGE-001    | 단위 | 원본 저장           | UUID 경로·0600 임시 파일·byte 상한·실패 시 partial 정리         | 통과 |
+| FILE-API-001        | 단위 | 업로드·메시지 API   | octet stream header·CSRF 전제·attachment ID 전달·파일-only 입력 | 통과 |
+| FILE-E2E-001        | E2E  | HTTPS 텍스트 첨부   | 원본·추출 저장, AI 활용, 후속 포함 전환, 삭제·격리              | 계획 |
 | UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결              | 통과 |
 | UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용         | 통과 |
 | SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index   | 통과 |
@@ -168,7 +173,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 129개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 140개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인
@@ -191,6 +196,7 @@ pnpm build
 - OpenAI 호환·Anthropic·Gemini 요청 builder, 분할 SSE parser와 컨텍스트 초과 시 quota 예약 방지 단위시험 통과
 - 대화에 저장된 모델 우선 복원, 활성 분기의 마지막 허용 모델과 첫 허용 모델 fallback을 Web 단위시험으로 확인
 - 10차 migration의 대화별 모델·파라미터와 기존 대화 backfill 계약, 저장된 생성 파라미터의 설정 form 복원을 단위시험으로 확인
+- 11차 migration attachment FK·제약·index, 텍스트 이름·MIME·인코딩·상한·context 합성, UUID 원본 저장과 partial 정리, raw upload·메시지 attachment 전달을 단위시험으로 확인
 - 부모 경로 공유형 분기 합성, 반복 재생성, 잘못된 fork 거부와 재생성 전용 실행·API 입력·분기 활성화 service 단위시험 통과
 - 마지막 assistant 답변만 재생성 대상으로 허용하고 동일 질문의 실제 branch 답변만 인라인 탐색 후보로 구성하는 단위시험 통과
 - 메시지 목록 하단 96px 자동 추적 경계와 사용자가 위로 스크롤한 경우의 추적 중단 단위시험 통과

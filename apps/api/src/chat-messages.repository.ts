@@ -11,6 +11,7 @@ import type { ChatParameters } from './chat-streaming.js';
 import type { ChatPrincipal } from './chats.repository.js';
 import { ConversationNotFoundError } from './chats.repository.js';
 import { DatabaseService } from './database.service.js';
+import { attachmentContext } from './text-attachments.js';
 
 export interface ChatTurnRecord {
   activateBranchOnComplete: boolean;
@@ -39,6 +40,14 @@ interface RawContextMessage {
   status: 'cancelled' | 'completed' | 'failed' | 'pending' | 'streaming';
 }
 
+interface RawTextAttachment {
+  extracted_text: string;
+  id: string;
+  include_in_future_messages: boolean;
+  message_id: string | null;
+  original_name: string;
+}
+
 interface RawBranchState {
   forked_from_message_id: string | null;
   id: string;
@@ -47,6 +56,7 @@ interface RawBranchState {
 
 export class ChatMessageStateError extends Error {}
 export class ChatRegenerationTargetError extends Error {}
+export class ChatAttachmentError extends Error {}
 
 function requestParameters(parameters: ChatParameters): JSONValue {
   return { ...parameters };
@@ -77,6 +87,27 @@ function composeContext(
       parentBranchId: branch.parent_branch_id,
     })),
     messagesByBranch,
+  );
+}
+
+function contentWithAttachments(
+  message: RawContextMessage,
+  attachments: RawTextAttachment[],
+  includeAll = false,
+): string {
+  if (message.role !== 'user') return message.content;
+  return attachmentContext(
+    message.content,
+    attachments
+      .filter(
+        (attachment) =>
+          attachment.message_id === message.id &&
+          (includeAll || attachment.include_in_future_messages),
+      )
+      .map((attachment) => ({
+        originalName: attachment.original_name,
+        text: attachment.extracted_text,
+      })),
   );
 }
 
@@ -138,6 +169,7 @@ export class ChatMessagesRepository {
   async beginTurn(
     principal: ChatPrincipal,
     input: {
+      attachmentIds: string[];
       content: string;
       conversationId: string;
       modelId: string;
@@ -183,6 +215,38 @@ export class ChatMessagesRepository {
         branches,
         storedMessages,
       );
+      const attachmentIds = [...new Set(input.attachmentIds)];
+      if (
+        attachmentIds.length !== input.attachmentIds.length ||
+        attachmentIds.length > 10
+      ) {
+        throw new ChatAttachmentError();
+      }
+      const selectedAttachments: RawTextAttachment[] = [];
+      for (const attachmentId of attachmentIds) {
+        const rows = await transaction<RawTextAttachment[]>`
+          SELECT id, message_id, original_name, extracted_text,
+            include_in_future_messages
+          FROM attachments
+          WHERE id = ${attachmentId}
+            AND conversation_id = ${input.conversationId}
+            AND message_id IS NULL
+            AND status = 'ready'
+            AND expires_at > now()
+          FOR UPDATE
+        `;
+        if (!rows[0]) throw new ChatAttachmentError();
+        selectedAttachments.push(rows[0]);
+      }
+      const priorAttachments = await transaction<RawTextAttachment[]>`
+        SELECT id, message_id, original_name, extracted_text,
+          include_in_future_messages
+        FROM attachments
+        WHERE conversation_id = ${input.conversationId}
+          AND message_id IS NOT NULL
+          AND status = 'ready'
+          AND expires_at > now()
+      `;
       const last = previous.at(-1);
       const userMessageId = randomUUID();
       const assistantMessageId = randomUUID();
@@ -197,6 +261,14 @@ export class ChatMessagesRepository {
           ${userSequence}, 'user', 'completed', ${input.content}, now()
         )
       `;
+      for (const attachment of selectedAttachments) {
+        await transaction`
+          UPDATE attachments
+          SET message_id = ${userMessageId}
+          WHERE id = ${attachment.id} AND message_id IS NULL
+        `;
+        attachment.message_id = userMessageId;
+      }
       await transaction`
         INSERT INTO messages (
           id, conversation_id, branch_id, parent_message_id, sequence_number,
@@ -224,7 +296,7 @@ export class ChatMessagesRepository {
       const priorContext = previous
         .filter((message) => message.status === 'completed')
         .map((message) => ({
-          content: message.content,
+          content: contentWithAttachments(message, priorAttachments),
           id: message.id,
           role: message.role,
         }));
@@ -238,7 +310,17 @@ export class ChatMessagesRepository {
         branchId: conversation.active_branch_id,
         context: [
           ...limited,
-          { content: input.content, id: userMessageId, role: 'user' },
+          {
+            content: attachmentContext(
+              input.content,
+              selectedAttachments.map((attachment) => ({
+                originalName: attachment.original_name,
+                text: attachment.extracted_text,
+              })),
+            ),
+            id: userMessageId,
+            role: 'user',
+          },
         ],
         contextTokenLimit: conversation.context_token_limit,
         previousActiveBranchId: conversation.active_branch_id,
@@ -297,6 +379,15 @@ export class ChatMessagesRepository {
         branches,
         storedMessages,
       );
+      const attachments = await transaction<RawTextAttachment[]>`
+        SELECT id, message_id, original_name, extracted_text,
+          include_in_future_messages
+        FROM attachments
+        WHERE conversation_id = ${input.conversationId}
+          AND message_id IS NOT NULL
+          AND status = 'ready'
+          AND expires_at > now()
+      `;
       const targetIndex = activeMessages.findIndex(
         (message) => message.id === input.assistantMessageId,
       );
@@ -350,7 +441,11 @@ export class ChatMessagesRepository {
         .slice(0, targetIndex)
         .filter((message) => message.status === 'completed')
         .map((message) => ({
-          content: message.content,
+          content: contentWithAttachments(
+            message,
+            attachments,
+            message.id === targetUser.id,
+          ),
           id: message.id,
           role: message.role,
         }));

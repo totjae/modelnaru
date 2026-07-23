@@ -256,6 +256,7 @@ function parseParameters(value: unknown): ChatParameters | undefined {
 
 function parseMessage(body: unknown):
   | {
+      attachmentIds: string[];
       content: string;
       parameters: ChatParameters;
       providerModelId: string;
@@ -265,8 +266,17 @@ function parseMessage(body: unknown):
   if (!input || typeof input.content !== 'string') return undefined;
   const content = input.content.trim();
   const parameters = parseParameters(input.parameters);
+  const attachmentIds =
+    input.attachmentIds === undefined ? [] : input.attachmentIds;
   if (
-    content.length < 1 ||
+    !Array.isArray(attachmentIds) ||
+    attachmentIds.length > 10 ||
+    attachmentIds.some(
+      (attachmentId) =>
+        typeof attachmentId !== 'string' || !UUID.test(attachmentId),
+    ) ||
+    new Set(attachmentIds).size !== attachmentIds.length ||
+    (content.length < 1 && attachmentIds.length === 0) ||
     content.length > 200_000 ||
     typeof input.providerModelId !== 'string' ||
     !UUID.test(input.providerModelId) ||
@@ -274,7 +284,12 @@ function parseMessage(body: unknown):
   ) {
     return undefined;
   }
-  return { content, parameters, providerModelId: input.providerModelId };
+  return {
+    attachmentIds: attachmentIds as string[],
+    content,
+    parameters,
+    providerModelId: input.providerModelId,
+  };
 }
 
 function parseRegeneration(

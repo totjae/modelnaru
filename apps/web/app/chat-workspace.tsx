@@ -47,6 +47,7 @@ interface ConversationSummary {
 }
 
 interface ChatMessage {
+  attachments: MessageAttachment[];
   branchId: string | null;
   content: string;
   errorCode: string | null;
@@ -57,6 +58,19 @@ interface ChatMessage {
   role: 'assistant' | 'summary' | 'user';
   sequenceNumber: number;
   status: 'cancelled' | 'completed' | 'failed' | 'pending' | 'streaming';
+}
+
+interface MessageAttachment {
+  byteSize: number;
+  expiresAt: string;
+  id: string;
+  includeInFutureMessages: boolean;
+  mediaType: string;
+  originalName: string;
+}
+
+interface PendingAttachment extends MessageAttachment {
+  conversationId: string;
 }
 
 interface ConversationDetail extends ConversationSummary {
@@ -79,6 +93,45 @@ type StreamEvent =
       retryable: boolean;
       type: 'error';
     };
+
+const textAttachmentAccept = [
+  '.txt',
+  '.md',
+  '.markdown',
+  '.json',
+  '.jsonl',
+  '.csv',
+  '.tsv',
+  '.log',
+  '.xml',
+  '.yaml',
+  '.yml',
+  '.js',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.py',
+  '.java',
+  '.c',
+  '.cpp',
+  '.h',
+  '.hpp',
+  '.cs',
+  '.go',
+  '.rs',
+  '.php',
+  '.rb',
+  '.sh',
+  '.ps1',
+  '.sql',
+  '.html',
+  '.css',
+].join(',');
+
+function fileSizeLabel(byteSize: number): string {
+  if (byteSize < 1024) return `${byteSize} B`;
+  return `${Math.ceil(byteSize / 1024)} KB`;
+}
 
 function mutation(
   path: string,
@@ -108,6 +161,21 @@ async function responseMessage(response: Response): Promise<string> {
     }
     if (body.error?.code === 'ACCESS_MODEL_FORBIDDEN') {
       return '이 계정에는 선택한 모델 권한이 없습니다.';
+    }
+    if (body.error?.code === 'FILE_TOO_LARGE') {
+      return '파일 하나의 크기는 최대 10MB입니다.';
+    }
+    if (body.error?.code === 'FILE_TYPE_UNSUPPORTED') {
+      return '현재 지원하지 않는 파일 형식이거나 텍스트 파일이 아닙니다.';
+    }
+    if (body.error?.code === 'FILE_ATTACHMENT_LIMIT') {
+      return '메시지 하나에는 파일을 최대 10개까지 첨부할 수 있습니다.';
+    }
+    if (body.error?.code === 'FILE_STORAGE_LOW') {
+      return '서버 저장 공간이 부족해 파일을 올릴 수 없습니다.';
+    }
+    if (body.error?.code === 'CHAT_ATTACHMENT_INVALID') {
+      return '첨부파일이 만료되었거나 현재 대화에서 사용할 수 없습니다.';
     }
     return body.error?.message || '요청을 처리하지 못했습니다.';
   } catch {
@@ -171,8 +239,10 @@ function temporaryMessage(
   id: string,
   role: 'assistant' | 'user',
   content: string,
+  attachments: MessageAttachment[] = [],
 ): ChatMessage {
   return {
+    attachments,
     branchId: null,
     content,
     errorCode: null,
@@ -198,6 +268,10 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [assistantId, setAssistantId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    PendingAttachment[]
+  >([]);
+  const [uploading, setUploading] = useState(false);
   const [parameterValues, setParameterValues] = useState<ParameterValues>({
     ...defaultChatParameterValues,
   });
@@ -212,6 +286,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     parameterValues: ParameterValues;
     selectedModel: string;
   } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const closeSettings = useCallback(
     (force = false) => {
@@ -246,12 +321,21 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   }
 
   const loadDetail = useCallback(async (id: string) => {
-    const response = await fetch(`/api/conversations/${id}`, {
-      cache: 'no-store',
-      credentials: 'same-origin',
-    });
-    if (!response.ok) throw new Error('detail failed');
+    const [response, pendingResponse] = await Promise.all([
+      fetch(`/api/conversations/${id}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      }),
+      fetch(`/api/files/conversations/${id}/pending`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      }),
+    ]);
+    if (!response.ok || !pendingResponse.ok) throw new Error('detail failed');
     const value = (await response.json()) as ConversationDetail;
+    const pending = (await pendingResponse.json()) as {
+      attachments: MessageAttachment[];
+    };
     const active = value.branches.find(
       (branch) => branch.id === value.activeBranchId,
     );
@@ -268,6 +352,13 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       ),
     );
     setParameterValues(parameterValuesFromRequest(value.generationParameters));
+    setPendingAttachments((current) => [
+      ...current.filter((attachment) => attachment.conversationId !== id),
+      ...pending.attachments.map((attachment) => ({
+        ...attachment,
+        conversationId: id,
+      })),
+    ]);
   }, []);
 
   const refreshConversations = useCallback(async () => {
@@ -465,6 +556,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         (conversation) => conversation.id !== conversationId,
       );
       setConversations(remaining);
+      setPendingAttachments((current) =>
+        current.filter(
+          (attachment) => attachment.conversationId !== conversationId,
+        ),
+      );
       if (conversationId === selectedId) {
         const next = remaining[0]?.id ?? null;
         followLatestRef.current = true;
@@ -494,6 +590,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       models.find((model) => model.id === selectedModel)?.parameterPolicy,
     );
   }, [models, parameterValues, selectedModel]);
+
+  const currentPendingAttachments = useMemo(
+    () =>
+      pendingAttachments.filter(
+        (attachment) => attachment.conversationId === selectedId,
+      ),
+    [pendingAttachments, selectedId],
+  );
 
   const latestMessage = messages.at(-1);
   const alternatives = useMemo(
@@ -587,6 +691,99 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     return completed;
   }
 
+  async function uploadAttachments(files: FileList | null) {
+    if (!files || !selectedId || busy || uploading) return;
+    const available = 10 - currentPendingAttachments.length;
+    if (available <= 0) {
+      setError('메시지 하나에는 파일을 최대 10개까지 첨부할 수 있습니다.');
+      return;
+    }
+    const selectedFiles = [...files].slice(0, available);
+    if (files.length > available) {
+      setNotice(`최대 10개까지만 선택되어 ${available}개를 추가합니다.`);
+    }
+    setUploading(true);
+    setError('');
+    try {
+      for (const file of selectedFiles) {
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error(`${file.name}: 파일 크기는 최대 10MB입니다.`);
+        }
+        const response = await fetch(`/api/files/conversations/${selectedId}`, {
+          method: 'POST',
+          body: file,
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-CSRF-Token': csrfToken(),
+            'X-File-Name': encodeURIComponent(file.name),
+            'X-File-Media-Type': file.type || 'application/octet-stream',
+            'X-Include-In-Future': 'false',
+          },
+        });
+        if (!response.ok) throw new Error(await responseMessage(response));
+        const attachment = (await response.json()) as MessageAttachment;
+        setPendingAttachments((current) => [
+          ...current,
+          { ...attachment, conversationId: selectedId },
+        ]);
+      }
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : '파일을 올리지 못했습니다.',
+      );
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploading(false);
+    }
+  }
+
+  async function updatePendingAttachment(
+    attachment: PendingAttachment,
+    includeInFutureMessages: boolean,
+  ) {
+    try {
+      const response = await mutation(
+        `/api/files/conversations/${attachment.conversationId}/${attachment.id}`,
+        'PATCH',
+        { includeInFutureMessages },
+      );
+      if (!response.ok) throw new Error(await responseMessage(response));
+      setPendingAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id
+            ? { ...item, includeInFutureMessages }
+            : item,
+        ),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : '첨부 설정을 바꾸지 못했습니다.',
+      );
+    }
+  }
+
+  async function removePendingAttachment(attachment: PendingAttachment) {
+    try {
+      const response = await mutation(
+        `/api/files/conversations/${attachment.conversationId}/${attachment.id}`,
+        'DELETE',
+      );
+      if (!response.ok) throw new Error(await responseMessage(response));
+      setPendingAttachments((current) =>
+        current.filter((item) => item.id !== attachment.id),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : '첨부를 삭제하지 못했습니다.',
+      );
+    }
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedId || !selectedModel || busy) return;
@@ -594,13 +791,18 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     const data = new FormData(form);
     const rawContent = data.get('message');
     const content = typeof rawContent === 'string' ? rawContent.trim() : '';
-    if (!content) return;
+    if (!content && currentPendingAttachments.length === 0) return;
     followLatestRef.current = true;
     const temporaryUserId = `user-${Date.now()}`;
     const temporaryAssistantId = `assistant-${Date.now()}`;
     setMessages((current) => [
       ...current,
-      temporaryMessage(temporaryUserId, 'user', content),
+      temporaryMessage(
+        temporaryUserId,
+        'user',
+        content,
+        currentPendingAttachments,
+      ),
       temporaryMessage(temporaryAssistantId, 'assistant', ''),
     ]);
     setBusy(true);
@@ -609,14 +811,23 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     form.reset();
     const controller = new AbortController();
     abortRef.current = controller;
+    let attachmentsSubmitted = false;
     try {
       const response = await mutation(
         `/api/conversations/${selectedId}/messages`,
         'POST',
-        { content, parameters, providerModelId: selectedModel },
+        {
+          attachmentIds: currentPendingAttachments.map(
+            (attachment) => attachment.id,
+          ),
+          content,
+          parameters,
+          providerModelId: selectedModel,
+        },
         controller.signal,
       );
       if (!response.ok) throw new Error(await responseMessage(response));
+      attachmentsSubmitted = true;
       await streamAssistant(response, temporaryAssistantId);
       await loadDetail(selectedId);
       await refreshConversations().catch(() => undefined);
@@ -634,6 +845,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         // Keep the optimistic messages when refresh is unavailable.
       }
     } finally {
+      if (attachmentsSubmitted) {
+        const submittedIds = new Set(
+          currentPendingAttachments.map((attachment) => attachment.id),
+        );
+        setPendingAttachments((current) =>
+          current.filter((attachment) => !submittedIds.has(attachment.id)),
+        );
+      }
       abortRef.current = null;
       setAssistantId(null);
       setBusy(false);
@@ -850,8 +1069,27 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                     </div>
                     <p>
                       {message.content ||
-                        (message.status === 'pending' ? '생각하는 중…' : '')}
+                        (message.status === 'pending'
+                          ? '생각하는 중…'
+                          : message.attachments.length > 0
+                            ? '첨부파일을 전송했습니다.'
+                            : '')}
                     </p>
+                    {message.attachments.length > 0 && (
+                      <ul className="message-attachments" aria-label="첨부파일">
+                        {message.attachments.map((attachment) => (
+                          <li key={attachment.id}>
+                            <span>{attachment.originalName}</span>
+                            <small>
+                              {fileSizeLabel(attachment.byteSize)}
+                              {attachment.includeInFutureMessages
+                                ? ' · 후속 포함'
+                                : ''}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {(message.status === 'failed' ||
                       message.status === 'cancelled') && (
                       <small className="message-state">
@@ -928,6 +1166,68 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             </div>
 
             <form className="composer" onSubmit={sendMessage}>
+              <div className="attachment-composer">
+                <input
+                  ref={fileInputRef}
+                  id="chat-file-input"
+                  className="visually-hidden"
+                  type="file"
+                  accept={textAttachmentAccept}
+                  multiple
+                  disabled={
+                    busy || uploading || currentPendingAttachments.length >= 10
+                  }
+                  onChange={(event) =>
+                    void uploadAttachments(event.target.files)
+                  }
+                />
+                <label
+                  className="attachment-add-button"
+                  htmlFor="chat-file-input"
+                  aria-disabled={
+                    busy || uploading || currentPendingAttachments.length >= 10
+                  }
+                >
+                  {uploading
+                    ? '파일 처리 중…'
+                    : `파일 추가 ${currentPendingAttachments.length}/10`}
+                </label>
+                {currentPendingAttachments.length > 0 && (
+                  <ul className="pending-attachments">
+                    {currentPendingAttachments.map((attachment) => (
+                      <li key={attachment.id}>
+                        <span>
+                          <strong>{attachment.originalName}</strong>
+                          <small>{fileSizeLabel(attachment.byteSize)}</small>
+                        </span>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={attachment.includeInFutureMessages}
+                            disabled={busy || uploading}
+                            onChange={(event) =>
+                              void updatePendingAttachment(
+                                attachment,
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          후속 메시지에도 포함
+                        </label>
+                        <button
+                          type="button"
+                          disabled={busy || uploading}
+                          onClick={() =>
+                            void removePendingAttachment(attachment)
+                          }
+                        >
+                          삭제
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <textarea
                 name="message"
                 rows={3}
@@ -937,8 +1237,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                     ? '관리자가 모델 권한을 부여해야 합니다.'
                     : '메시지를 입력하세요'
                 }
-                disabled={busy || models.length === 0}
-                required
+                disabled={busy || uploading || models.length === 0}
               />
               {busy ? (
                 <button
@@ -949,7 +1248,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   답변 중지
                 </button>
               ) : (
-                <button type="submit" disabled={!selectedModel}>
+                <button type="submit" disabled={!selectedModel || uploading}>
                   보내기
                 </button>
               )}

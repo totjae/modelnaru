@@ -36,6 +36,7 @@
 | Database 상세 명세 | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)                       | table, column, 관계, index, migration과 삭제 정책                 |
 | Provider 계약 시험 | [PROVIDER_CONTRACT_TESTS.md](./PROVIDER_CONTRACT_TESTS.md)       | provider별 fixture·모델 조회·연결 시험과 실제 자격증명 검증 결과  |
 | 채팅 상태 명세     | [CHAT_STATE_SPEC.md](./CHAT_STATE_SPEC.md)                       | 대화·메시지·분기 상태, 소유권, 재생성·취소와 삭제 기준            |
+| 파일 처리 명세     | [FILE_PROCESSING_SPEC.md](./FILE_PROCESSING_SPEC.md)             | 첨부 형식·제한·저장·추출·소유권·컨텍스트와 만료 기준              |
 | 게스트 체험 명세   | [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)                   | 공유 코드, 임시 session·격리·수명·모델 권한과 일일 호출 제한      |
 | Web UI 명세        | [WEB_UI_SPEC.md](./WEB_UI_SPEC.md)                               | 검정 기반 색상, 7색 포인트, 컴포넌트·레이아웃·반응형 기준         |
 

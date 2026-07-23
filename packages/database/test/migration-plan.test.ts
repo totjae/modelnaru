@@ -187,4 +187,19 @@ describe('migration plan', () => {
     expect(sql).toContain('UPDATE conversations c');
     expect(sql).toContain('m.branch_id = c.active_branch_id');
   });
+
+  it('adds text attachment ownership, message linkage, and cleanup indexes', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0011_text_attachments.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE attachments');
+    expect(sql).toContain('REFERENCES conversations(id) ON DELETE CASCADE');
+    expect(sql).toContain('FOREIGN KEY (message_id, conversation_id)');
+    expect(sql).toContain('REFERENCES messages(id, conversation_id)');
+    expect(sql).toContain('include_in_future_messages boolean');
+    expect(sql).toContain('char_length(extracted_text) <= 2000000');
+    expect(sql).toContain('CREATE INDEX attachments_expiry_idx');
+  });
 });

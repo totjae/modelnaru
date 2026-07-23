@@ -106,6 +106,47 @@ describe('ChatsController', () => {
     expect(chats.update).not.toHaveBeenCalled();
   });
 
+  it('passes validated attachment ids to chat execution', async () => {
+    const execute = vi.fn(() => Promise.resolve());
+    const controller = new ChatsController(
+      {} as ChatsService,
+      {
+        execute,
+      } as unknown as ChatExecutionService,
+    );
+    const conversationId = '10000000-0000-4000-8000-000000000001';
+    const attachmentId = '30000000-0000-4000-8000-000000000001';
+    const streamResponse = {
+      end: vi.fn(),
+      flushHeaders: vi.fn(),
+      on: vi.fn(),
+      setHeader: vi.fn(),
+      write: vi.fn(),
+    };
+
+    await controller.message(
+      conversationId,
+      {
+        attachmentIds: [attachmentId],
+        content: '',
+        parameters: {},
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      request(),
+      streamResponse,
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentIds: [attachmentId],
+        content: '',
+        conversationId,
+      }),
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
   it('rejects an invalid branch activation identifier', async () => {
     const chats = { activateBranch: vi.fn() };
     const controller = new ChatsController(

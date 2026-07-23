@@ -109,6 +109,15 @@
 - 게스트 코드·hash, 원본 IP, 대화 본문, Provider 연결 정보와 API 키는 게스트 response와 일반 log에 포함하지 않는다.
 - 세부 정책과 오류 code는 [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)를 따른다.
 
+### 6.8 텍스트 attachment
+
+- 업로드·pending 설정·삭제·메시지 연결은 일반 사용자·게스트 session과 CSRF를 요구하고 server session의 주체로 대화 소유권을 검사한다.
+- 원본 파일명은 표시 metadata로만 저장하며 UUID object key 외에는 로컬 경로 구성에 사용하지 않는다.
+- 업로드는 `application/octet-stream` 원시 body로 받고 스트림을 쓰는 동안 byte 상한을 검사한다. 확장자·원본 MIME·텍스트 decoding과 NUL byte를 함께 검증한다.
+- 임시 파일은 exclusive·0600으로 만들고 검증 뒤 storage root로 rename한다. 실패 시 partial 파일을 정리한다.
+- API 응답은 추출 본문·storage key·절대 경로를 반환하지 않으며 다른 주체의 파일과 없는 파일은 같은 not-found로 처리한다.
+- Provider에는 사용자가 현재 또는 후속 포함으로 선택한 추출문만 전달한다.
+
 ## 7. 오류·경계 조건
 
 - 설정 parse 오류, 허용 범위를 벗어난 제한값, 필수 secret 파일 부재는 시작 실패 사유다.

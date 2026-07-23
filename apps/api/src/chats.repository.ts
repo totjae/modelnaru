@@ -37,6 +37,7 @@ export interface ConversationBranchRecord {
 }
 
 export interface MessageRecord {
+  attachments: MessageAttachmentRecord[];
   branchId: string;
   completedAt: Date | null;
   content: string;
@@ -54,6 +55,15 @@ export interface MessageRecord {
   sequenceNumber: number;
   status: 'cancelled' | 'completed' | 'failed' | 'pending' | 'streaming';
   updatedAt: Date;
+}
+
+export interface MessageAttachmentRecord {
+  byteSize: number;
+  expiresAt: Date;
+  id: string;
+  includeInFutureMessages: boolean;
+  mediaType: string;
+  originalName: string;
 }
 
 export interface ConversationDetail extends ConversationRecord {
@@ -119,6 +129,16 @@ interface RawMessageRow {
   updated_at: Date;
 }
 
+interface RawMessageAttachmentRow {
+  byte_size: string | number;
+  expires_at: Date;
+  id: string;
+  include_in_future_messages: boolean;
+  media_type: string;
+  message_id: string;
+  original_name: string;
+}
+
 export class ConversationNotFoundError extends Error {}
 
 function mapConversation(row: RawConversationRow): ConversationRecord {
@@ -137,8 +157,12 @@ function mapConversation(row: RawConversationRow): ConversationRecord {
   };
 }
 
-function mapMessage(row: RawMessageRow): MessageRecord {
+function mapMessage(
+  row: RawMessageRow,
+  attachments: MessageAttachmentRecord[],
+): MessageRecord {
   return {
+    attachments,
     branchId: row.branch_id,
     completedAt: row.completed_at,
     content: row.content,
@@ -263,10 +287,34 @@ export class ChatsRepository {
       WHERE conversation_id = ${id}
       ORDER BY branch_id, sequence_number
     `;
+    const attachmentRows = await sql<RawMessageAttachmentRow[]>`
+      SELECT id, message_id, original_name, media_type, byte_size,
+        include_in_future_messages, expires_at
+      FROM attachments
+      WHERE conversation_id = ${id}
+        AND message_id IS NOT NULL
+        AND status = 'ready'
+      ORDER BY created_at, id
+    `;
+    const attachmentsByMessage = new Map<string, MessageAttachmentRecord[]>();
+    for (const attachment of attachmentRows) {
+      const records = attachmentsByMessage.get(attachment.message_id) ?? [];
+      records.push({
+        byteSize: Number(attachment.byte_size),
+        expiresAt: attachment.expires_at,
+        id: attachment.id,
+        includeInFutureMessages: attachment.include_in_future_messages,
+        mediaType: attachment.media_type,
+        originalName: attachment.original_name,
+      });
+      attachmentsByMessage.set(attachment.message_id, records);
+    }
     const messagesByBranch = new Map<string, MessageRecord[]>();
     for (const messageRow of messageRows) {
       const messages = messagesByBranch.get(messageRow.branch_id) ?? [];
-      messages.push(mapMessage(messageRow));
+      messages.push(
+        mapMessage(messageRow, attachmentsByMessage.get(messageRow.id) ?? []),
+      );
       messagesByBranch.set(messageRow.branch_id, messages);
     }
     const branches = branchRows.map((branch) => ({

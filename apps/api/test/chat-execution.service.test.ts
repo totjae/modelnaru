@@ -70,6 +70,7 @@ describe('ChatExecutionService', () => {
 
     await service.execute(
       {
+        attachmentIds: [],
         content: 'too long',
         conversationId: '50000000-0000-4000-8000-000000000001',
         parameters: {},

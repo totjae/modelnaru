@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { AccessError, AccessService } from './access.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
 import {
+  ChatAttachmentError,
   ChatMessagesRepository,
   ChatRegenerationTargetError,
 } from './chat-messages.repository.js';
@@ -39,6 +40,7 @@ interface ActiveRequest {
 export class ChatParameterPolicyError extends Error {}
 
 export interface ExecuteChatInput {
+  attachmentIds: string[];
   content: string;
   conversationId: string;
   parameters: ChatParameters;
@@ -49,7 +51,7 @@ export interface ExecuteChatInput {
 
 export type RegenerateChatInput = Omit<
   ExecuteChatInput,
-  'content' | 'regenerateAssistantMessageId'
+  'attachmentIds' | 'content' | 'regenerateAssistantMessageId'
 > & { assistantMessageId: string };
 
 @Injectable()
@@ -97,6 +99,7 @@ export class ChatExecutionService {
             templateId: runtime.template.id,
           })
         : await this.messages.beginTurn(principal, {
+            attachmentIds: input.attachmentIds,
             content: input.content,
             conversationId: input.conversationId,
             modelId: runtime.modelId,
@@ -226,6 +229,7 @@ export class ChatExecutionService {
   ): Promise<void> {
     return this.execute(
       {
+        attachmentIds: [],
         content: '',
         conversationId: input.conversationId,
         parameters: input.parameters,
@@ -315,6 +319,13 @@ export class ChatExecutionService {
       return {
         code: 'CHAT_PARAMETER_INVALID',
         message: 'A parameter exceeds the selected model limit.',
+        retryable: false,
+      };
+    }
+    if (error instanceof ChatAttachmentError) {
+      return {
+        code: 'CHAT_ATTACHMENT_INVALID',
+        message: 'One or more attachments are invalid.',
         retryable: false,
       };
     }

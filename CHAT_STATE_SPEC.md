@@ -73,6 +73,7 @@
 - 실패·취소 시 이미 받은 부분 본문은 보존할 수 있으며 오류 code만 저장하고 upstream 원문 오류는 저장하지 않는다.
 - `(branch_id, sequence_number)`는 유일하며 분기 내 순서를 결정한다.
 - 요청 parameter는 서버 검증을 통과한 값만 JSON으로 저장한다.
+- user 메시지는 같은 대화에 속한 attachment metadata를 가질 수 있다. 원본 본문은 그대로 저장하며 AI context를 만들 때만 현재 첨부와 후속 포함 첨부의 추출문을 합성한다.
 
 ### 3.5 컨텍스트 자동 요약
 
@@ -93,7 +94,7 @@
 - `GET /api/conversations/:id`: 활성 분기와 저장된 메시지를 포함한 상세 조회
 - `PATCH /api/conversations/:id`: 제목·시스템 프롬프트·컨텍스트·기본 모델·생성 파라미터 설정 변경
 - `DELETE /api/conversations/:id`: 대화 hard delete
-- `POST /api/conversations/:id/messages`: user·assistant 메시지를 저장하고 SSE로 AI 응답 전송
+- `POST /api/conversations/:id/messages`: attachment를 user 메시지에 연결하고 user·assistant 메시지를 저장한 뒤 SSE로 AI 응답 전송
 - `POST /api/conversations/:id/messages/:messageId/cancel`: 진행 중인 upstream 요청 취소
 - `POST /api/conversations/:id/messages/:messageId/regenerate`: 기존 답변을 보존한 새 분기에서 SSE 재생성
 - `PATCH /api/conversations/:id/branches/:branchId/active`: 정상 완료된 답변 분기로 전환

@@ -19,7 +19,7 @@
 | 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                                                       |
 | 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                                                               |
 | `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                                                |
-| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~10차 권한·게스트·채팅·요약·사용량·대화 설정 migration 로컬 검증                          |
+| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~11차 권한·게스트·채팅·요약·사용량·대화 설정·attachment migration 로컬 검증               |
 | 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인                              |
 | 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                                             |
 | provider registry    | 구현 완료 | 전체 catalog parameter profile, 핵심 4개 등록·암호화·동기화 UI와 실제 key 확인                                  |
@@ -28,7 +28,7 @@
 | 게스트 체험          | 구현 중   | 공유 코드·독립 session·권한·할당량·대화 소유권 구현, 만료 파일 정리는 후속                                      |
 | AI streaming         | 구현 중   | Provider별 동적 parameter policy·3종 SSE·upstream 취소 구현, 전체 adapter는 후속                                |
 | 대화·branch·요약     | 구현 중   | CRUD·분기·자동 요약·대화방별 모델·동적 Provider 파라미터 저장 구현, Ubuntu 재검증 대기                          |
-| 파일 처리            | 계획      | 텍스트·PDF·이미지, OCR은 보류                                                                                   |
+| 파일 처리            | 구현 중   | 텍스트 원본 저장·인코딩 추출·소유권·메시지 연결·후속 context·Web UI 구현, PDF·이미지·만료 worker 후속           |
 | 관리자 log           | 구현 중   | 본문 없는 AI 사용량 원장·기간별 대시보드와 audit_logs 구현, 통합 로그 조회·retention은 계획                     |
 | Ubuntu 배포          | 검증 완료 | Ubuntu Compose·외부 Nginx·HTTPS·gateway·health 실통신 확인                                                      |
 | 외부 backup          | 보류      | 초기에는 구성하지 않음                                                                                          |

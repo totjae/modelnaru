@@ -40,6 +40,9 @@ import { SummarizationService } from './summarization.service.js';
 import { UsageController } from './usage.controller.js';
 import { UsageRepository } from './usage.repository.js';
 import { UsageService } from './usage.service.js';
+import { AttachmentsController } from './attachments.controller.js';
+import { AttachmentsRepository } from './attachments.repository.js';
+import { AttachmentsService } from './attachments.service.js';
 
 @Module({
   controllers: [
@@ -52,6 +55,7 @@ import { UsageService } from './usage.service.js';
     ChatsController,
     SummarizationController,
     UsageController,
+    AttachmentsController,
   ],
   providers: [
     modelNaruConfigProvider,
@@ -80,6 +84,8 @@ import { UsageService } from './usage.service.js';
     SummarizationService,
     UsageRepository,
     UsageService,
+    AttachmentsRepository,
+    AttachmentsService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },
   ],
 })
