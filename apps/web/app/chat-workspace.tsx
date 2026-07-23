@@ -8,6 +8,7 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import { csrfToken } from './client-auth';
 import { selectConversationModel } from './chat-model-selection';
@@ -198,11 +199,48 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     ...defaultChatParameterValues,
   });
   const [conversationListOpen, setConversationListOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const followLatestRef = useRef(true);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const modelsRef = useRef<AllowedModel[]>([]);
+  const settingsSnapshotRef = useRef<{
+    parameterValues: ParameterValues;
+    selectedModel: string;
+  } | null>(null);
+
+  const closeSettings = useCallback(
+    (force = false) => {
+      if (busy && !force) return;
+      if (
+        !force &&
+        settingsDirty &&
+        !window.confirm('저장하지 않은 설정 변경을 취소할까요?')
+      ) {
+        return;
+      }
+      const snapshot = settingsSnapshotRef.current;
+      if (!force && snapshot) {
+        setSelectedModel(snapshot.selectedModel);
+        setParameterValues({ ...snapshot.parameterValues });
+      }
+      settingsSnapshotRef.current = null;
+      setSettingsDirty(false);
+      setSettingsOpen(false);
+    },
+    [busy, settingsDirty],
+  );
+
+  function openSettings() {
+    if (!detail) return;
+    settingsSnapshotRef.current = {
+      parameterValues: { ...parameterValues },
+      selectedModel,
+    };
+    setSettingsDirty(false);
+    setSettingsOpen(true);
+  }
 
   const loadDetail = useCallback(async (id: string) => {
     const response = await fetch(`/api/conversations/${id}`, {
@@ -280,6 +318,20 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeSettings();
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeSettings, settingsOpen]);
 
   async function createConversation() {
     followLatestRef.current = true;
@@ -364,6 +416,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           conversation.id === updated.id ? updated : conversation,
         ),
       );
+      settingsSnapshotRef.current = null;
+      setSettingsDirty(false);
+      setSettingsOpen(false);
       setNotice('대화 설정을 저장했습니다.');
     } catch (caught) {
       setError(
@@ -395,6 +450,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       setSelectedId(next);
       setDetail(null);
       setMessages([]);
+      settingsSnapshotRef.current = null;
+      setSettingsDirty(false);
+      setSettingsOpen(false);
       if (next) await loadDetail(next);
     } catch (caught) {
       setError(
@@ -633,7 +691,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
 
   return (
     <section
-      className={`chat-workspace${conversationListOpen ? '' : ' sidebar-collapsed'}${settingsOpen ? '' : ' settings-collapsed'}`}
+      className={`chat-workspace${conversationListOpen ? '' : ' sidebar-collapsed'}`}
       aria-label="AI 대화 공간"
     >
       <aside className="chat-sidebar" hidden={!conversationListOpen}>
@@ -688,17 +746,26 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             <span aria-hidden="true">{conversationListOpen ? '←' : '→'}</span>
             대화 목록
           </button>
-          <strong title={detail?.title ?? '대화 공간'}>
-            {detail?.title ?? '대화 공간'}
-          </strong>
+          <div className="chat-toolbar-context">
+            <strong title={detail?.title ?? '대화 공간'}>
+              {detail?.title ?? '대화 공간'}
+            </strong>
+            <span>
+              {models.find((model) => model.id === selectedModel)
+                ?.displayName ||
+                models.find((model) => model.id === selectedModel)?.modelId ||
+                '모델 미선택'}
+            </span>
+          </div>
           <button
             className="panel-toggle settings-panel-toggle"
             type="button"
             aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((current) => !current)}
+            aria-haspopup="dialog"
+            onClick={openSettings}
+            disabled={!detail}
           >
             설정
-            <span aria-hidden="true">{settingsOpen ? '→' : '←'}</span>
           </button>
         </div>
         {!detail ? (
@@ -844,104 +911,148 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         )}
       </div>
 
-      <aside className="chat-settings" hidden={!settingsOpen}>
-        {detail ? (
-          <form key={detail.id} onSubmit={saveSettings}>
-            <p className="card-label">CONVERSATION SETTINGS</p>
-            <label>
-              대화 제목
-              <input
-                name="title"
-                defaultValue={detail.title}
-                maxLength={200}
-                required
-              />
-            </label>
-            <label>
-              모델
-              <select
-                value={selectedModel}
-                onChange={(event) => {
-                  setSelectedModel(event.target.value);
-                  setParameterValues({ ...defaultChatParameterValues });
-                }}
-                disabled={busy}
+      {settingsOpen &&
+        detail &&
+        createPortal(
+          <div
+            className="settings-modal-backdrop"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeSettings();
+            }}
+          >
+            <section
+              className="chat-settings"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="conversation-settings-title"
+            >
+              <header className="settings-modal-header">
+                <div>
+                  <p className="card-label">CONVERSATION SETTINGS</p>
+                  <h2 id="conversation-settings-title">대화 설정</h2>
+                </div>
+                <button
+                  type="button"
+                  className="settings-modal-close"
+                  aria-label="설정 닫기"
+                  onClick={() => closeSettings()}
+                  disabled={busy}
+                >
+                  ×
+                </button>
+              </header>
+              <form
+                key={detail.id}
+                onSubmit={saveSettings}
+                onChange={() => setSettingsDirty(true)}
               >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.displayName || model.modelId} ·{' '}
-                    {model.connectionName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <fieldset className="parameter-box">
-              <legend>생성 파라미터</legend>
-              <ProviderParameterFields
-                policy={
-                  models.find((model) => model.id === selectedModel)
-                    ?.parameterPolicy
-                }
-                values={parameterValues}
-                onChange={setParameterValues}
-              />
-            </fieldset>
-            <label>
-              이전 메시지 수
-              <input
-                name="historyMessageLimit"
-                type="number"
-                min="0"
-                max="10000"
-                defaultValue={detail.historyMessageLimit}
-                required
-              />
-              <small>
-                0은 전체 대화입니다.
-                <br />
-                값이 크면 더 많은 이전 문맥을 모델에 전달합니다.
-              </small>
-            </label>
-            <label>
-              컨텍스트 토큰 한도
-              <input
-                name="contextTokenLimit"
-                type="number"
-                min="1000"
-                max="2000000"
-                defaultValue={detail.contextTokenLimit}
-                required
-              />
-            </label>
-            <label>
-              시스템 프롬프트
-              <textarea
-                name="systemPrompt"
-                defaultValue={detail.systemPrompt}
-                rows={8}
-                maxLength={100000}
-              />
-            </label>
-            <button
-              className="settings-save-button"
-              type="submit"
-              disabled={busy}
-            >
-              설정 저장
-            </button>
-            <button
-              type="button"
-              className="danger-button"
-              onClick={deleteConversation}
-              disabled={busy}
-            >
-              대화 삭제
-            </button>
-          </form>
-        ) : (
-          <p>대화를 선택하면 설정이 표시됩니다.</p>
+                <div className="settings-modal-body">
+                  <label>
+                    대화 제목
+                    <input
+                      name="title"
+                      defaultValue={detail.title}
+                      maxLength={200}
+                      autoFocus
+                      required
+                    />
+                  </label>
+                  <label>
+                    모델
+                    <select
+                      value={selectedModel}
+                      onChange={(event) => {
+                        setSelectedModel(event.target.value);
+                        setParameterValues({ ...defaultChatParameterValues });
+                      }}
+                      disabled={busy}
+                    >
+                      {models.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.displayName || model.modelId} ·{' '}
+                          {model.connectionName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <fieldset className="parameter-box">
+                    <legend>생성 파라미터</legend>
+                    <ProviderParameterFields
+                      policy={
+                        models.find((model) => model.id === selectedModel)
+                          ?.parameterPolicy
+                      }
+                      values={parameterValues}
+                      onChange={setParameterValues}
+                    />
+                  </fieldset>
+                  <label>
+                    이전 메시지 수
+                    <input
+                      name="historyMessageLimit"
+                      type="number"
+                      min="0"
+                      max="10000"
+                      defaultValue={detail.historyMessageLimit}
+                      required
+                    />
+                    <small>
+                      0은 전체 대화입니다.
+                      <br />
+                      값이 크면 더 많은 이전 문맥을 모델에 전달합니다.
+                    </small>
+                  </label>
+                  <label>
+                    컨텍스트 토큰 한도
+                    <input
+                      name="contextTokenLimit"
+                      type="number"
+                      min="1000"
+                      max="2000000"
+                      defaultValue={detail.contextTokenLimit}
+                      required
+                    />
+                  </label>
+                  <label>
+                    시스템 프롬프트
+                    <textarea
+                      name="systemPrompt"
+                      defaultValue={detail.systemPrompt}
+                      rows={10}
+                      maxLength={100000}
+                    />
+                  </label>
+                </div>
+                <footer className="settings-modal-actions">
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    onClick={() => closeSettings()}
+                    disabled={busy}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={deleteConversation}
+                    disabled={busy}
+                  >
+                    대화 삭제
+                  </button>
+                  <button
+                    className="settings-save-button"
+                    type="submit"
+                    disabled={busy}
+                  >
+                    설정 저장
+                  </button>
+                </footer>
+              </form>
+            </section>
+          </div>,
+          document.body,
         )}
-      </aside>
     </section>
   );
 }
