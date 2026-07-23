@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AccessService } from '../src/access.service.js';
+import type { AttachmentsService } from '../src/attachments.service.js';
 import type { AuthenticatedPrincipal } from '../src/auth.service.js';
 import { ChatExecutionService } from '../src/chat-execution.service.js';
 import type { ChatMessagesRepository } from '../src/chat-messages.repository.js';
@@ -17,6 +18,86 @@ const principal: AuthenticatedPrincipal = {
 };
 
 describe('ChatExecutionService', () => {
+  it('rejects image attachments before quota use when the model capability is disabled', async () => {
+    const access = {
+      assertModelAllowed: vi.fn(() => Promise.resolve()),
+      reserveDailyRequest: vi.fn(),
+    };
+    const messages = {
+      assertConversation: vi.fn(() => Promise.resolve()),
+      beginTurn: vi.fn(() =>
+        Promise.resolve({
+          activateBranchOnComplete: false,
+          assistantMessageId: '30000000-0000-4000-8000-000000000001',
+          branchId: '60000000-0000-4000-8000-000000000001',
+          context: [
+            {
+              content: '이미지를 설명해줘',
+              id: '40000000-0000-4000-8000-000000000001',
+              role: 'user',
+            },
+          ],
+          contextTokenLimit: 100_000,
+          imageAttachments: [
+            { mediaType: 'image/png', storageKey: 'aa/image-id' },
+          ],
+          previousActiveBranchId: '60000000-0000-4000-8000-000000000001',
+          systemPrompt: '',
+          userMessageId: '40000000-0000-4000-8000-000000000001',
+        }),
+      ),
+      finishIncomplete: vi.fn(() => Promise.resolve()),
+    };
+    const service = new ChatExecutionService(
+      access as unknown as AccessService,
+      { readImage: vi.fn() } as unknown as AttachmentsService,
+      {
+        resolve: vi.fn(() =>
+          Promise.resolve({
+            apiKey: 'secret',
+            baseUrl: 'https://api.openai.com/v1',
+            contextWindow: null,
+            maxOutputTokens: null,
+            modelId: 'gpt-test',
+            providerModelId: '20000000-0000-4000-8000-000000000001',
+            supportsImageInput: false,
+            template: providerTemplateById('openai')!,
+          }),
+        ),
+      } as unknown as ChatProviderService,
+      messages as unknown as ChatMessagesRepository,
+      { fitContext: vi.fn() } as unknown as SummarizationService,
+    );
+    const events: Array<{ code?: string; type: string }> = [];
+
+    await service.execute(
+      {
+        attachmentIds: ['70000000-0000-4000-8000-000000000001'],
+        content: '이미지를 설명해줘',
+        conversationId: '50000000-0000-4000-8000-000000000001',
+        parameters: {},
+        principal,
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      (event) => events.push(event),
+    );
+
+    expect(access.reserveDailyRequest).not.toHaveBeenCalled();
+    expect(messages.finishIncomplete).toHaveBeenCalledWith(
+      '30000000-0000-4000-8000-000000000001',
+      expect.objectContaining({
+        errorCode: 'CHAT_IMAGE_MODEL_UNSUPPORTED',
+        status: 'failed',
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        code: 'CHAT_IMAGE_MODEL_UNSUPPORTED',
+        type: 'error',
+      }),
+    );
+  });
+
   it('stops before quota reservation when context exceeds the configured limit', async () => {
     const access = {
       assertModelAllowed: vi.fn(() => Promise.resolve()),
@@ -29,6 +110,7 @@ describe('ChatExecutionService', () => {
           baseUrl: 'https://api.openai.com/v1',
           modelId: 'gpt-test',
           providerModelId: '20000000-0000-4000-8000-000000000001',
+          supportsImageInput: false,
           template: providerTemplateById('openai')!,
         }),
       ),
@@ -48,6 +130,7 @@ describe('ChatExecutionService', () => {
             },
           ],
           contextTokenLimit: 2,
+          imageAttachments: [],
           previousActiveBranchId: '60000000-0000-4000-8000-000000000001',
           systemPrompt: '',
           userMessageId: '40000000-0000-4000-8000-000000000001',
@@ -62,6 +145,7 @@ describe('ChatExecutionService', () => {
     };
     const service = new ChatExecutionService(
       access as unknown as AccessService,
+      { readImage: vi.fn() } as unknown as AttachmentsService,
       providers as unknown as ChatProviderService,
       messages as unknown as ChatMessagesRepository,
       summarization as unknown as SummarizationService,
@@ -109,6 +193,7 @@ describe('ChatExecutionService', () => {
           contextWindow: 1,
           modelId: 'gpt-test',
           providerModelId: '20000000-0000-4000-8000-000000000001',
+          supportsImageInput: false,
           template: providerTemplateById('openai')!,
         }),
       ),
@@ -128,6 +213,7 @@ describe('ChatExecutionService', () => {
             },
           ],
           contextTokenLimit: 100_000,
+          imageAttachments: [],
           previousActiveBranchId: '70000000-0000-4000-8000-000000000001',
           systemPrompt: '',
           userMessageId: null,
@@ -142,6 +228,7 @@ describe('ChatExecutionService', () => {
     };
     const service = new ChatExecutionService(
       access as unknown as AccessService,
+      { readImage: vi.fn() } as unknown as AttachmentsService,
       providers as unknown as ChatProviderService,
       messages as unknown as ChatMessagesRepository,
       summarization as unknown as SummarizationService,

@@ -29,6 +29,7 @@ interface AllowedModel {
   id: string;
   modelId: string;
   templateId: string;
+  supportsImageInput: boolean;
   parameterPolicy?: ParameterPolicy;
 }
 
@@ -63,7 +64,9 @@ interface ChatMessage {
 interface MessageAttachment {
   byteSize: number;
   expiresAt: string;
-  fileKind: 'pdf' | 'text';
+  fileKind: 'image' | 'pdf' | 'text';
+  imageHeight: number | null;
+  imageWidth: number | null;
   id: string;
   includeInFutureMessages: boolean;
   mediaType: string;
@@ -97,6 +100,10 @@ type StreamEvent =
     };
 
 const attachmentAccept = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
   '.pdf',
   '.txt',
   '.md',
@@ -183,6 +190,9 @@ async function responseMessage(response: Response): Promise<string> {
     if (body.error?.code === 'FILE_PDF_INVALID') {
       return 'PDF가 손상되었거나 올바른 PDF 형식이 아닙니다.';
     }
+    if (body.error?.code === 'FILE_IMAGE_DIMENSIONS_EXCEEDED') {
+      return '이미지 해상도가 서버의 최대 픽셀 제한을 초과했습니다.';
+    }
     if (body.error?.code === 'FILE_ATTACHMENT_LIMIT') {
       return '메시지 하나에는 파일을 최대 10개까지 첨부할 수 있습니다.';
     }
@@ -213,6 +223,9 @@ function streamError(code: string): string {
   }
   if (code === 'CHAT_REGENERATION_INVALID') {
     return '현재 대화의 가장 최근 AI 답변만 재생성할 수 있습니다.';
+  }
+  if (code === 'CHAT_IMAGE_MODEL_UNSUPPORTED') {
+    return '선택한 모델은 이미지 입력이 허용되지 않았습니다. 이미지 지원 모델을 선택하세요.';
   }
   if (code === 'CHAT_PROVIDER_AUTH_FAILED') {
     return 'Provider 인증에 실패했습니다. 관리자에게 알려주세요.';
@@ -807,6 +820,17 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     const rawContent = data.get('message');
     const content = typeof rawContent === 'string' ? rawContent.trim() : '';
     if (!content && currentPendingAttachments.length === 0) return;
+    if (
+      currentPendingAttachments.some(
+        (attachment) => attachment.fileKind === 'image',
+      ) &&
+      !models.find((model) => model.id === selectedModel)?.supportsImageInput
+    ) {
+      setError(
+        '선택한 모델은 이미지 입력이 허용되지 않았습니다. 설정에서 이미지 지원 모델을 선택하세요.',
+      );
+      return;
+    }
     followLatestRef.current = true;
     const temporaryUserId = `user-${Date.now()}`;
     const temporaryAssistantId = `assistant-${Date.now()}`;
@@ -1100,6 +1124,10 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                               {attachment.pageCount !== null
                                 ? ` · ${attachment.pageCount}페이지`
                                 : ''}
+                              {attachment.imageWidth !== null &&
+                              attachment.imageHeight !== null
+                                ? ` · ${attachment.imageWidth}×${attachment.imageHeight}`
+                                : ''}
                               {attachment.includeInFutureMessages
                                 ? ' · 후속 포함'
                                 : ''}
@@ -1220,6 +1248,12 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                           {attachment.pageCount !== null && (
                             <small>{attachment.pageCount}페이지</small>
                           )}
+                          {attachment.imageWidth !== null &&
+                            attachment.imageHeight !== null && (
+                              <small>
+                                {attachment.imageWidth}×{attachment.imageHeight}
+                              </small>
+                            )}
                         </span>
                         <label>
                           <input

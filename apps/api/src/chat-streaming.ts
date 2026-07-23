@@ -7,6 +7,10 @@ import {
 
 export interface ChatContextMessage {
   content: string;
+  images?: Array<{
+    data: string;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+  }>;
   role: 'assistant' | 'user';
 }
 
@@ -65,6 +69,47 @@ function usesCompletionTokenParameter(modelId: string): boolean {
   return /^(?:gpt-5|o[134](?:-|$))/iu.test(modelId);
 }
 
+function anthropicContent(message: ChatContextMessage) {
+  if (!message.images?.length || message.role === 'assistant') {
+    return message.content;
+  }
+  return [
+    ...message.images.map((image) => ({
+      source: {
+        data: image.data,
+        media_type: image.mediaType,
+        type: 'base64',
+      },
+      type: 'image',
+    })),
+    ...(message.content ? [{ text: message.content, type: 'text' }] : []),
+  ];
+}
+
+function geminiParts(message: ChatContextMessage) {
+  return [
+    ...(message.images ?? []).map((image) => ({
+      inline_data: { data: image.data, mime_type: image.mediaType },
+    })),
+    ...(message.content ? [{ text: message.content }] : []),
+  ];
+}
+
+function openAiContent(message: ChatContextMessage) {
+  if (!message.images?.length || message.role === 'assistant') {
+    return message.content;
+  }
+  return [
+    ...message.images.map((image) => ({
+      image_url: {
+        url: `data:${image.mediaType};base64,${image.data}`,
+      },
+      type: 'image_url',
+    })),
+    ...(message.content ? [{ text: message.content, type: 'text' }] : []),
+  ];
+}
+
 export function buildProviderStreamRequest(
   input: Omit<ProviderStreamInput, 'signal'>,
 ): UpstreamRequest {
@@ -83,7 +128,7 @@ export function buildProviderStreamRequest(
         body: JSON.stringify({
           max_tokens: parameters.maxOutputTokens ?? 4_096,
           messages: input.messages.map((message) => ({
-            content: message.content,
+            content: anthropicContent(message),
             role: message.role,
           })),
           model: input.modelId,
@@ -134,7 +179,7 @@ export function buildProviderStreamRequest(
       init: {
         body: JSON.stringify({
           contents: input.messages.map((message) => ({
-            parts: [{ text: message.content }],
+            parts: geminiParts(message),
             role: message.role === 'assistant' ? 'model' : 'user',
           })),
           generationConfig: {
@@ -190,7 +235,7 @@ export function buildProviderStreamRequest(
             ? [{ content: input.systemPrompt, role: 'system' }]
             : []),
           ...input.messages.map((message) => ({
-            content: message.content,
+            content: openAiContent(message),
             role: message.role,
           })),
         ],

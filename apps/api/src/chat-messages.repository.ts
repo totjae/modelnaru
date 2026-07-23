@@ -19,6 +19,10 @@ export interface ChatTurnRecord {
   branchId: string;
   context: Array<{ content: string; id: string; role: 'assistant' | 'user' }>;
   contextTokenLimit: number;
+  imageAttachments: Array<{
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+    storageKey: string;
+  }>;
   previousActiveBranchId: string;
   systemPrompt: string;
   userMessageId: string | null;
@@ -40,12 +44,15 @@ interface RawContextMessage {
   status: 'cancelled' | 'completed' | 'failed' | 'pending' | 'streaming';
 }
 
-interface RawTextAttachment {
-  extracted_text: string;
+interface RawAttachment {
+  extracted_text: string | null;
+  file_kind: 'image' | 'pdf' | 'text';
   id: string;
   include_in_future_messages: boolean;
   message_id: string | null;
   original_name: string;
+  media_type: string;
+  storage_key: string;
 }
 
 interface RawBranchState {
@@ -92,7 +99,7 @@ function composeContext(
 
 function contentWithAttachments(
   message: RawContextMessage,
-  attachments: RawTextAttachment[],
+  attachments: RawAttachment[],
   includeAll = false,
 ): string {
   if (message.role !== 'user') return message.content;
@@ -101,12 +108,14 @@ function contentWithAttachments(
     attachments
       .filter(
         (attachment) =>
+          attachment.file_kind !== 'image' &&
+          attachment.extracted_text !== null &&
           attachment.message_id === message.id &&
           (includeAll || attachment.include_in_future_messages),
       )
       .map((attachment) => ({
         originalName: attachment.original_name,
-        text: attachment.extracted_text,
+        text: attachment.extracted_text!,
       })),
   );
 }
@@ -222,11 +231,11 @@ export class ChatMessagesRepository {
       ) {
         throw new ChatAttachmentError();
       }
-      const selectedAttachments: RawTextAttachment[] = [];
+      const selectedAttachments: RawAttachment[] = [];
       for (const attachmentId of attachmentIds) {
-        const rows = await transaction<RawTextAttachment[]>`
+        const rows = await transaction<RawAttachment[]>`
           SELECT id, message_id, original_name, extracted_text,
-            include_in_future_messages
+            include_in_future_messages, file_kind, media_type, storage_key
           FROM attachments
           WHERE id = ${attachmentId}
             AND conversation_id = ${input.conversationId}
@@ -238,9 +247,9 @@ export class ChatMessagesRepository {
         if (!rows[0]) throw new ChatAttachmentError();
         selectedAttachments.push(rows[0]);
       }
-      const priorAttachments = await transaction<RawTextAttachment[]>`
+      const priorAttachments = await transaction<RawAttachment[]>`
         SELECT id, message_id, original_name, extracted_text,
-          include_in_future_messages
+          include_in_future_messages, file_kind, media_type, storage_key
         FROM attachments
         WHERE conversation_id = ${input.conversationId}
           AND message_id IS NOT NULL
@@ -313,16 +322,37 @@ export class ChatMessagesRepository {
           {
             content: attachmentContext(
               input.content,
-              selectedAttachments.map((attachment) => ({
-                originalName: attachment.original_name,
-                text: attachment.extracted_text,
-              })),
+              selectedAttachments
+                .filter(
+                  (attachment) =>
+                    attachment.file_kind !== 'image' &&
+                    attachment.extracted_text !== null,
+                )
+                .map((attachment) => ({
+                  originalName: attachment.original_name,
+                  text: attachment.extracted_text!,
+                })),
             ),
             id: userMessageId,
             role: 'user',
           },
         ],
         contextTokenLimit: conversation.context_token_limit,
+        imageAttachments: [...selectedAttachments, ...priorAttachments]
+          .filter(
+            (attachment) =>
+              attachment.file_kind === 'image' &&
+              (selectedAttachments.includes(attachment) ||
+                (attachment.include_in_future_messages &&
+                  previous.some(
+                    (message) => message.id === attachment.message_id,
+                  ))),
+          )
+          .map((attachment) => ({
+            mediaType: attachment.media_type as
+              'image/jpeg' | 'image/png' | 'image/webp',
+            storageKey: attachment.storage_key,
+          })),
         previousActiveBranchId: conversation.active_branch_id,
         systemPrompt: conversation.system_prompt,
         userMessageId,
@@ -379,9 +409,9 @@ export class ChatMessagesRepository {
         branches,
         storedMessages,
       );
-      const attachments = await transaction<RawTextAttachment[]>`
+      const attachments = await transaction<RawAttachment[]>`
         SELECT id, message_id, original_name, extracted_text,
-          include_in_future_messages
+          include_in_future_messages, file_kind, media_type, storage_key
         FROM attachments
         WHERE conversation_id = ${input.conversationId}
           AND message_id IS NOT NULL
@@ -459,6 +489,21 @@ export class ChatMessagesRepository {
         branchId,
         context: limited,
         contextTokenLimit: conversation.context_token_limit,
+        imageAttachments: attachments
+          .filter(
+            (attachment) =>
+              attachment.file_kind === 'image' &&
+              (attachment.message_id === targetUser.id ||
+                (attachment.include_in_future_messages &&
+                  activeMessages
+                    .slice(0, targetIndex)
+                    .some((message) => message.id === attachment.message_id))),
+          )
+          .map((attachment) => ({
+            mediaType: attachment.media_type as
+              'image/jpeg' | 'image/png' | 'image/webp',
+            storageKey: attachment.storage_key,
+          })),
         previousActiveBranchId: conversation.active_branch_id,
         systemPrompt: conversation.system_prompt,
         userMessageId: null,

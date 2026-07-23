@@ -173,15 +173,18 @@ export class ProvidersController {
   ) {
     response.setHeader('Cache-Control', 'no-store');
     const input = recordBody(body);
-    if (!uuid(id) || typeof input?.isEnabled !== 'boolean') {
+    const patch: { isEnabled?: boolean; supportsImageInput?: boolean } = {};
+    if (typeof input?.isEnabled === 'boolean') {
+      patch.isEnabled = input.isEnabled;
+    }
+    if (typeof input?.supportsImageInput === 'boolean') {
+      patch.supportsImageInput = input.supportsImageInput;
+    }
+    if (!uuid(id) || Object.keys(patch).length === 0) {
       this.invalidInput();
     }
     try {
-      return await this.providers.setModelEnabled(
-        id,
-        input.isEnabled,
-        this.audit(request),
-      );
+      return await this.providers.updateModel(id, patch, this.audit(request));
     } catch (error) {
       this.mapError(error);
     }

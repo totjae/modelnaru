@@ -528,6 +528,7 @@ Provider Manager에는 모델 그룹, manual·sequential·on-error 전략과 조
 - 이 parameter 대응은 준비 중 Provider의 향후 adapter가 같은 요청 계약을 재사용할 수 있게 한 것이며, 전용 인증·endpoint 구현이 끝나지 않은 Provider를 등록 가능 상태로 승격한다는 뜻은 아니다.
 - API 키는 AES-256-GCM으로 암호화하고 연결 목록에는 선택적 마지막 네 글자 hint만 반환한다.
 - 신규 모델은 기본 비활성화하며 관리자가 모델별로 활성화할 수 있다.
+- 모델별 `supports_image_input`도 기본 `false`이며 관리자가 모델 화면의 `이미지 입력`에서 명시적으로 켠다. 모델 재동기화는 이 값을 덮어쓰지 않는다.
 - 연결 물리 삭제 대신 비활성화하고 동기화에서 사라진 모델도 unavailable 상태로 보존한다.
 - 사용자·게스트 모델 권한과 일일 호출 제한 API·UI는 구현됐다. API 키 교체와 Provider별 고급 parameter 설정은 채팅·파일 처리 이후 하위 단계다.
 

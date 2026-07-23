@@ -1024,6 +1024,19 @@ h1 {
   font-weight: 650;
 }
 
+.provider-model-capability {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.provider-model-capability input {
+  accent-color: var(--accent-violet);
+}
+
 .section-heading {
   justify-content: space-between;
   gap: 20px;

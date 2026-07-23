@@ -215,4 +215,17 @@ describe('migration plan', () => {
     expect(sql).toContain('attachments_ready_pdf_check');
     expect(sql).toContain("file_kind <> 'pdf'");
   });
+
+  it('adds image dimensions and explicit model image capability', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0013_image_attachments.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('ADD COLUMN image_width integer');
+    expect(sql).toContain('ADD COLUMN image_height integer');
+    expect(sql).toContain('attachments_ready_image_check');
+    expect(sql).toContain('ADD COLUMN supports_image_input boolean');
+    expect(sql).toContain('DEFAULT false');
+  });
 });

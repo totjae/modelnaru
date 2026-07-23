@@ -81,4 +81,27 @@ describe('ProvidersController', () => {
       },
     );
   });
+
+  it('allows an administrator to mark a model as image-capable', async () => {
+    const updateModel = vi.fn(() =>
+      Promise.resolve({ id: '20000000-0000-4000-8000-000000000001' }),
+    );
+    const controller = new ProvidersController(
+      { updateModel } as unknown as ProvidersService,
+      { hashIpAddress: vi.fn() } as unknown as AuthService,
+    );
+
+    await controller.updateModel(
+      '20000000-0000-4000-8000-000000000001',
+      { supportsImageInput: true },
+      request(),
+      response(),
+    );
+
+    expect(updateModel).toHaveBeenCalledWith(
+      '20000000-0000-4000-8000-000000000001',
+      { supportsImageInput: true },
+      expect.objectContaining({ actorId: 'admin:admin' }),
+    );
+  });
 });

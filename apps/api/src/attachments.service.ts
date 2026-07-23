@@ -29,6 +29,12 @@ import {
   PdfPasswordProtectedError,
   PdfTextTooLargeError,
 } from './pdf-attachments.js';
+import {
+  extractImageAttachment,
+  ImageDimensionsError,
+  imageMediaType,
+  ImageTypeError,
+} from './image-attachments.js';
 
 export class FileInputError extends Error {}
 export class FileStorageLowError extends Error {}
@@ -39,6 +45,7 @@ export class FilePdfInvalidError extends Error {}
 export class FilePdfOcrRequiredError extends Error {}
 export class FilePdfPageLimitError extends Error {}
 export class FilePdfPasswordProtectedError extends Error {}
+export class FileImageDimensionsError extends Error {}
 
 export type UploadByteStream = AsyncIterable<Uint8Array>;
 
@@ -66,7 +73,11 @@ export class AttachmentsService {
     await this.repository.assertConversation(principal, input.conversationId);
     const parsedName = this.parseFileName(input.fileName);
     const originalName = parsedName.originalName;
-    const mediaType = this.parseMediaType(input.mediaType, parsedName.fileKind);
+    const mediaType = this.parseMediaType(
+      input.mediaType,
+      parsedName.fileKind,
+      originalName,
+    );
     await this.assertStorageCapacity();
 
     const id = randomUUID();
@@ -93,7 +104,13 @@ export class AttachmentsService {
                 this.loaded.config.limits.maximumPdfPages,
               ),
             )
-          : extractTextAttachment(bytes);
+          : parsedName.fileKind === 'image'
+            ? extractImageAttachment(
+                bytes,
+                mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
+                this.loaded.config.limits.maximumImagePixels,
+              )
+            : extractTextAttachment(bytes);
       await mkdir(dirname(finalPath), { recursive: true });
       await rename(temporaryPath, finalPath);
       finalCreated = true;
@@ -101,8 +118,10 @@ export class AttachmentsService {
         byteSize,
         conversationId: input.conversationId,
         encoding: 'encoding' in extracted ? extracted.encoding : null,
-        extractedText: extracted.text,
+        extractedText: 'text' in extracted ? extracted.text : null,
         fileKind: parsedName.fileKind,
+        imageHeight: 'height' in extracted ? extracted.height : null,
+        imageWidth: 'width' in extracted ? extracted.width : null,
         id,
         includeInFutureMessages: input.includeInFutureMessages,
         maximumPending: this.loaded.config.limits.maximumAttachmentsPerMessage,
@@ -136,6 +155,12 @@ export class AttachmentsService {
       }
       if (error instanceof PdfInvalidError) {
         throw new FilePdfInvalidError();
+      }
+      if (error instanceof ImageDimensionsError) {
+        throw new FileImageDimensionsError();
+      }
+      if (error instanceof ImageTypeError) {
+        throw new FileTypeUnsupportedError();
       }
       throw error;
     }
@@ -184,13 +209,16 @@ export class AttachmentsService {
   }
 
   private parseFileName(header: string): {
-    fileKind: 'pdf' | 'text';
+    fileKind: 'image' | 'pdf' | 'text';
     originalName: string;
   } {
     try {
       const decoded = decodeURIComponent(header);
       if (decoded.toLocaleLowerCase('en-US').endsWith('.pdf')) {
         return { fileKind: 'pdf', originalName: safeOriginalName(decoded) };
+      }
+      if (/\.(?:jpe?g|png|webp)$/iu.test(decoded)) {
+        return { fileKind: 'image', originalName: safeOriginalName(decoded) };
       }
       textFileExtension(decoded);
       return { fileKind: 'text', originalName: safeOriginalName(decoded) };
@@ -199,8 +227,13 @@ export class AttachmentsService {
     }
   }
 
-  private parseMediaType(value: string, fileKind: 'pdf' | 'text'): string {
+  private parseMediaType(
+    value: string,
+    fileKind: 'image' | 'pdf' | 'text',
+    fileName: string,
+  ): string {
     try {
+      if (fileKind === 'image') return imageMediaType(fileName, value);
       if (fileKind === 'pdf') {
         if (
           value.split(';', 1)[0]!.trim().toLowerCase() !== 'application/pdf'
@@ -213,6 +246,10 @@ export class AttachmentsService {
     } catch {
       throw new FileTypeUnsupportedError();
     }
+  }
+
+  async readImage(storageKey: string): Promise<string> {
+    return (await readFile(this.storagePath(storageKey))).toString('base64');
   }
 
   private async assertStorageCapacity(): Promise<void> {

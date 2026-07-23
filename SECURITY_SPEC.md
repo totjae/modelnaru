@@ -109,7 +109,7 @@
 - 게스트 코드·hash, 원본 IP, 대화 본문, Provider 연결 정보와 API 키는 게스트 response와 일반 log에 포함하지 않는다.
 - 세부 정책과 오류 code는 [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)를 따른다.
 
-### 6.8 텍스트·PDF attachment
+### 6.8 텍스트·PDF·이미지 attachment
 
 - 업로드·pending 설정·삭제·메시지 연결은 일반 사용자·게스트 session과 CSRF를 요구하고 server session의 주체로 대화 소유권을 검사한다.
 - 원본 파일명은 표시 metadata로만 저장하며 UUID object key 외에는 로컬 경로 구성에 사용하지 않는다.
@@ -121,6 +121,9 @@
 - 암호 입력이 필요한 PDF와 파싱 오류는 내부 예외를 노출하지 않는 표준 오류로 거부한다. 텍스트 레이어가 없는 스캔 PDF는 OCR을 임의 수행하거나 외부 서비스로 전송하지 않는다.
 - 페이지 수와 추출문 상한을 원본 저장 확정 전에 검사해 과도한 처리와 컨텍스트 확대를 제한한다.
 - 동시 PDF 파싱 수는 `limits.maximumPdfWorkers`로 제한해 압축 해제와 텍스트 추출이 CPU·메모리를 동시에 점유하지 않게 한다.
+- 이미지는 확장자·MIME·실제 signature와 가로·세로를 함께 검사하고 40,000,000 decoded pixel 기본 상한을 적용한다.
+- 원본 image base64는 API response·log·DB에 복제하지 않고 Provider 요청을 만드는 시점에 비공개 storage에서 읽는다.
+- 관리자에게 이미지 입력이 명시적으로 허용된 모델만 원본 이미지를 외부 Provider로 전송한다.
 
 ## 7. 오류·경계 조건
 

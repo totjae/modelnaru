@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-현재 구현은 텍스트 계열 파일과 텍스트 레이어가 있는 PDF의 업로드·검증·추출·원본 저장·메시지 연결을 포함한다. JPEG·PNG·WebP 이미지 입력은 같은 attachment 기반 위에 후속 구현한다. 스캔 PDF OCR, DOCX, GIF와 HEIC는 제외한다.
+현재 구현은 텍스트 계열 파일, 텍스트 레이어가 있는 PDF와 JPEG·PNG·WebP 이미지의 업로드·검증·원본 저장·메시지 연결을 포함한다. 이미지 원본은 OCR로 변환하지 않고 이미지 입력이 허용된 멀티모달 모델에 직접 전달한다. 스캔 PDF OCR, DOCX, GIF와 HEIC는 제외한다.
 
 ## 3. 상세 명세
 
@@ -37,7 +37,17 @@
 - PDF 추출문도 텍스트 파일과 같은 2,000,000자 상한을 적용한다.
 - 동시에 실행하는 PDF 추출 작업은 `limits.maximumPdfWorkers`로 제한하며 N100 기본 설정은 1개다. 추가 요청은 업로드 임시 파일을 유지한 채 순서대로 대기한다.
 
-### 3.4 업로드 API
+### 3.4 이미지 처리
+
+- 지원 확장자는 `.jpg`, `.jpeg`, `.png`, `.webp`이고 MIME은 각각 `image/jpeg`, `image/png`, `image/webp`여야 한다.
+- 확장자와 MIME만 신뢰하지 않고 원본 byte signature를 해석해 실제 형식과 가로·세로 크기를 확인한다.
+- decoded pixel 수는 `limits.maximumImagePixels` 이하이며 기본값은 40,000,000픽셀이다.
+- DB에는 `image_width`, `image_height`를 저장하고 추출문·텍스트 인코딩·PDF 페이지 수는 저장하지 않는다.
+- 이미지 생성, GIF·HEIC, 이미지 OCR과 자동 리사이즈는 제공하지 않는다.
+- 현재 메시지 이미지와 사용자가 `후속 메시지에도 포함`으로 지정한 활성 경로의 이전 이미지를 원본 base64로 Provider adapter에 전달한다.
+- 선택 모델의 `supports_image_input`이 꺼져 있으면 Provider 호출과 호출량 차감 전에 `CHAT_IMAGE_MODEL_UNSUPPORTED`로 실패한다.
+
+### 3.5 업로드 API
 
 `POST /api/files/conversations/:conversationId`는 인증된 사용자·게스트와 CSRF 검증을 요구한다.
 
@@ -54,7 +64,7 @@
 
 `DELETE /api/files/conversations/:conversationId/:attachmentId`는 아직 메시지에 연결되지 않은 attachment와 원본 파일을 삭제한다. 메시지에 연결된 attachment는 대화 삭제 정책을 따른다.
 
-### 3.5 저장
+### 3.6 저장
 
 - 원본은 Web 공개 경로 밖의 `storage.root` 아래 UUID 기반 object key로 저장한다.
 - 원본 파일명은 DB metadata로만 보존하고 경로 구성에 사용하지 않는다.
@@ -63,7 +73,7 @@
 - 대화 또는 소유 주체 삭제 시 DB 행은 cascade 삭제한다. 원본 파일의 즉시 제거와 만료 정리 worker는 보관 정책 단계에서 완성한다.
 - 기본 만료 시각은 업로드 시각부터 `storage.attachmentRetentionDays`이며 기본 30일이다.
 
-### 3.6 AI 컨텍스트
+### 3.7 AI 컨텍스트
 
 - 현재 전송 메시지에 연결한 모든 텍스트 attachment는 현재 user 메시지 본문 뒤에 구분된 attachment context로 포함한다.
 - `includeInFutureMessages = true`인 attachment는 같은 활성 대화 경로의 후속 요청에도 포함한다.
@@ -81,6 +91,7 @@
 - `FILE_PDF_PASSWORD_PROTECTED`(`422`): 암호 입력이 필요한 PDF
 - `FILE_PDF_OCR_REQUIRED`(`422`): 추출할 텍스트 레이어가 없는 스캔 PDF
 - `FILE_PDF_INVALID`(`422`): 손상되었거나 PDF로 해석할 수 없는 본문
+- `FILE_IMAGE_DIMENSIONS_EXCEEDED`(`413`): 설정한 decoded pixel 제한 초과
 - `FILE_STORAGE_LOW`(`507`): 최소 여유 공간 미만
 - `FILE_NOT_FOUND`(`404`): 존재하지 않거나 다른 주체·대화의 attachment
 - `FILE_ATTACHMENT_LIMIT`(`400`): 메시지당 첨부 개수 초과
@@ -91,6 +102,8 @@
 
 - 지원 텍스트 파일과 PDF의 원본·추출문이 저장되고 실제 AI context에 포함된다.
 - 텍스트 PDF는 페이지 수와 페이지별 추출문이 보존되고, 100페이지 초과·암호·스캔·손상 PDF는 서로 구분되는 오류로 거부된다.
+- JPEG·PNG·WebP는 확장자·MIME·실제 본문 형식과 decoded pixel 수가 검증되고 가로·세로 metadata가 저장된다.
+- 이미지 입력이 꺼진 모델에는 이미지 원본을 전송하거나 호출량을 차감하지 않는다.
 - 같은 제목의 파일도 UUID object key로 충돌하지 않는다.
 - 경로 traversal 파일명이 저장 경로에 영향을 주지 않는다.
 - 사용자·게스트·대화 소유권과 CSRF가 업로드·삭제·메시지 연결에서 강제된다.
@@ -100,7 +113,6 @@
 
 ## 6. 미결정·보류 항목
 
-- JPEG·PNG·WebP decoded pixel 상한과 Provider별 멀티모달 변환
 - 만료·고아 파일 정리 worker의 실행 주기와 관리자 보관 기간 UI
 - 악성 파일 검사
 - 스캔 PDF OCR

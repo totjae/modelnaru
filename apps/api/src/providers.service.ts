@@ -130,13 +130,13 @@ export class ProvidersService {
     return this.mapNotFound(() => this.repository.update(id, patch, audit));
   }
 
-  setModelEnabled(
+  updateModel(
     id: string,
-    isEnabled: boolean,
+    patch: { isEnabled?: boolean; supportsImageInput?: boolean },
     audit: ProviderAuditContext,
   ): Promise<ProviderModelRecord> {
     return this.mapNotFound(() =>
-      this.repository.setModelEnabled(id, isEnabled, audit),
+      this.repository.updateModel(id, patch, audit),
     );
   }
 

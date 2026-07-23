@@ -25,6 +25,7 @@ import { AttachmentNotFoundError } from './attachments.repository.js';
 import {
   AttachmentsService,
   FileInputError,
+  FileImageDimensionsError,
   FilePdfInvalidError,
   FilePdfOcrRequiredError,
   FilePdfPageLimitError,
@@ -216,6 +217,13 @@ export class AttachmentsController {
     }
     if (error instanceof FilePdfInvalidError) {
       this.error('FILE_PDF_INVALID', 'The PDF is invalid or damaged.', 422);
+    }
+    if (error instanceof FileImageDimensionsError) {
+      this.error(
+        'FILE_IMAGE_DIMENSIONS_EXCEEDED',
+        'The image dimensions exceed the configured pixel limit.',
+        413,
+      );
     }
     if (error instanceof FileTypeUnsupportedError) {
       this.error(

@@ -60,7 +60,9 @@ export interface MessageRecord {
 export interface MessageAttachmentRecord {
   byteSize: number;
   expiresAt: Date;
-  fileKind: 'pdf' | 'text';
+  fileKind: 'image' | 'pdf' | 'text';
+  imageHeight: number | null;
+  imageWidth: number | null;
   id: string;
   includeInFutureMessages: boolean;
   mediaType: string;
@@ -134,7 +136,9 @@ interface RawMessageRow {
 interface RawMessageAttachmentRow {
   byte_size: string | number;
   expires_at: Date;
-  file_kind: 'pdf' | 'text';
+  file_kind: 'image' | 'pdf' | 'text';
+  image_height: number | null;
+  image_width: number | null;
   id: string;
   include_in_future_messages: boolean;
   media_type: string;
@@ -293,7 +297,7 @@ export class ChatsRepository {
     `;
     const attachmentRows = await sql<RawMessageAttachmentRow[]>`
       SELECT id, message_id, original_name, media_type, file_kind, byte_size,
-        page_count,
+        page_count, image_width, image_height,
         include_in_future_messages, expires_at
       FROM attachments
       WHERE conversation_id = ${id}
@@ -308,6 +312,8 @@ export class ChatsRepository {
         byteSize: Number(attachment.byte_size),
         expiresAt: attachment.expires_at,
         fileKind: attachment.file_kind,
+        imageHeight: attachment.image_height,
+        imageWidth: attachment.image_width,
         id: attachment.id,
         includeInFutureMessages: attachment.include_in_future_messages,
         mediaType: attachment.media_type,

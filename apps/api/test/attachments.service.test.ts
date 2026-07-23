@@ -48,6 +48,7 @@ async function fixture(maximumFileBytes = 1024) {
       limits: {
         maximumAttachmentsPerMessage: 10,
         maximumFileBytes,
+        maximumImagePixels: 40_000_000,
         maximumPdfPages: 100,
         maximumPdfWorkers: 1,
       },
@@ -97,6 +98,8 @@ describe('AttachmentsService', () => {
         encoding: 'utf-8',
         extractedText: '첨부 내용',
         fileKind: 'text',
+        imageHeight: null,
+        imageWidth: null,
         includeInFutureMessages: true,
         originalName: 'notes.md',
         pageCount: null,

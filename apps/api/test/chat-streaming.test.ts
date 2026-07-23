@@ -73,6 +73,42 @@ describe('chat provider streaming', () => {
     });
   });
 
+  it('maps image input to each provider protocol', () => {
+    const imageMessages = [
+      {
+        content: '이 이미지를 설명해줘',
+        images: [{ data: 'aGVsbG8=', mediaType: 'image/png' as const }],
+        role: 'user' as const,
+      },
+    ];
+    const requestBody = (templateId: 'anthropic' | 'google' | 'openai') => {
+      const template = providerTemplateById(templateId)!;
+      const request = buildProviderStreamRequest({
+        apiKey: 'key',
+        baseUrl: template.baseUrl!,
+        messages: imageMessages,
+        modelId: 'vision-model',
+        parameters: {},
+        systemPrompt: '',
+        template,
+      });
+      if (typeof request.init.body !== 'string') {
+        throw new Error('Expected a JSON string request body');
+      }
+      return JSON.parse(request.init.body) as Record<string, unknown>;
+    };
+
+    expect(JSON.stringify(requestBody('openai'))).toContain(
+      'data:image/png;base64,aGVsbG8=',
+    );
+    expect(JSON.stringify(requestBody('anthropic'))).toContain(
+      '"media_type":"image/png"',
+    );
+    expect(JSON.stringify(requestBody('google'))).toContain(
+      '"mime_type":"image/png"',
+    );
+  });
+
   it('normalizes text, usage and completion events', () => {
     expect(
       normalizeProviderStreamEvent('openai', {

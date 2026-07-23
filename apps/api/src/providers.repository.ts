@@ -20,6 +20,7 @@ export interface ProviderModelRecord {
   maxOutputTokens: number | null;
   modelId: string;
   providerConnectionId: string;
+  supportsImageInput: boolean;
 }
 
 export interface ProviderConnectionRecord {
@@ -64,6 +65,7 @@ interface RawModelRow {
   max_output_tokens: number | null;
   model_id: string;
   provider_connection_id: string;
+  supports_image_input: boolean;
 }
 
 export class ProviderNotFoundError extends Error {}
@@ -78,6 +80,7 @@ function mapModel(row: RawModelRow): ProviderModelRecord {
     maxOutputTokens: row.max_output_tokens,
     modelId: row.model_id,
     providerConnectionId: row.provider_connection_id,
+    supportsImageInput: row.supports_image_input,
   };
 }
 
@@ -139,7 +142,8 @@ export class ProvidersRepository {
     `;
     const models = await sql<RawModelRow[]>`
       SELECT id, provider_connection_id, model_id, display_name,
-        context_window, max_output_tokens, is_enabled, is_available
+        context_window, max_output_tokens, is_enabled, is_available,
+        supports_image_input
       FROM provider_models
       ORDER BY model_id
     `;
@@ -299,27 +303,39 @@ export class ProvidersRepository {
     });
   }
 
-  async setModelEnabled(
+  async updateModel(
     id: string,
-    isEnabled: boolean,
+    patch: { isEnabled?: boolean; supportsImageInput?: boolean },
     audit: ProviderAuditContext,
   ): Promise<ProviderModelRecord> {
     return this.database.getClient().begin(async (transaction) => {
       const rows = await transaction<RawModelRow[]>`
         UPDATE provider_models
-        SET is_enabled = ${isEnabled}
+        SET is_enabled = COALESCE(${patch.isEnabled ?? null}, is_enabled),
+          supports_image_input = COALESCE(
+            ${patch.supportsImageInput ?? null},
+            supports_image_input
+          )
         WHERE id = ${id} AND is_available = true
         RETURNING id, provider_connection_id, model_id, display_name,
-          context_window, max_output_tokens, is_enabled, is_available
+          context_window, max_output_tokens, is_enabled, is_available,
+          supports_image_input
       `;
       const row = rows[0];
       if (!row) throw new ProviderNotFoundError();
       const model = mapModel(row);
       await writeAudit(transaction, {
-        action: isEnabled
-          ? 'provider.model_enabled'
-          : 'provider.model_disabled',
-        after: { isEnabled, modelId: model.modelId },
+        action:
+          patch.isEnabled === undefined
+            ? 'provider.model_capabilities_updated'
+            : patch.isEnabled
+              ? 'provider.model_enabled'
+              : 'provider.model_disabled',
+        after: {
+          isEnabled: model.isEnabled,
+          modelId: model.modelId,
+          supportsImageInput: model.supportsImageInput,
+        },
         audit,
         targetId: id,
         targetType: 'provider_model',
@@ -352,7 +368,8 @@ export class ProvidersRepository {
           is_available = true,
           last_seen_at = now()
         RETURNING id, provider_connection_id, model_id, display_name,
-          context_window, max_output_tokens, is_enabled, is_available
+          context_window, max_output_tokens, is_enabled, is_available,
+          supports_image_input
       `;
       if (rows[0]) output.push(mapModel(rows[0]));
     }
@@ -367,7 +384,8 @@ export class ProvidersRepository {
   ): Promise<ProviderModelRecord[]> {
     const rows = await transaction<RawModelRow[]>`
       SELECT id, provider_connection_id, model_id, display_name,
-        context_window, max_output_tokens, is_enabled, is_available
+        context_window, max_output_tokens, is_enabled, is_available,
+        supports_image_input
       FROM provider_models
       WHERE provider_connection_id = ${connectionId}
       ORDER BY model_id

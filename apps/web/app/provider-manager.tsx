@@ -29,6 +29,7 @@ interface ProviderModel {
   isEnabled: boolean;
   maxOutputTokens: number | null;
   modelId: string;
+  supportsImageInput: boolean;
 }
 
 interface ProviderConnection {
@@ -238,7 +239,11 @@ export function ProviderManager() {
     }
   }
 
-  async function toggleModel(connectionId: string, model: ProviderModel) {
+  async function updateModel(
+    connectionId: string,
+    model: ProviderModel,
+    patch: { isEnabled?: boolean; supportsImageInput?: boolean },
+  ) {
     setBusy(model.id);
     setError('');
     setNotice('');
@@ -246,7 +251,7 @@ export function ProviderManager() {
       const response = await mutation(
         `/api/admin/provider-models/${model.id}`,
         'PATCH',
-        { isEnabled: !model.isEnabled },
+        patch,
       );
       if (!response.ok) {
         setError(await responseError(response));
@@ -266,7 +271,7 @@ export function ProviderManager() {
         ),
       );
     } catch {
-      setError('모델 상태를 변경하지 못했습니다.');
+      setError('모델 설정을 변경하지 못했습니다.');
     } finally {
       setBusy(null);
     }
@@ -449,9 +454,26 @@ export function ProviderManager() {
                           <strong>{model.displayName || model.modelId}</strong>
                           <small>{model.modelId}</small>
                         </div>
+                        <label className="provider-model-capability">
+                          <input
+                            type="checkbox"
+                            checked={model.supportsImageInput}
+                            onChange={(event) =>
+                              void updateModel(connection.id, model, {
+                                supportsImageInput: event.target.checked,
+                              })
+                            }
+                            disabled={!model.isAvailable || busy === model.id}
+                          />
+                          이미지 입력
+                        </label>
                         <button
                           type="button"
-                          onClick={() => toggleModel(connection.id, model)}
+                          onClick={() =>
+                            updateModel(connection.id, model, {
+                              isEnabled: !model.isEnabled,
+                            })
+                          }
                           disabled={!model.isAvailable || busy === model.id}
                         >
                           {model.isEnabled ? '사용 중' : '사용 안 함'}

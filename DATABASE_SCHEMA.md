@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가하고 열한 번째 migration은 텍스트 attachment를 추가한다. 열두 번째 migration은 PDF 페이지 metadata와 ready 상태 제약을 추가한다. 이미지 확장과 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가하고 열한 번째 migration은 텍스트 attachment를 추가한다. 열두 번째 migration은 PDF 페이지 metadata를, 열세 번째 migration은 이미지 크기와 모델별 이미지 입력 capability를 추가한다. 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
 
 ## 3. Migration 규칙
 
@@ -228,6 +228,7 @@ Index:
 - `file_kind`는 `text`, `pdf`, `image`, `status`는 `processing`, `ready`, `failed`로 제한한다. 현재 API는 `text`·`pdf`의 `ready` 행을 생성한다.
 - text ready 행은 최대 2,000,000자의 `extracted_text`와 `text_encoding`을 반드시 가진다.
 - `0012_pdf_attachments.sql`은 nullable `page_count`를 추가한다. PDF ready 행은 추출문과 1~500 범위의 페이지 수가 필요하며 텍스트 인코딩은 `NULL`이다. 실제 업로드 상한은 config 기본값인 100페이지로 더 엄격하게 검사한다.
+- `0013_image_attachments.sql`은 nullable `image_width`, `image_height`와 `provider_models.supports_image_input`을 추가한다. 이미지 ready 행은 양쪽 크기가 모두 필요하고 추출문·인코딩·페이지 수는 `NULL`이다. 모델 capability 기본값은 `false`이며 동기화로 덮어쓰지 않는다.
 - `include_in_future_messages`는 이후 Provider context에 추출문을 계속 포함할지 결정한다.
 - `expires_at` cleanup index와 대화·message 조회 index를 둔다.
 
@@ -263,5 +264,5 @@ Index:
 
 ## 19. 미결정·보류 항목
 
-- 이미지 metadata와 처리 상태 확장은 후속 migration에서 추가한다.
+- 이미지 OCR·변환 결과 metadata가 필요해지면 후속 migration에서 추가한다.
 - 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.

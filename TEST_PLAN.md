@@ -140,6 +140,10 @@
 | FILE-PDF-001        | 단위 | PDF 텍스트 추출     | signature·실제 텍스트·페이지 수·페이지 제한·OCR 필요·손상 구분  | 통과 |
 | FILE-PDF-002        | 정적 | 12차 migration      | PDF page_count 범위·ready 추출문·인코딩 제약                    | 통과 |
 | FILE-PDF-E2E-001    | E2E  | HTTPS PDF 첨부      | 텍스트 PDF AI 활용·페이지 표시·암호·스캔·100페이지 거부         | 계획 |
+| FILE-IMAGE-001      | 단위 | 이미지 본문 검증    | JPEG·PNG·WebP 확장자/MIME·signature·해상도·픽셀 상한            | 통과 |
+| FILE-IMAGE-002      | 단위 | 멀티모달 변환       | OpenAI image_url·Anthropic image block·Gemini inline_data       | 통과 |
+| FILE-IMAGE-003      | 단위 | 모델 capability     | 기본 비활성·관리자 변경·동기화 보존·미지원 모델 quota 전 차단   | 통과 |
+| FILE-IMAGE-E2E-001  | E2E  | HTTPS 이미지 첨부   | 실제 모델 JPEG·PNG·WebP 인식·후속 포함·미지원 모델 차단         | 계획 |
 | UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결              | 통과 |
 | UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용         | 통과 |
 | SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index   | 통과 |
@@ -176,7 +180,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 145개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 154개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인

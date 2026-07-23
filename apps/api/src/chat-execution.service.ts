@@ -30,6 +30,7 @@ import {
   estimateContextSize,
   SummarizationService,
 } from './summarization.service.js';
+import { AttachmentsService } from './attachments.service.js';
 
 interface ActiveRequest {
   controller: AbortController;
@@ -38,6 +39,7 @@ interface ActiveRequest {
 }
 
 export class ChatParameterPolicyError extends Error {}
+export class ChatImageModelUnsupportedError extends Error {}
 
 export interface ExecuteChatInput {
   attachmentIds: string[];
@@ -60,6 +62,7 @@ export class ChatExecutionService {
 
   constructor(
     private readonly access: AccessService,
+    private readonly attachments: AttachmentsService,
     private readonly providers: ChatProviderService,
     private readonly messages: ChatMessagesRepository,
     private readonly summarization: SummarizationService,
@@ -108,6 +111,9 @@ export class ChatExecutionService {
             templateId: runtime.template.id,
           });
       assistantMessageId = turn.assistantMessageId;
+      if (turn.imageAttachments.length > 0 && !runtime.supportsImageInput) {
+        throw new ChatImageModelUnsupportedError();
+      }
       const effectiveContextLimit = Math.min(
         turn.contextTokenLimit,
         runtime.contextWindow ?? turn.contextTokenLimit,
@@ -124,6 +130,21 @@ export class ChatExecutionService {
           ...(externalSignal ? { signal: externalSignal } : {}),
           systemPrompt: turn.systemPrompt,
         });
+      }
+      if (turn.imageAttachments.length > 0) {
+        const images = await Promise.all(
+          turn.imageAttachments.map(async (image) => ({
+            data: await this.attachments.readImage(image.storageKey),
+            mediaType: image.mediaType,
+          })),
+        );
+        const targetIndex = context.findLastIndex(
+          (message) => message.role === 'user',
+        );
+        if (targetIndex < 0) throw new ChatAttachmentError();
+        context = context.map((message, index) =>
+          index === targetIndex ? { ...message, images } : message,
+        );
       }
       await this.access.reserveDailyRequest(principal, input.providerModelId);
       emit({
@@ -326,6 +347,13 @@ export class ChatExecutionService {
       return {
         code: 'CHAT_ATTACHMENT_INVALID',
         message: 'One or more attachments are invalid.',
+        retryable: false,
+      };
+    }
+    if (error instanceof ChatImageModelUnsupportedError) {
+      return {
+        code: 'CHAT_IMAGE_MODEL_UNSUPPORTED',
+        message: 'The selected model does not support image input.',
         retryable: false,
       };
     }
