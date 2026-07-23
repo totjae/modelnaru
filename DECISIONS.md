@@ -162,7 +162,7 @@
 
 - 상태: 확정
 - 결정일: 2026-07-23
-- 결정: `provider-manager-v1.10.0.js`의 요청 builder를 기준으로 Provider catalog 전체에 parameter profile을 부여하고 일반 채팅과 자동 요약이 하나의 서버 정책을 사용한다. UI는 선택 모델이 지원하는 항목만 표시하며 선택적 값은 `Provider 기본값`과 `직접 설정`을 명시적으로 구분한다.
+- 결정: `provider-manager-v1.10.0.js`의 요청 builder를 기준으로 Provider catalog 전체에 parameter profile을 부여하고 일반 채팅과 자동 요약이 하나의 서버 정책을 사용한다. 각 파라미터는 설명·Provider 기본 동작·직접 설정 체크박스·설정값을 고정된 구조로 표시한다. 다른 설정과 충돌한 항목은 제거하지 않고 비활성화 사유를 표시한다.
 - 이유: 모든 Provider에 같은 sampling 필드를 보내거나 특정 모델에서 입력을 비워 두도록 안내하면 upstream 오류와 설정 의미의 혼동이 발생하기 때문이다.
 - 대안: Provider별 화면·검증을 각각 구현, 모든 모델에 OpenAI sampling 필드 노출, upstream 400 응답에 의존.
 - 영향: OpenAI reasoning, Anthropic thinking, Gemini, NovelAI와 routed Provider 정책을 중앙에서 정규화한다. 준비 중 Provider도 profile은 갖지만 전용 인증·endpoint adapter가 완료되기 전까지 등록 가능 상태로 승격하지 않는다.

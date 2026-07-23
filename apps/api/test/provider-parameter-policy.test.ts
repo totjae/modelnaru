@@ -7,7 +7,6 @@ import {
 import {
   normalizeProviderParameters,
   providerParameterPolicy,
-  ProviderParameterValidationError,
   type ProviderGenerationParameters,
 } from '../src/provider-parameter-policy.js';
 import { buildProviderStreamRequest } from '../src/chat-streaming.js';
@@ -43,14 +42,23 @@ describe('provider parameter policy', () => {
     ).toBe(true);
   });
 
-  it('uses reasoning controls instead of sampling controls for GPT-5 and o-series', () => {
+  it('keeps sampling controls and removes conflicting values when reasoning is enabled', () => {
     const template = providerTemplateById('openai')!;
     expect(providerParameterPolicy(template, 'gpt-5-mini').profile).toBe(
       'openai-reasoning',
     );
-    expect(() =>
-      normalizeProviderParameters(template, 'gpt-5-mini', { temperature: 0.5 }),
-    ).toThrow(ProviderParameterValidationError);
+    expect(
+      normalizeProviderParameters(template, 'gpt-5-mini', {
+        temperature: 0.5,
+      }),
+    ).toMatchObject({ temperature: 0.5 });
+    expect(
+      normalizeProviderParameters(template, 'gpt-5-mini', {
+        reasoningEffort: 'low',
+        temperature: 0.5,
+        topP: 0.9,
+      }),
+    ).toEqual({ reasoningEffort: 'low' });
     expect(
       body('openai', 'gpt-5-mini', {
         reasoningEffort: 'low',
@@ -90,16 +98,17 @@ describe('provider parameter policy', () => {
       providerTemplateById('anthropic')!,
       'claude-opus-4-8',
     );
-    expect(adaptive.fields.map((field) => field.key)).not.toContain(
-      'temperature',
+    expect(adaptive.fields.map((field) => field.key)).toContain('temperature');
+    expect(adaptive.disabledFields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'temperature' })]),
     );
-    expect(() =>
+    expect(
       normalizeProviderParameters(
         providerTemplateById('anthropic')!,
         'claude-opus-4-8',
         { temperature: 0.3 },
       ),
-    ).toThrow(ProviderParameterValidationError);
+    ).not.toHaveProperty('temperature');
   });
 
   it('maps Gemini sampling, penalties, seed, stops and thinking configuration', () => {

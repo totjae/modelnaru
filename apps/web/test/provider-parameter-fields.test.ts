@@ -30,4 +30,20 @@ describe('provider parameter request', () => {
       }),
     ).toEqual({ stopSequences: ['END', 'STOP'], temperature: 0.7 });
   });
+
+  it('keeps disabled parameters visible in policy but omits their values', () => {
+    expect(
+      providerParameterRequest(
+        { temperature: '0.7', topP: '0.9' },
+        {
+          disabledFields: [{ key: 'temperature', reason: 'thinking conflict' }],
+          fields: [
+            { key: 'temperature', type: 'number' },
+            { key: 'topP', type: 'number' },
+          ],
+          profile: 'anthropic',
+        },
+      ),
+    ).toEqual({ topP: 0.9 });
+  });
 });

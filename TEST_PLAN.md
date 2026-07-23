@@ -121,7 +121,7 @@
 | SUMMARY-PARAM-001   | 단위 | 7차 migration·API   | sampling 범위·nullable 기본값·최대 출력 범위 검증              | 통과 |
 | PROVIDER-PARAM-001  | 단위 | parameter policy    | 전체 catalog profile·OpenAI reasoning·Anthropic thinking 규칙  | 통과 |
 | PROVIDER-PARAM-002  | 단위 | request mapping     | Gemini penalty·seed·stop·thinking과 Anthropic/OpenAI 필드 변환 | 통과 |
-| SUMMARY-PARAM-002   | 정적 | 8차 migration·Web   | 고급 JSON 저장·모델별 동적 필드·명시적 Provider 기본값 선택    | 통과 |
+| SUMMARY-PARAM-002   | 정적 | 8차 migration·Web   | 고급 JSON·설명·기본 동작·직접 설정 checkbox·충돌 사유 표시     | 통과 |
 | SUMMARY-UNIT-001    | 단위 | 요약 context 구성   | Unicode 추정·호환 요약 재사용·최근 메시지 보존                 | 통과 |
 | SUMMARY-FAIL-001    | 단위 | 요약 실패 처리      | 본 호출 quota 예약 전 표준 오류·failed 상태 저장               | 통과 |
 | SUMMARY-ADMIN-001   | 통합 | 관리자 요약 설정    | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록            | 계획 |
@@ -179,7 +179,7 @@ pnpm build
 - 6차 migration의 요약 설정·메시지 경계·cascade·중복 방지 제약, Unicode 기반 한도 추정, 호환 요약 재사용과 요약 실패 시 quota 예약 방지를 단위시험으로 확인
 - Ubuntu HTTPS에서 Gemini·OpenAI 호환 모델 응답, 모델별 snapshot·token usage 저장, 새로고침 후 대화 복원과 assistant 취소 상태 저장을 확인했으며 대화별 모델 선택 복원은 수정 후 재배포 검증 대기
 - Ubuntu에서 `0003_provider_registry.sql` 적용과 LLM Gateway·OpenAI 실제 키 등록·모델 조회·동기화·활성 변경·감사 기록을 확인
-- Provider Manager 전체 catalog의 parameter profile 존재, GPT-5·o 계열 sampling 차단과 reasoning 변환, Anthropic thinking의 sampling 제거, Gemini 고급 필드 변환을 단위시험으로 확인
+- Provider Manager 전체 catalog의 parameter profile 존재, GPT-5·o 계열 sampling 유지·reasoning 충돌 제거, Anthropic thinking의 sampling 제거, Gemini 고급 필드 변환을 단위시험으로 확인
 
 2026-07-22 Ubuntu 최초 migration 실행은 internal backend network에서 Corepack이 `pnpm`을 내려받으려다 DNS `EAI_AGAIN`으로 실패했다. PostgreSQL은 healthy였고 migration 적용 전 실패하여 schema 손상은 없었다. Runtime command를 build된 JavaScript의 직접 `node` 실행으로 변경한 뒤 재배포하여 `0001_auth_foundation.sql` 적용, migrate exit code 0, API·Web·PostgreSQL·Valkey healthy와 readiness `database: ok`를 확인했다. Migration 재실행과 `schema_migrations` 직접 조회, DB 중단 시 readiness 503 확인은 남아 있다.
 

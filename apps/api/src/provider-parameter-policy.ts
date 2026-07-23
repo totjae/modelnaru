@@ -26,6 +26,7 @@ export interface ProviderParameterField {
 }
 
 export interface ProviderParameterPolicy {
+  disabledFields?: Array<{ key: ProviderParameterKey; reason: string }>;
   fields: ProviderParameterField[];
   profile: 'anthropic' | 'gemini' | 'novelai' | 'openai' | 'openai-reasoning';
 }
@@ -191,6 +192,10 @@ const policies: Record<
   'openai-reasoning': {
     fields: [
       maxOutput,
+      temperature(2),
+      topP,
+      frequencyPenalty,
+      presencePenalty,
       {
         key: 'reasoningEffort',
         options: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
@@ -238,18 +243,16 @@ export function providerParameterPolicy(
   modelId: string,
 ): ProviderParameterPolicy {
   const policy = policies[profileFor(template, modelId)];
-  if (
-    policy.profile === 'anthropic' &&
+  return policy.profile === 'anthropic' &&
     usesAdaptiveAnthropicThinking(modelId)
-  ) {
-    return {
-      ...policy,
-      fields: policy.fields.filter(
-        (field) => !['temperature', 'topK', 'topP'].includes(field.key),
-      ),
-    };
-  }
-  return policy;
+    ? {
+        ...policy,
+        disabledFields: ['temperature', 'topP', 'topK'].map((key) => ({
+          key: key as ProviderParameterKey,
+          reason: '이 모델의 adaptive thinking에서는 적용되지 않습니다.',
+        })),
+      }
+    : policy;
 }
 
 export class ProviderParameterValidationError extends Error {}
@@ -305,7 +308,9 @@ export function normalizeProviderParameters(
   }
   if (
     policy.profile === 'anthropic' &&
-    ((output.thinkingBudget ?? 0) > 0 || output.outputEffort)
+    ((output.thinkingBudget ?? 0) > 0 ||
+      output.outputEffort ||
+      usesAdaptiveAnthropicThinking(modelId))
   ) {
     delete output.temperature;
     delete output.topP;
