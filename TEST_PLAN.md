@@ -91,6 +91,7 @@
 | UI-STATIC-001       | 정적 | 공통 UI theme     | 라이트·다크 token·역할별 7색 단색 포인트·focus·checkbox 정렬     | 통과 |
 | UI-THEME-001        | E2E  | 테마 전환         | 시스템 추종·수동 전환·새로고침 후 선택 복원                      | 계획 |
 | UI-COMPOSER-001     | 정적 | 채팅 작성 영역    | 파일·전송 버튼 동일 크기·Enter 전송·Shift+Enter 줄바꿈·IME 보호  | 통과 |
+| UI-LANDING-001      | 정적 | 비로그인 메인     | 고정 제목·인프라 흐름·역할 기능·게스트 체험 순서와 반응형 표시   | 통과 |
 | GUEST-ISOLATION-001 | 보안 | 게스트 소유권     | 같은 코드를 쓴 두 guest가 상대 대화·첨부를 조회하지 못함         | 계획 |
 | GUEST-CLEANUP-001   | 통합 | 임시 데이터 삭제  | logout·만료·관리자 종료 후 기한 내 연쇄 삭제                     | 계획 |
 | GUEST-E2E-001       | E2E  | HTTPS 게스트 체험 | 코드 참가·독립 대화·호출 제한·logout                             | 계획 |
