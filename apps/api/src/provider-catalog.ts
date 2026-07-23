@@ -18,6 +18,7 @@ export interface ProviderTemplate {
   modelListPath?: string;
   modelResponseType?: ProviderModelResponseType;
   name: string;
+  parameterProfile: 'anthropic' | 'gemini' | 'novelai' | 'openai' | 'routed';
   supportLevel: ProviderSupportLevel;
 }
 
@@ -38,6 +39,7 @@ const registrableTemplates: ProviderTemplate[] = [
     modelListPath: '/models?exclude_deprecated=true',
     modelResponseType: 'openai',
     name: 'LLM Gateway',
+    parameterProfile: 'openai',
     supportLevel: 'compatible',
   },
   {
@@ -54,6 +56,7 @@ const registrableTemplates: ProviderTemplate[] = [
     modelListPath: '/models',
     modelResponseType: 'openai',
     name: 'OpenAI',
+    parameterProfile: 'openai',
     supportLevel: 'compatible',
   },
   {
@@ -67,6 +70,7 @@ const registrableTemplates: ProviderTemplate[] = [
     modelListPath: '/models',
     modelResponseType: 'openai',
     name: 'Anthropic',
+    parameterProfile: 'anthropic',
     supportLevel: 'compatible',
   },
   {
@@ -82,41 +86,49 @@ const registrableTemplates: ProviderTemplate[] = [
     modelListPath: '/v1beta/models',
     modelResponseType: 'google',
     name: 'Google AI Studio',
+    parameterProfile: 'gemini',
     supportLevel: 'compatible',
   },
 ];
 
 const futureTemplates: Array<
-  Pick<ProviderTemplate, 'category' | 'id' | 'name' | 'supportLevel'>
+  Pick<ProviderTemplate, 'category' | 'id' | 'name' | 'supportLevel'> & {
+    parameterProfile?: ProviderTemplate['parameterProfile'];
+  }
 > = [
   {
     category: 'advanced',
     id: 'gemini-express',
     name: 'Gemini Express Mode',
+    parameterProfile: 'gemini',
     supportLevel: 'experimental',
   },
   {
     category: 'advanced',
     id: 'novelai',
     name: 'NovelAI',
+    parameterProfile: 'novelai',
     supportLevel: 'coming_soon',
   },
   {
     category: 'advanced',
     id: 'vertex',
     name: 'Vertex AI',
+    parameterProfile: 'routed',
     supportLevel: 'coming_soon',
   },
   {
     category: 'advanced',
     id: 'bedrock',
     name: 'AWS Bedrock',
+    parameterProfile: 'routed',
     supportLevel: 'coming_soon',
   },
   {
     category: 'advanced',
     id: 'copilot',
     name: 'GitHub Copilot',
+    parameterProfile: 'routed',
     supportLevel: 'coming_soon',
   },
   {
@@ -329,7 +341,11 @@ export function compareProviderTemplates(
 export const providerCatalog: readonly ProviderTemplate[] = Object.freeze(
   [
     ...registrableTemplates,
-    ...futureTemplates.map((template) => ({ ...template, canRegister: false })),
+    ...futureTemplates.map((template) => ({
+      ...template,
+      canRegister: false,
+      parameterProfile: template.parameterProfile ?? ('openai' as const),
+    })),
   ].sort(compareProviderTemplates),
 );
 

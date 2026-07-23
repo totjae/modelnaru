@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
+import type { JSONValue } from '@modelnaru/database';
 
 import {
   composeBranchMessages,
@@ -47,16 +48,8 @@ interface RawBranchState {
 export class ChatMessageStateError extends Error {}
 export class ChatRegenerationTargetError extends Error {}
 
-function requestParameters(parameters: ChatParameters): Record<string, number> {
-  const result: Record<string, number> = {};
-  if (parameters.maxOutputTokens !== undefined) {
-    result.maxOutputTokens = parameters.maxOutputTokens;
-  }
-  if (parameters.temperature !== undefined) {
-    result.temperature = parameters.temperature;
-  }
-  if (parameters.topP !== undefined) result.topP = parameters.topP;
-  return result;
+function requestParameters(parameters: ChatParameters): JSONValue {
+  return { ...parameters };
 }
 
 function composeContext(

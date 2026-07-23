@@ -3,6 +3,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { csrfToken } from './client-auth';
+import {
+  ProviderParameterFields,
+  providerParameterRequest,
+  type ParameterPolicy,
+  type ParameterValues,
+} from './provider-parameter-fields';
 
 interface SummaryModel {
   connectionName: string;
@@ -10,6 +16,7 @@ interface SummaryModel {
   id: string;
   modelId: string;
   templateId: string;
+  parameterPolicy?: ParameterPolicy;
 }
 
 interface SummarySettings {
@@ -17,6 +24,7 @@ interface SummarySettings {
   prompt: string;
   promptVersion: number;
   providerModelId: string | null;
+  providerParameters: Record<string, number | string | string[]>;
   temperature: number | null;
   topP: number | null;
   updatedAt: string;
@@ -27,9 +35,21 @@ interface SummaryState {
   settings: SummarySettings;
 }
 
-function optionalNumber(data: FormData, name: string): number | null {
-  const value = data.get(name);
-  return typeof value === 'string' && value.trim() ? Number(value) : null;
+function settingValues(settings: SummarySettings): ParameterValues {
+  const values: ParameterValues = {
+    maxOutputTokens: String(settings.maxOutputTokens),
+    ...Object.fromEntries(
+      Object.entries(settings.providerParameters).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? value.join('\n') : String(value),
+      ]),
+    ),
+  };
+  if (settings.temperature !== null) {
+    values.temperature = String(settings.temperature);
+  }
+  if (settings.topP !== null) values.topP = String(settings.topP);
+  return values;
 }
 
 export function SummarizationManager() {
@@ -37,6 +57,8 @@ export function SummarizationManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [parameterValues, setParameterValues] = useState<ParameterValues>({});
 
   async function load() {
     setBusy(true);
@@ -47,7 +69,10 @@ export function SummarizationManager() {
         credentials: 'same-origin',
       });
       if (!response.ok) throw new Error('load failed');
-      setState((await response.json()) as SummaryState);
+      const loaded = (await response.json()) as SummaryState;
+      setState(loaded);
+      setSelectedModel(loaded.settings.providerModelId ?? '');
+      setParameterValues(settingValues(loaded.settings));
     } catch {
       setError('요약 설정을 불러오지 못했습니다.');
     } finally {
@@ -62,17 +87,37 @@ export function SummarizationManager() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    const selectedPolicy = state?.models.find(
+      (model) => model.id === selectedModel,
+    )?.parameterPolicy;
+    const requestParameters = providerParameterRequest(
+      parameterValues,
+      selectedPolicy,
+    );
+    const maxOutputTokens = Number(requestParameters.maxOutputTokens);
+    const temperature =
+      typeof requestParameters.temperature === 'number'
+        ? requestParameters.temperature
+        : null;
+    const topP =
+      typeof requestParameters.topP === 'number'
+        ? requestParameters.topP
+        : null;
+    delete requestParameters.maxOutputTokens;
+    delete requestParameters.temperature;
+    delete requestParameters.topP;
     setBusy(true);
     setError('');
     setNotice('');
     try {
       const response = await fetch('/api/admin/summarization', {
         body: JSON.stringify({
-          maxOutputTokens: Number(data.get('maxOutputTokens')),
+          maxOutputTokens,
           prompt: data.get('prompt'),
-          providerModelId: data.get('providerModelId') || null,
-          temperature: optionalNumber(data, 'temperature'),
-          topP: optionalNumber(data, 'topP'),
+          providerModelId: selectedModel || null,
+          providerParameters: requestParameters,
+          temperature,
+          topP,
         }),
         credentials: 'same-origin',
         headers: {
@@ -86,6 +131,7 @@ export function SummarizationManager() {
       setState((current) =>
         current ? { ...current, settings: result.settings } : current,
       );
+      setParameterValues(settingValues(result.settings));
       setNotice('자동 요약 설정을 저장했습니다.');
     } catch {
       setError(
@@ -138,7 +184,13 @@ export function SummarizationManager() {
             <select
               id="summary-model"
               name="providerModelId"
-              defaultValue={state.settings.providerModelId ?? ''}
+              value={selectedModel}
+              onChange={(event) => {
+                setSelectedModel(event.target.value);
+                setParameterValues({
+                  maxOutputTokens: String(state.settings.maxOutputTokens),
+                });
+              }}
             >
               <option value="">사용 안 함</option>
               {state.models.map((model) => (
@@ -148,42 +200,16 @@ export function SummarizationManager() {
               ))}
             </select>
             <div className="summary-parameter-grid">
-              <label>
-                Temperature
-                <input
-                  name="temperature"
-                  type="number"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  defaultValue={state.settings.temperature ?? ''}
-                  placeholder="Provider 기본값"
-                />
-              </label>
-              <label>
-                Top P
-                <input
-                  name="topP"
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  defaultValue={state.settings.topP ?? ''}
-                  placeholder="Provider 기본값"
-                />
-              </label>
-              <label>
-                최대 출력 토큰
-                <input
-                  name="maxOutputTokens"
-                  type="number"
-                  min={128}
-                  max={32768}
-                  step={1}
-                  defaultValue={state.settings.maxOutputTokens}
-                  required
-                />
-              </label>
+              <ProviderParameterFields
+                policy={
+                  state.models.find((model) => model.id === selectedModel)
+                    ?.parameterPolicy
+                }
+                values={parameterValues}
+                onChange={setParameterValues}
+                requiredKeys={['maxOutputTokens']}
+                minimumOverrides={{ maxOutputTokens: 128 }}
+              />
             </div>
             <label htmlFor="summary-prompt">요약 시스템 프롬프트</label>
             <textarea

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-import type { DatabaseTransaction } from '@modelnaru/database';
+import type { DatabaseTransaction, JSONValue } from '@modelnaru/database';
+import type { ProviderGenerationParameters } from './provider-parameter-policy.js';
 
 import { DatabaseService } from './database.service.js';
 
@@ -17,6 +18,7 @@ export interface SummarizationSettings {
   prompt: string;
   promptVersion: number;
   providerModelId: string | null;
+  providerParameters: ProviderGenerationParameters;
   temperature: number | null;
   topP: number | null;
   updatedAt: Date;
@@ -37,6 +39,7 @@ interface RawSettings {
   prompt: string;
   prompt_version: number;
   provider_model_id: string | null;
+  provider_parameters: ProviderGenerationParameters;
   temperature: number | null;
   top_p: number | null;
   updated_at: Date;
@@ -58,6 +61,7 @@ function mapSettings(row: RawSettings): SummarizationSettings {
     prompt: row.prompt,
     promptVersion: row.prompt_version,
     providerModelId: row.provider_model_id,
+    providerParameters: row.provider_parameters,
     temperature: row.temperature,
     topP: row.top_p,
     updatedAt: row.updated_at,
@@ -73,7 +77,7 @@ export class SummarizationRepository {
   async getSettings(): Promise<SummarizationSettings> {
     const rows = await this.database.getClient()<RawSettings[]>`
       SELECT provider_model_id, prompt, prompt_version, max_output_tokens,
-        temperature, top_p, updated_at
+        temperature, top_p, provider_parameters, updated_at
       FROM summarization_settings WHERE singleton = true
     `;
     if (!rows[0]) throw new Error('Summarization settings are missing');
@@ -98,6 +102,7 @@ export class SummarizationRepository {
     maxOutputTokens: number;
     prompt: string;
     providerModelId: string | null;
+    providerParameters: ProviderGenerationParameters;
     temperature: number | null;
     topP: number | null;
   }): Promise<SummarizationSettings> {
@@ -116,11 +121,12 @@ export class SummarizationRepository {
         UPDATE summarization_settings SET
           provider_model_id = ${input.providerModelId}, prompt = ${input.prompt},
           temperature = ${input.temperature}, top_p = ${input.topP},
+          provider_parameters = ${transaction.json(input.providerParameters as unknown as JSONValue)},
           max_output_tokens = ${input.maxOutputTokens},
           prompt_version = prompt_version + 1
         WHERE singleton = true
         RETURNING provider_model_id, prompt, prompt_version,
-          max_output_tokens, temperature, top_p, updated_at
+          max_output_tokens, temperature, top_p, provider_parameters, updated_at
       `;
       await this.audit(transaction, input, rows[0]!.prompt_version);
       return mapSettings(rows[0]!);
@@ -195,6 +201,7 @@ export class SummarizationRepository {
       providerModelId: string | null;
       temperature: number | null;
       topP: number | null;
+      providerParameters: ProviderGenerationParameters;
     },
     promptVersion: number,
   ): Promise<void> {
@@ -210,7 +217,8 @@ export class SummarizationRepository {
           providerModelId: input.providerModelId,
           temperature: input.temperature,
           topP: input.topP,
-        })},
+          providerParameters: input.providerParameters,
+        } as unknown as JSONValue)},
         ${input.ipHash}
       )
     `;

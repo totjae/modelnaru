@@ -158,6 +158,15 @@
 - 영향: 내부 요약 호출은 사용자 일일 quota를 차감하지 않고 본 답변만 요약 성공 후 예약한다. 요약이 불가능하면 원문을 자르지 않고 본 요청을 실패시킨다.
 - 추가 기준: 요약은 순차 context 압축이며 원문 retrieval을 수행하지 않는다. 따라서 현재 단계에는 embedding·vector database를 도입하지 않고 관련 원문 검색이 필요한 RAG 단계에서 별도로 결정한다.
 
+### ADR-018: Provider Manager 기반 중앙 파라미터 정책
+
+- 상태: 확정
+- 결정일: 2026-07-23
+- 결정: `provider-manager-v1.10.0.js`의 요청 builder를 기준으로 Provider catalog 전체에 parameter profile을 부여하고 일반 채팅과 자동 요약이 하나의 서버 정책을 사용한다. UI는 선택 모델이 지원하는 항목만 표시하며 선택적 값은 `Provider 기본값`과 `직접 설정`을 명시적으로 구분한다.
+- 이유: 모든 Provider에 같은 sampling 필드를 보내거나 특정 모델에서 입력을 비워 두도록 안내하면 upstream 오류와 설정 의미의 혼동이 발생하기 때문이다.
+- 대안: Provider별 화면·검증을 각각 구현, 모든 모델에 OpenAI sampling 필드 노출, upstream 400 응답에 의존.
+- 영향: OpenAI reasoning, Anthropic thinking, Gemini, NovelAI와 routed Provider 정책을 중앙에서 정규화한다. 준비 중 Provider도 profile은 갖지만 전용 인증·endpoint adapter가 완료되기 전까지 등록 가능 상태로 승격하지 않는다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

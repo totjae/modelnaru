@@ -1,16 +1,16 @@
 import type { ProviderTemplate } from './provider-catalog.js';
 import { providerDiscoveryHeaders } from './provider-discovery.js';
+import {
+  normalizeProviderParameters,
+  type ProviderGenerationParameters,
+} from './provider-parameter-policy.js';
 
 export interface ChatContextMessage {
   content: string;
   role: 'assistant' | 'user';
 }
 
-export interface ChatParameters {
-  maxOutputTokens?: number;
-  temperature?: number;
-  topP?: number;
-}
+export type ChatParameters = ProviderGenerationParameters;
 
 export type ChatEvent =
   | { branchId: string; messageId: string; modelId: string; type: 'start' }
@@ -61,18 +61,6 @@ function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/$/u, '')}/${path.replace(/^\//u, '')}`;
 }
 
-function generationParameters(parameters: ChatParameters) {
-  return {
-    ...(parameters.maxOutputTokens !== undefined
-      ? { maxOutputTokens: parameters.maxOutputTokens }
-      : {}),
-    ...(parameters.temperature !== undefined
-      ? { temperature: parameters.temperature }
-      : {}),
-    ...(parameters.topP !== undefined ? { topP: parameters.topP } : {}),
-  };
-}
-
 function usesCompletionTokenParameter(modelId: string): boolean {
   return /^(?:gpt-5|o[134](?:-|$))/iu.test(modelId);
 }
@@ -84,7 +72,11 @@ export function buildProviderStreamRequest(
     ...providerDiscoveryHeaders(input.template, input.apiKey),
     'Content-Type': 'application/json',
   };
-  const parameters = generationParameters(input.parameters);
+  const parameters = normalizeProviderParameters(
+    input.template,
+    input.modelId,
+    input.parameters,
+  );
   if (input.template.defaultFormat === 'anthropic') {
     return {
       init: {
@@ -101,6 +93,24 @@ export function buildProviderStreamRequest(
             ? { temperature: parameters.temperature }
             : {}),
           ...(parameters.topP !== undefined ? { top_p: parameters.topP } : {}),
+          ...(parameters.topK !== undefined ? { top_k: parameters.topK } : {}),
+          ...(parameters.stopSequences?.length
+            ? { stop_sequences: parameters.stopSequences }
+            : {}),
+          ...((parameters.thinkingBudget ?? 0) > 0
+            ? {
+                thinking: {
+                  budget_tokens: parameters.thinkingBudget,
+                  ...(parameters.thinkingDisplay
+                    ? { display: parameters.thinkingDisplay }
+                    : {}),
+                  type: 'enabled',
+                },
+              }
+            : {}),
+          ...(parameters.outputEffort
+            ? { output_config: { effort: parameters.outputEffort } }
+            : {}),
         }),
         headers,
         method: 'POST',
@@ -127,7 +137,39 @@ export function buildProviderStreamRequest(
             parts: [{ text: message.content }],
             role: message.role === 'assistant' ? 'model' : 'user',
           })),
-          generationConfig: parameters,
+          generationConfig: {
+            ...(parameters.maxOutputTokens !== undefined
+              ? { maxOutputTokens: parameters.maxOutputTokens }
+              : {}),
+            ...(parameters.temperature !== undefined
+              ? { temperature: parameters.temperature }
+              : {}),
+            ...(parameters.topP !== undefined ? { topP: parameters.topP } : {}),
+            ...(parameters.topK !== undefined ? { topK: parameters.topK } : {}),
+            ...(parameters.frequencyPenalty !== undefined
+              ? { frequencyPenalty: parameters.frequencyPenalty }
+              : {}),
+            ...(parameters.presencePenalty !== undefined
+              ? { presencePenalty: parameters.presencePenalty }
+              : {}),
+            ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
+            ...(parameters.stopSequences?.length
+              ? { stopSequences: parameters.stopSequences }
+              : {}),
+            ...(parameters.thinkingBudget !== undefined ||
+            parameters.thinkingLevel
+              ? {
+                  thinkingConfig: {
+                    ...(parameters.thinkingBudget !== undefined
+                      ? { thinkingBudget: parameters.thinkingBudget }
+                      : {}),
+                    ...(parameters.thinkingLevel
+                      ? { thinkingLevel: parameters.thinkingLevel }
+                      : {}),
+                  },
+                }
+              : {}),
+          },
           ...(input.systemPrompt
             ? { systemInstruction: { parts: [{ text: input.systemPrompt }] } }
             : {}),
@@ -164,6 +206,27 @@ export function buildProviderStreamRequest(
           ? { temperature: parameters.temperature }
           : {}),
         ...(parameters.topP !== undefined ? { top_p: parameters.topP } : {}),
+        ...(input.template.parameterProfile === 'novelai' &&
+        parameters.topK !== undefined
+          ? { top_k: parameters.topK }
+          : {}),
+        ...(parameters.frequencyPenalty !== undefined
+          ? { frequency_penalty: parameters.frequencyPenalty }
+          : {}),
+        ...(parameters.presencePenalty !== undefined
+          ? { presence_penalty: parameters.presencePenalty }
+          : {}),
+        ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
+        ...(parameters.stopSequences?.length
+          ? { stop: parameters.stopSequences }
+          : {}),
+        ...(parameters.reasoningEffort
+          ? { reasoning_effort: parameters.reasoningEffort }
+          : {}),
+        ...(parameters.verbosity ? { verbosity: parameters.verbosity } : {}),
+        ...(input.template.parameterProfile === 'novelai'
+          ? { enable_thinking: (parameters.thinkingBudget ?? 0) > 0 }
+          : {}),
       }),
       headers,
       method: 'POST',

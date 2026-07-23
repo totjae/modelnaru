@@ -17,6 +17,10 @@ import {
   streamProvider,
 } from './chat-streaming.js';
 import {
+  normalizeProviderParameters,
+  ProviderParameterValidationError,
+} from './provider-parameter-policy.js';
+import {
   type ChatPrincipal,
   ConversationNotFoundError,
 } from './chats.repository.js';
@@ -71,10 +75,15 @@ export class ChatExecutionService {
       await this.messages.assertConversation(principal, input.conversationId);
       await this.access.assertModelAllowed(principal, input.providerModelId);
       const runtime = await this.providers.resolve(input.providerModelId);
+      const parameters = normalizeProviderParameters(
+        runtime.template,
+        runtime.modelId,
+        input.parameters,
+      );
       if (
-        input.parameters.maxOutputTokens !== undefined &&
+        parameters.maxOutputTokens !== undefined &&
         runtime.maxOutputTokens !== null &&
-        input.parameters.maxOutputTokens > runtime.maxOutputTokens
+        parameters.maxOutputTokens > runtime.maxOutputTokens
       ) {
         throw new ChatParameterPolicyError();
       }
@@ -83,7 +92,7 @@ export class ChatExecutionService {
             assistantMessageId: input.regenerateAssistantMessageId,
             conversationId: input.conversationId,
             modelId: runtime.modelId,
-            parameters: input.parameters,
+            parameters,
             providerModelId: input.providerModelId,
             templateId: runtime.template.id,
           })
@@ -91,7 +100,7 @@ export class ChatExecutionService {
             content: input.content,
             conversationId: input.conversationId,
             modelId: runtime.modelId,
-            parameters: input.parameters,
+            parameters,
             providerModelId: input.providerModelId,
             templateId: runtime.template.id,
           });
@@ -145,7 +154,7 @@ export class ChatExecutionService {
           baseUrl: runtime.baseUrl,
           messages: context,
           modelId: runtime.modelId,
-          parameters: input.parameters,
+          parameters,
           signal: controller.signal,
           systemPrompt: turn.systemPrompt,
           template: runtime.template,
@@ -299,7 +308,10 @@ export class ChatExecutionService {
         retryable: false,
       };
     }
-    if (error instanceof ChatParameterPolicyError) {
+    if (
+      error instanceof ChatParameterPolicyError ||
+      error instanceof ProviderParameterValidationError
+    ) {
       return {
         code: 'CHAT_PARAMETER_INVALID',
         message: 'A parameter exceeds the selected model limit.',

@@ -129,7 +129,22 @@ function parseParameters(value: unknown): ChatParameters | undefined {
   if (value === undefined) return {};
   const input = recordBody(value);
   if (!input) return undefined;
-  const allowed = new Set(['maxOutputTokens', 'temperature', 'topP']);
+  const allowed = new Set([
+    'frequencyPenalty',
+    'maxOutputTokens',
+    'outputEffort',
+    'presencePenalty',
+    'reasoningEffort',
+    'seed',
+    'stopSequences',
+    'temperature',
+    'thinkingBudget',
+    'thinkingDisplay',
+    'thinkingLevel',
+    'topK',
+    'topP',
+    'verbosity',
+  ]);
   if (Object.keys(input).some((key) => !allowed.has(key))) return undefined;
   const output: ChatParameters = {};
   if (input.maxOutputTokens !== undefined) {
@@ -157,6 +172,55 @@ function parseParameters(value: unknown): ChatParameters | undefined {
       return undefined;
     }
     output.topP = input.topP;
+  }
+  for (const key of ['frequencyPenalty', 'presencePenalty'] as const) {
+    const parameter = input[key];
+    if (parameter !== undefined) {
+      if (
+        typeof parameter !== 'number' ||
+        !Number.isFinite(parameter) ||
+        parameter < -2 ||
+        parameter > 2
+      )
+        return undefined;
+      output[key] = parameter;
+    }
+  }
+  for (const [key, minimum, maximum] of [
+    ['topK', 0, 1_000],
+    ['seed', 0, 2_147_483_647],
+    ['thinkingBudget', 0, 131_072],
+  ] as const) {
+    const parameter = input[key];
+    if (parameter !== undefined && !validInteger(parameter, minimum, maximum))
+      return undefined;
+    if (parameter !== undefined) output[key] = parameter;
+  }
+  for (const key of [
+    'outputEffort',
+    'reasoningEffort',
+    'thinkingDisplay',
+    'thinkingLevel',
+    'verbosity',
+  ] as const) {
+    const parameter = input[key];
+    if (
+      parameter !== undefined &&
+      (typeof parameter !== 'string' || parameter.length > 32)
+    )
+      return undefined;
+    if (typeof parameter === 'string') output[key] = parameter;
+  }
+  if (input.stopSequences !== undefined) {
+    if (
+      !Array.isArray(input.stopSequences) ||
+      input.stopSequences.length > 16 ||
+      input.stopSequences.some(
+        (item) => typeof item !== 'string' || item.length > 500,
+      )
+    )
+      return undefined;
+    output.stopSequences = input.stopSequences as string[];
   }
   return output;
 }

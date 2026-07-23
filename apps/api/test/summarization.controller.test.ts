@@ -46,6 +46,7 @@ describe('SummarizationController', () => {
       maxOutputTokens: 1024,
       prompt: '이전 대화에서 중요한 사실과 미해결 작업을 정확히 요약하세요.',
       providerModelId: null,
+      providerParameters: {},
       temperature: 0.2,
       topP: null,
     });

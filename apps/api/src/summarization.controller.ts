@@ -15,6 +15,11 @@ import { AdminMutationGuard, AdminSessionGuard } from './auth.guard.js';
 import { AuthService } from './auth.service.js';
 import { SummarizationModelUnavailableError } from './summarization.repository.js';
 import { SummarizationService } from './summarization.service.js';
+import {
+  ProviderParameterValidationError,
+  type ProviderGenerationParameters,
+} from './provider-parameter-policy.js';
+import { ChatProviderUnavailableError } from './chat-provider.service.js';
 
 interface ResponseLike {
   setHeader(name: string, value: string): void;
@@ -24,6 +29,29 @@ function uuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
     value,
   );
+}
+
+function providerParameters(
+  value: unknown,
+): ProviderGenerationParameters | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined;
+  const input = value as Record<string, unknown>;
+  const allowed = new Set([
+    'frequencyPenalty',
+    'outputEffort',
+    'presencePenalty',
+    'reasoningEffort',
+    'seed',
+    'stopSequences',
+    'thinkingBudget',
+    'thinkingDisplay',
+    'thinkingLevel',
+    'topK',
+    'verbosity',
+  ]);
+  if (Object.keys(input).some((key) => !allowed.has(key))) return undefined;
+  return input;
 }
 
 @Controller('admin/summarization')
@@ -63,6 +91,9 @@ export class SummarizationController {
     const maxOutputTokens = record?.maxOutputTokens;
     const temperature = record?.temperature;
     const topP = record?.topP;
+    const parsedProviderParameters = providerParameters(
+      record?.providerParameters ?? {},
+    );
     if (
       prompt.length < 20 ||
       prompt.length > 20_000 ||
@@ -81,7 +112,8 @@ export class SummarizationController {
         (typeof topP !== 'number' ||
           !Number.isFinite(topP) ||
           topP < 0 ||
-          topP > 1))
+          topP > 1)) ||
+      !parsedProviderParameters
     ) {
       throw new HttpException(
         {
@@ -102,6 +134,7 @@ export class SummarizationController {
         maxOutputTokens,
         prompt,
         providerModelId,
+        providerParameters: parsedProviderParameters,
         temperature,
         topP,
       });
@@ -115,6 +148,28 @@ export class SummarizationController {
             },
           },
           HttpStatus.CONFLICT,
+        );
+      }
+      if (error instanceof ChatProviderUnavailableError) {
+        throw new HttpException(
+          {
+            error: {
+              code: 'SUMMARIZATION_MODEL_UNAVAILABLE',
+              message: 'The selected summary model is unavailable.',
+            },
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (error instanceof ProviderParameterValidationError) {
+        throw new HttpException(
+          {
+            error: {
+              code: 'SUMMARIZATION_PARAMETER_INVALID',
+              message: error.message,
+            },
+          },
+          HttpStatus.BAD_REQUEST,
         );
       }
       throw error;

@@ -13,6 +13,12 @@ import { csrfToken } from './client-auth';
 import { selectConversationModel } from './chat-model-selection';
 import { responseAlternatives } from './chat-response-navigation';
 import { isNearScrollEnd } from './chat-scroll';
+import {
+  ProviderParameterFields,
+  providerParameterRequest,
+  type ParameterPolicy,
+  type ParameterValues,
+} from './provider-parameter-fields';
 
 interface AllowedModel {
   connectionName: string;
@@ -20,6 +26,7 @@ interface AllowedModel {
   id: string;
   modelId: string;
   templateId: string;
+  parameterPolicy?: ParameterPolicy;
 }
 
 interface ConversationSummary {
@@ -186,9 +193,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [assistantId, setAssistantId] = useState<string | null>(null);
-  const [temperature, setTemperature] = useState('');
-  const [topP, setTopP] = useState('');
-  const [maxOutputTokens, setMaxOutputTokens] = useState('');
+  const [parameterValues, setParameterValues] = useState<ParameterValues>({});
   const [conversationListOpen, setConversationListOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -400,14 +405,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   }
 
   const parameters = useMemo(() => {
-    const value: Record<string, number> = {};
-    if (temperature !== '') value.temperature = Number(temperature);
-    if (topP !== '') value.topP = Number(topP);
-    if (maxOutputTokens !== '') {
-      value.maxOutputTokens = Number(maxOutputTokens);
-    }
-    return value;
-  }, [maxOutputTokens, temperature, topP]);
+    return providerParameterRequest(
+      parameterValues,
+      models.find((model) => model.id === selectedModel)?.parameterPolicy,
+    );
+  }, [models, parameterValues, selectedModel]);
 
   const latestMessage = messages.at(-1);
   const alternatives = useMemo(
@@ -856,7 +858,10 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
               모델
               <select
                 value={selectedModel}
-                onChange={(event) => setSelectedModel(event.target.value)}
+                onChange={(event) => {
+                  setSelectedModel(event.target.value);
+                  setParameterValues({});
+                }}
                 disabled={busy}
               >
                 {models.map((model) => (
@@ -869,40 +874,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             </label>
             <fieldset className="parameter-box">
               <legend>생성 파라미터</legend>
-              <div className="parameter-grid">
-                <label>
-                  Temperature
-                  <input
-                    type="number"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={temperature}
-                    onChange={(event) => setTemperature(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Top P
-                  <input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={topP}
-                    onChange={(event) => setTopP(event.target.value)}
-                  />
-                </label>
-                <label>
-                  최대 출력 토큰
-                  <input
-                    type="number"
-                    min="1"
-                    max="131072"
-                    value={maxOutputTokens}
-                    onChange={(event) => setMaxOutputTokens(event.target.value)}
-                  />
-                </label>
-              </div>
+              <ProviderParameterFields
+                policy={
+                  models.find((model) => model.id === selectedModel)
+                    ?.parameterPolicy
+                }
+                values={parameterValues}
+                onChange={setParameterValues}
+              />
             </fieldset>
             <label>
               이전 메시지 수

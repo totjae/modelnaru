@@ -523,6 +523,9 @@ Provider Manager에는 모델 그룹, manual·sequential·on-error 전략과 조
 - `provider-manager-v1.10.0.js`와 이 문서의 전체 서비스 이름을 서버 내장 카탈로그로 보존했다.
 - LLM Gateway, OpenAI, Anthropic, Google AI Studio는 고정 HTTPS 템플릿, API 키 연결 시험과 모델 목록 동기화를 지원한다.
 - 나머지 제공자는 카탈로그에 `준비 중` 또는 `시험 예정`으로 표시하며 아직 자격증명을 받지 않는다.
+- 전체 내장·registry catalog 항목에는 `parameterProfile`을 지정했다. OpenAI 호환 template은 공통 정책을 사용하고 Gemini Express·NovelAI는 전용 정책, Vertex·Bedrock·Copilot은 모델 계열별 routed 정책을 사용한다.
+- 모델 선택 API는 계산된 parameter policy를 함께 반환한다. Web은 지원 항목만 표시하고 서버는 같은 정책으로 범위·enum·상호 배타 조건을 다시 검증한다.
+- 이 parameter 대응은 준비 중 Provider의 향후 adapter가 같은 요청 계약을 재사용할 수 있게 한 것이며, 전용 인증·endpoint 구현이 끝나지 않은 Provider를 등록 가능 상태로 승격한다는 뜻은 아니다.
 - API 키는 AES-256-GCM으로 암호화하고 연결 목록에는 선택적 마지막 네 글자 hint만 반환한다.
 - 신규 모델은 기본 비활성화하며 관리자가 모델별로 활성화할 수 있다.
 - 연결 물리 삭제 대신 비활성화하고 동기화에서 사라진 모델도 unavailable 상태로 보존한다.

@@ -1,4 +1,7 @@
 import { Injectable } from '@nestjs/common';
+
+import { providerTemplateById } from './provider-catalog.js';
+import { providerParameterPolicy } from './provider-parameter-policy.js';
 import { hash, type Algorithm } from '@node-rs/argon2';
 
 import type { AuthenticatedPrincipal } from './auth.service.js';
@@ -101,7 +104,23 @@ export class AccessService {
         'No user model workspace is available.',
       );
     }
-    return { models: await this.repository.allowedModels(principal) };
+    const models = await this.repository.allowedModels(principal);
+    return {
+      models: models.map((model) => {
+        const template = providerTemplateById(model.templateId);
+        return {
+          ...model,
+          ...(template
+            ? {
+                parameterPolicy: providerParameterPolicy(
+                  template,
+                  model.modelId,
+                ),
+              }
+            : {}),
+        };
+      }),
+    };
   }
 
   async reserveDailyRequest(

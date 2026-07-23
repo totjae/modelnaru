@@ -3,6 +3,12 @@ import { Injectable } from '@nestjs/common';
 import type { ChatTurnRecord } from './chat-messages.repository.js';
 import { ChatProviderService } from './chat-provider.service.js';
 import { streamProvider } from './chat-streaming.js';
+import { providerTemplateById } from './provider-catalog.js';
+import {
+  normalizeProviderParameters,
+  providerParameterPolicy,
+  type ProviderGenerationParameters,
+} from './provider-parameter-policy.js';
 import {
   SummarizationRepository,
   type SummarizationSettings,
@@ -30,14 +36,34 @@ export class SummarizationService {
   ) {}
 
   async adminState(): Promise<{
-    models: SummaryModelOption[];
+    models: Array<
+      SummaryModelOption & {
+        parameterPolicy?: ReturnType<typeof providerParameterPolicy>;
+      }
+    >;
     settings: SummarizationSettings;
   }> {
     const [settings, models] = await Promise.all([
       this.repository.getSettings(),
       this.repository.listModels(),
     ]);
-    return { models, settings };
+    return {
+      models: models.map((model) => {
+        const template = providerTemplateById(model.templateId);
+        return {
+          ...model,
+          ...(template
+            ? {
+                parameterPolicy: providerParameterPolicy(
+                  template,
+                  model.modelId,
+                ),
+              }
+            : {}),
+        };
+      }),
+      settings,
+    };
   }
 
   async updateAdminSettings(input: {
@@ -48,8 +74,45 @@ export class SummarizationService {
     providerModelId: string | null;
     temperature: number | null;
     topP: number | null;
+    providerParameters: ProviderGenerationParameters;
   }): Promise<{ settings: SummarizationSettings }> {
-    return { settings: await this.repository.updateSettings(input) };
+    if (!input.providerModelId) {
+      return {
+        settings: await this.repository.updateSettings({
+          ...input,
+          providerParameters: {},
+          temperature: null,
+          topP: null,
+        }),
+      };
+    }
+    const runtime = await this.providers.resolve(input.providerModelId);
+    const normalized = normalizeProviderParameters(
+      runtime.template,
+      runtime.modelId,
+      {
+        ...input.providerParameters,
+        maxOutputTokens: input.maxOutputTokens,
+        ...(input.temperature === null
+          ? {}
+          : { temperature: input.temperature }),
+        ...(input.topP === null ? {} : { topP: input.topP }),
+      },
+    );
+    const temperature = normalized.temperature ?? null;
+    const topP = normalized.topP ?? null;
+    const providerParameters = { ...normalized };
+    delete providerParameters.maxOutputTokens;
+    delete providerParameters.temperature;
+    delete providerParameters.topP;
+    return {
+      settings: await this.repository.updateSettings({
+        ...input,
+        providerParameters,
+        temperature,
+        topP,
+      }),
+    };
   }
 
   async fitContext(input: {
@@ -117,16 +180,21 @@ export class SummarizationService {
         baseUrl: runtime.baseUrl,
         messages: [{ content: transcript, role: 'user' }],
         modelId: runtime.modelId,
-        parameters: {
-          maxOutputTokens: Math.min(
-            settings.maxOutputTokens,
-            runtime.maxOutputTokens ?? settings.maxOutputTokens,
-          ),
-          ...(settings.temperature !== null
-            ? { temperature: settings.temperature }
-            : {}),
-          ...(settings.topP !== null ? { topP: settings.topP } : {}),
-        },
+        parameters: normalizeProviderParameters(
+          runtime.template,
+          runtime.modelId,
+          {
+            maxOutputTokens: Math.min(
+              settings.maxOutputTokens,
+              runtime.maxOutputTokens ?? settings.maxOutputTokens,
+            ),
+            ...(settings.temperature !== null
+              ? { temperature: settings.temperature }
+              : {}),
+            ...(settings.topP !== null ? { topP: settings.topP } : {}),
+            ...settings.providerParameters,
+          },
+        ),
         signal: controller.signal,
         systemPrompt: settings.prompt,
         template: runtime.template,
