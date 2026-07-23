@@ -123,6 +123,16 @@
 - 동시 PDF 파싱 수는 `limits.maximumPdfWorkers`로 제한해 압축 해제와 텍스트 추출이 CPU·메모리를 동시에 점유하지 않게 한다.
 - 이미지는 확장자·MIME·실제 signature와 가로·세로를 함께 검사하고 40,000,000 decoded pixel 기본 상한을 적용한다.
 - 원본 image base64는 API response·log·DB에 복제하지 않고 Provider 요청을 만드는 시점에 비공개 storage에서 읽는다.
+
+### 6.9 session 한정 요청·응답 기록
+
+- 일반 사용자와 게스트는 대화 설정에서 최근 0~3개의 실제 Provider 전송 기록을 볼 수 있다.
+- 기록은 현재 API process 메모리에만 있고 PostgreSQL·Valkey·파일·관리자 로그에 저장하지 않는다.
+- Authorization, API key 계열 header, URL query의 key·token·secret과 이미지 base64를 저장 전에 제거한다.
+- 대화 소유권과 현재 session ID를 함께 검사하며 같은 계정의 다른 브라우저 session과도 공유하지 않는다.
+- 단일 기록 2MB, session 전체 30개를 넘지 못한다.
+- 로그아웃·만료·session 제한 폐기·credential 변경·계정 및 대화 삭제·게스트 종료 시 관련 기록을 즉시 삭제한다.
+- 관리자 통합 로그는 운영 진단 metadata만 취급하고 사용자 메시지, AI 답변, system prompt와 첨부 본문을 저장하지 않는다.
 - 관리자에게 이미지 입력이 명시적으로 허용된 모델만 원본 이미지를 외부 Provider로 전송한다.
 
 ## 7. 오류·경계 조건
@@ -141,6 +151,7 @@
 - 인증 cookie 속성, TOTP window, session 만료·폐기와 CSRF 거부 시험이 통과한다.
 - 같은 공유 코드를 사용한 게스트 사이의 session·대화·첨부 소유권 격리 시험이 통과한다.
 - 게스트 코드·session 생성 속도 제한과 일일 호출 제한이 동시 요청에서도 우회되지 않는다.
+- session 전송 기록에서 인증 정보와 이미지 base64가 마스킹되고 다른 session·주체가 조회할 수 없다.
 - 채팅 mutation과 취소는 session·CSRF·대화 소유권을 검증하며 응답 event에 API 키와 upstream 오류 본문이 없다.
 - cascade 삭제할 원본 경로는 DB cleanup queue에 먼저 기록하고 파일 삭제 성공 후에만 queue에서 제거해 장애 중에도 재시도한다.
 - 고아 파일 정리는 UUID object key 패턴의 일반 파일만 대상으로 하며 symlink·알 수 없는 디렉터리·24시간 이내 파일을 건드리지 않는다.

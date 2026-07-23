@@ -8,11 +8,14 @@ import { ServerSettings } from './server-settings';
 import { SummarizationManager } from './summarization-manager';
 import { UsageDashboard } from './usage-dashboard';
 import { UserManager } from './user-manager';
+import { AdminLogViewer } from './admin-log-viewer';
 
-type AdminTab = 'guest' | 'memory' | 'providers' | 'server' | 'usage' | 'users';
+type AdminTab =
+  'guest' | 'logs' | 'memory' | 'providers' | 'server' | 'usage' | 'users';
 
 const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'usage', label: 'Usage' },
+  { id: 'logs', label: '로그' },
   { id: 'users', label: '사용자' },
   { id: 'guest', label: '게스트' },
   { id: 'providers', label: '프로바이더' },
@@ -49,6 +52,7 @@ export function AdminWorkspace() {
         role="tabpanel"
       >
         {tab === 'usage' && <UsageDashboard />}
+        {tab === 'logs' && <AdminLogViewer />}
         {tab === 'users' && (
           <>
             <UserManager />

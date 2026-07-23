@@ -162,7 +162,7 @@ export class AttachmentLifecycleRepository {
     });
   }
 
-  async purgeExpiredGuests(): Promise<number> {
+  async purgeExpiredGuests(): Promise<string[]> {
     const rows = await this.database.getClient()<Array<{ id: string }>>`
       DELETE FROM guest_principals
       WHERE deleted_at IS NOT NULL
@@ -170,7 +170,7 @@ export class AttachmentLifecycleRepository {
         OR absolute_expires_at <= now()
       RETURNING id
     `;
-    return rows.length;
+    return rows.map((row) => row.id);
   }
 
   async queued(limit: number): Promise<AttachmentCleanupEntry[]> {

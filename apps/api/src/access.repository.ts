@@ -44,6 +44,7 @@ export interface GuestAccessRecord {
   maximumActiveSessions: number;
   permissions: ModelPermissionRecord[];
   resetTimezone: string;
+  requestTraceEnabled: boolean;
   sessionDailyRequestLimit: number;
 }
 
@@ -70,6 +71,7 @@ export interface GuestAccessUpdateInput extends AccessUpdateInput {
   isEnabled: boolean;
   maximumActiveSessions: number;
   resetTimezone: string;
+  requestTraceEnabled: boolean;
 }
 
 interface RawAccessModelRow {
@@ -109,6 +111,7 @@ interface RawGuestAccessRow {
   is_enabled: boolean;
   maximum_active_sessions: number;
   reset_timezone: string;
+  request_trace_enabled: boolean;
   session_daily_request_limit: number;
 }
 
@@ -232,6 +235,7 @@ export class AccessRepository {
         g.maximum_active_sessions, g.session_daily_request_limit,
         g.global_daily_request_limit, g.idle_timeout_minutes,
         g.absolute_timeout_hours, g.reset_timezone, g.file_upload_enabled,
+        g.request_trace_enabled,
         (
           SELECT count(*)::int FROM guest_principals p
           WHERE p.deleted_at IS NULL
@@ -261,6 +265,7 @@ export class AccessRepository {
         maximumActiveSessions: guest.maximum_active_sessions,
         permissions: guestPermissionRows.map(mapPermission),
         resetTimezone: guest.reset_timezone,
+        requestTraceEnabled: guest.request_trace_enabled,
         sessionDailyRequestLimit: guest.session_daily_request_limit,
       },
       models: models.map((row) => ({
@@ -359,7 +364,8 @@ export class AccessRepository {
           idle_timeout_minutes = ${input.idleTimeoutMinutes},
           absolute_timeout_hours = ${input.absoluteTimeoutHours},
           reset_timezone = ${input.resetTimezone},
-          file_upload_enabled = ${input.fileUploadEnabled}
+          file_upload_enabled = ${input.fileUploadEnabled},
+          request_trace_enabled = ${input.requestTraceEnabled}
         WHERE singleton = true
       `;
       await transaction`DELETE FROM guest_model_permissions`;
@@ -383,6 +389,7 @@ export class AccessRepository {
           isEnabled: input.isEnabled,
           maximumActiveSessions: input.maximumActiveSessions,
           modelCount: input.permissions.length,
+          requestTraceEnabled: input.requestTraceEnabled,
           sessionDailyRequestLimit: input.dailyRequestLimit,
           terminatedExistingSessions: true,
         },

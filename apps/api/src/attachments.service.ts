@@ -36,6 +36,7 @@ import {
   imageMediaType,
   ImageTypeError,
 } from './image-attachments.js';
+import { AdminLogsService } from './admin-logs.service.js';
 
 export class FileInputError extends Error {}
 export class FileStorageLowError extends Error {}
@@ -63,6 +64,9 @@ export class AttachmentsService {
       retentionDays: () =>
         Promise.resolve(loaded.config.storage.attachmentRetentionDays),
     } as AttachmentLifecycleService,
+    private readonly logs: AdminLogsService = {
+      record: () => Promise.resolve(),
+    } as unknown as AdminLogsService,
   ) {}
 
   async upload(
@@ -121,7 +125,7 @@ export class AttachmentsService {
       await mkdir(dirname(finalPath), { recursive: true });
       await rename(temporaryPath, finalPath);
       finalCreated = true;
-      return await this.repository.createReady(principal, {
+      const created = await this.repository.createReady(principal, {
         byteSize,
         conversationId: input.conversationId,
         encoding: 'encoding' in extracted ? extracted.encoding : null,
@@ -138,10 +142,41 @@ export class AttachmentsService {
         retentionDays,
         storageKey,
       });
+      await this.logs.record({
+        action: 'file.upload_completed',
+        actorId: principal.id,
+        actorLabel:
+          principal.type === 'user'
+            ? principal.username
+            : `guest-${principal.id.slice(0, 8)}`,
+        actorType: principal.type,
+        category: 'file',
+        metadata: {
+          byteSize,
+          fileKind: parsedName.fileKind,
+          mediaType,
+          pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
+        },
+        targetId: created.id,
+        targetType: 'attachment',
+      });
+      return created;
     } catch (error) {
       await rm(finalCreated ? finalPath : temporaryPath, {
         force: true,
       }).catch(() => undefined);
+      await this.logs.record({
+        action: 'file.upload_failed',
+        actorId: principal.id,
+        actorType: principal.type,
+        category: 'file',
+        errorCode:
+          error instanceof Error ? error.constructor.name.slice(0, 64) : null,
+        level: 'warn',
+        metadata: { fileKind: parsedName.fileKind, mediaType },
+        status: 'failed',
+        targetType: 'attachment',
+      });
       if (error instanceof TextAttachmentTooLargeError) {
         throw new FileTextTooLargeError();
       }
@@ -184,6 +219,14 @@ export class AttachmentsService {
       attachmentId,
     );
     await this.lifecycle.flushQueuedFiles();
+    await this.logs.record({
+      action: 'file.pending_deleted',
+      actorId: principalValue.type === 'admin' ? null : principalValue.id,
+      actorType: principalValue.type,
+      category: 'file',
+      targetId: attachmentId,
+      targetType: 'attachment',
+    });
   }
 
   listPending(

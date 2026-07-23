@@ -28,6 +28,7 @@ import {
   type CreateConversationInput,
   type UpdateConversationInput,
 } from './chats.repository.js';
+import { RequestTraceService } from './request-trace.service.js';
 
 interface ResponseLike {
   end?(): void;
@@ -82,6 +83,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     input.systemPrompt === undefined ? '' : systemPrompt(input.systemPrompt);
   const historyMessageLimit = input.historyMessageLimit ?? 0;
   const contextTokenLimit = input.contextTokenLimit ?? 100_000;
+  const requestTraceLimit = input.requestTraceLimit ?? 3;
   const defaultProviderModelId =
     input.defaultProviderModelId === undefined
       ? null
@@ -95,6 +97,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     parsedSystemPrompt === undefined ||
     !validInteger(historyMessageLimit, 0, 10_000) ||
     !validInteger(contextTokenLimit, 1_000, 2_000_000) ||
+    !validInteger(requestTraceLimit, 0, 3) ||
     (defaultProviderModelId !== null &&
       (typeof defaultProviderModelId !== 'string' ||
         !UUID.test(defaultProviderModelId))) ||
@@ -107,6 +110,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     defaultProviderModelId,
     generationParameters,
     historyMessageLimit,
+    requestTraceLimit,
     systemPrompt: parsedSystemPrompt,
     title: parsedTitle,
   };
@@ -135,6 +139,10 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
       return undefined;
     }
     output.contextTokenLimit = input.contextTokenLimit;
+  }
+  if (input.requestTraceLimit !== undefined) {
+    if (!validInteger(input.requestTraceLimit, 0, 3)) return undefined;
+    output.requestTraceLimit = input.requestTraceLimit;
   }
   if (input.defaultProviderModelId !== undefined) {
     if (
@@ -313,6 +321,11 @@ export class ChatsController {
   constructor(
     private readonly chats: ChatsService,
     private readonly execution: ChatExecutionService,
+    private readonly traces: RequestTraceService = {
+      applyConversationLimit: () => undefined,
+      clearSessionConversation: () => undefined,
+      list: () => Promise.resolve([]),
+    } as unknown as RequestTraceService,
   ) {}
 
   @Get()
@@ -384,11 +397,19 @@ export class ChatsController {
     const input = parseUpdate(body);
     if (!UUID.test(id) || !input) this.invalidInput();
     try {
-      return await this.chats.update(
+      const updated = await this.chats.update(
         request.authenticatedSession!.principal,
         id,
         input,
       );
+      if (input.requestTraceLimit !== undefined) {
+        this.traces.applyConversationLimit(
+          request.authenticatedSession!.row.id,
+          id,
+          input.requestTraceLimit,
+        );
+      }
+      return updated;
     } catch (error) {
       this.mapError(error);
     }
@@ -459,8 +480,10 @@ export class ChatsController {
     await this.execution.execute(
       {
         ...input,
+        absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
         conversationId: id,
         principal: request.authenticatedSession!.principal,
+        sessionId: request.authenticatedSession!.row.id,
       },
       emit,
       disconnected.signal,
@@ -502,6 +525,38 @@ export class ChatsController {
     }
   }
 
+  @Get(':id/traces')
+  @UseGuards(AuthenticatedSessionGuard)
+  async tracesForConversation(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id)) this.invalidInput();
+    await this.chats.detail(request.authenticatedSession!.principal, id);
+    return {
+      traces: this.traces.list(request.authenticatedSession!.row.id, id),
+    };
+  }
+
+  @Delete(':id/traces')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AuthenticatedMutationGuard)
+  async clearTraces(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ): Promise<void> {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id)) this.invalidInput();
+    await this.chats.detail(request.authenticatedSession!.principal, id);
+    this.traces.clearSessionConversation(
+      request.authenticatedSession!.row.id,
+      id,
+    );
+  }
+
   @Post(':id/messages/:messageId/regenerate')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthenticatedMutationGuard)
@@ -532,9 +587,11 @@ export class ChatsController {
     await this.execution.regenerate(
       {
         ...input,
+        absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
         assistantMessageId: messageId,
         conversationId: id,
         principal: request.authenticatedSession!.principal,
+        sessionId: request.authenticatedSession!.row.id,
       },
       emit,
       disconnected.signal,

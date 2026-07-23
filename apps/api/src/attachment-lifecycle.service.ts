@@ -13,7 +13,9 @@ import {
   AttachmentLifecycleRepository,
   type AttachmentLifecycleSettings,
 } from './attachment-lifecycle.repository.js';
+import { AdminLogsService } from './admin-logs.service.js';
 import { DatabaseService } from './database.service.js';
+import { RequestTraceService } from './request-trace.service.js';
 import { MODELNARU_CONFIG } from './tokens.js';
 
 export interface AttachmentCleanupResult {
@@ -44,6 +46,12 @@ export class AttachmentLifecycleService
     private readonly database: DatabaseService = {
       ready: () => Promise.resolve(),
     } as DatabaseService,
+    private readonly logs: AdminLogsService = {
+      record: () => Promise.resolve(),
+    } as unknown as AdminLogsService,
+    private readonly traces: RequestTraceService = {
+      clearPrincipal: () => undefined,
+    } as unknown as RequestTraceService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -123,7 +131,11 @@ export class AttachmentLifecycleService
   }
 
   private async performCleanup(): Promise<AttachmentCleanupResult> {
-    const guestCount = await this.repository.purgeExpiredGuests();
+    const expiredGuestIds = await this.repository.purgeExpiredGuests();
+    for (const guestId of expiredGuestIds) {
+      this.traces.clearPrincipal('guest', guestId);
+    }
+    const guestCount = expiredGuestIds.length;
     let expiredCount = 0;
     for (let batch = 0; batch < 20; batch += 1) {
       const queued = await this.repository.queueExpired(500);
@@ -140,6 +152,15 @@ export class AttachmentLifecycleService
       orphanCount: orphans.deletedCount,
     };
     await this.repository.recordCleanup(result);
+    await this.logs.record({
+      action: 'file.cleanup_completed',
+      actorType: 'system',
+      category: 'system',
+      level: result.failedCount > 0 ? 'warn' : 'info',
+      metadata: result,
+      status: result.failedCount > 0 ? 'failed' : 'success',
+      targetType: 'attachment_storage',
+    });
     this.logger.log(
       `Attachment cleanup completed: expired=${expiredCount}, deleted=${result.deletedCount}, failed=${result.failedCount}, guests=${guestCount}, orphans=${orphans.deletedCount}`,
     );

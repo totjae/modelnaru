@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가하고 열한 번째 migration은 텍스트 attachment를 추가한다. 열두 번째 migration은 PDF 페이지 metadata를, 열세 번째 migration은 이미지 크기와 모델별 이미지 입력 capability를 추가한다. 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가하고 열한 번째부터 열네 번째까지 attachment 종류와 수명 관리를 추가한다. `0015_admin_logs_and_request_traces.sql`은 대화별 session 전송 기록 수, 게스트 허용 설정, 운영 로그와 로그 보관 설정을 추가한다.
 
 ## 3. Migration 규칙
 
@@ -153,7 +153,7 @@ Index:
 
 ## 11. `conversations`
 
-`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다. `0010_conversation_generation_defaults.sql`은 대화별 `default_provider_model_id`와 검증된 `generation_parameters` JSON object를 추가한다.
+`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다. `0010_conversation_generation_defaults.sql`은 대화별 `default_provider_model_id`와 검증된 `generation_parameters` JSON object를 추가한다. `0015`는 0~3 범위의 `request_trace_limit`을 기본 3으로 추가한다. 이 column은 메모리 기록의 개수만 제어하며 요청·응답 본문 자체는 DB에 저장하지 않는다.
 
 - `user_id`와 `guest_id`는 각각 소유 주체 삭제 시 cascade한다.
 - 소유 주체별 `(owner_id, updated_at DESC)` partial index로 목록을 조회한다.
@@ -235,6 +235,16 @@ Index:
 
 `attachment_settings`는 보관 일수와 최근 cleanup 결과를 관리한다. `attachment_cleanup_queue`는 파일시스템 삭제가 성공한 뒤에만 제거한다. 만료 attachment는 추출문과 후속 포함 설정을 제거하되 파일명·크기·페이지·해상도 metadata를 유지한다.
 
+## 16.1 관리자 운영 로그와 보관 설정
+
+`0015_admin_logs_and_request_traces.sql`은 다음 table과 설정을 추가한다.
+
+- `operational_logs`: `security`, `file`, `system` 범주의 수준·작업·상태·주체·대상·Provider/model snapshot·일반화 오류·처리 시간·안전한 JSON metadata를 저장한다.
+- `log_settings`: singleton 행으로 AI·보안·감사·파일·시스템 범주별 보관 일수와 최근 cleanup 시각·삭제 건수를 저장한다.
+- `guest_settings.request_trace_enabled`: 게스트의 session 한정 전송 기록 허용 여부이며 기본 true다.
+- 범주·발생 시각, 작업·발생 시각과 오류 발생 시각 partial index로 관리자 최신순 조회를 지원한다.
+- 전송 기록 원문은 `operational_logs`나 별도 table에 저장하지 않는다.
+
 ## 17. 오류·경계 조건
 
 - 적용 기록은 있는데 repository에 migration 파일이 없으면 downgrade 또는 불완전 배포로 보고 실패한다.
@@ -264,6 +274,7 @@ Index:
 - 요약 설정 singleton, prompt 범위와 요약 범위 message FK·중복 방지 index가 존재
 - 사용량 원장은 본문 없이 주체·모델 snapshot, 상태, token과 처리 시간만 저장하고 원본 삭제 후에도 유지됨
 - attachment가 대화·message 복합 FK로 격리되고 이름·종류·크기·storage key·추출문·상태 제약과 만료 index를 가짐
+- 운영 로그 범주·수준·상태와 보관 기간에 DB 제약이 있고 대화별 전송 기록 수는 0~3으로 제한됨
 
 ## 19. 미결정·보류 항목
 

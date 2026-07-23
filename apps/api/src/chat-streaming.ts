@@ -33,6 +33,7 @@ export interface ProviderStreamInput {
   baseUrl: string;
   messages: ChatContextMessage[];
   modelId: string;
+  onRawEvent?: (document: unknown) => void;
   parameters: ChatParameters;
   signal: AbortSignal;
   systemPrompt: string;
@@ -55,7 +56,7 @@ export class ChatUpstreamError extends Error {
   }
 }
 
-interface UpstreamRequest {
+export interface UpstreamRequest {
   init: RequestInit;
   protocol: ProviderProtocol;
   url: string;
@@ -461,6 +462,7 @@ export async function* streamProvider(
       } catch {
         throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
       }
+      input.onRawEvent?.(document);
       for (const event of normalizeProviderStreamEvent(
         request.protocol,
         document,

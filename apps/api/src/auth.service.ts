@@ -3,6 +3,7 @@ import { verify } from '@node-rs/argon2';
 
 import type { LoadedConfig } from '@modelnaru/config';
 
+import { AdminLogsService } from './admin-logs.service.js';
 import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import {
   constantTimeBufferEqual,
@@ -22,6 +23,7 @@ import {
   type UserCredentialRow,
 } from './auth.repository.js';
 import { MODELNARU_CONFIG } from './tokens.js';
+import { RequestTraceService } from './request-trace.service.js';
 
 export type AuthErrorCode =
   | 'AUTH_ADMIN_REQUIRED'
@@ -94,6 +96,14 @@ export class AuthService {
     private readonly attachmentLifecycle: AttachmentLifecycleService = {
       flushQueuedFiles: () => Promise.resolve(),
     } as AttachmentLifecycleService,
+    private readonly traces: RequestTraceService = {
+      clearSession: () => undefined,
+      retainPrincipalSessions: () => undefined,
+      touchSession: () => undefined,
+    } as unknown as RequestTraceService,
+    private readonly logs: AdminLogsService = {
+      record: () => Promise.resolve(),
+    } as unknown as AdminLogsService,
   ) {
     const admin = loadedConfig.config.admin;
     this.adminAccountKey = `admin:${admin.username.toLowerCase()}`;
@@ -108,6 +118,9 @@ export class AuthService {
     ).toString('hex');
     const retryAfter = this.rateLimiter.retryAfterSeconds(rateKey);
     if (retryAfter > 0) {
+      await this.securityLog('auth.login_rate_limited', input.username, {
+        status: 'denied',
+      });
       throw new AuthError(
         'AUTH_RATE_LIMITED',
         429,
@@ -121,6 +134,11 @@ export class AuthService {
       : this.authenticateUserCredentials(input));
     if (!session) {
       const nextRetryAfter = this.rateLimiter.recordFailure(rateKey);
+      await this.securityLog('auth.login_failed', input.username, {
+        errorCode: 'AUTH_INVALID_CREDENTIALS',
+        level: 'warn',
+        status: 'failed',
+      });
       throw new AuthError(
         nextRetryAfter > 0 ? 'AUTH_RATE_LIMITED' : 'AUTH_INVALID_CREDENTIALS',
         nextRetryAfter > 0 ? 429 : 401,
@@ -159,6 +177,28 @@ export class AuthService {
       userId: session.principal.type === 'user' ? session.principal.id : null,
       guestId: null,
     });
+    if (session.principal.type === 'user') {
+      const activeSessionIds = await this.repository.activeSessionIds(
+        session.accountKey,
+      );
+      this.traces.retainPrincipalSessions(
+        'user',
+        session.principal.id,
+        new Set(activeSessionIds),
+      );
+    }
+    await this.logs.record({
+      action: 'auth.login_succeeded',
+      actorId: session.principal.type === 'user' ? session.principal.id : null,
+      actorLabel:
+        session.principal.type === 'admin'
+          ? session.principal.username
+          : session.principal.username,
+      actorType: session.principal.type,
+      category: 'security',
+      targetId: row.id,
+      targetType: 'session',
+    });
 
     return {
       absoluteExpiresAt,
@@ -191,6 +231,9 @@ export class AuthService {
       15 * 60 * 1_000,
     );
     if (retryAfter > 0) {
+      await this.securityLog('auth.guest_rate_limited', 'guest', {
+        status: 'denied',
+      });
       throw new AuthError(
         'GUEST_RATE_LIMITED',
         429,
@@ -200,12 +243,20 @@ export class AuthService {
     }
     const settings = await this.repository.getGuestSettings();
     if (!settings.isEnabled || !settings.accessCodeHash) {
+      await this.securityLog('auth.guest_disabled', 'guest', {
+        status: 'denied',
+      });
       throw new AuthError('GUEST_DISABLED', 403, 'Guest access is disabled.');
     }
     const codeMatches = await verify(settings.accessCodeHash, input.accessCode)
       .then(Boolean)
       .catch(() => false);
     if (!codeMatches) {
+      await this.securityLog('auth.guest_join_failed', 'guest', {
+        errorCode: 'GUEST_AUTH_FAILED',
+        level: 'warn',
+        status: 'failed',
+      });
       throw new AuthError(
         'GUEST_AUTH_FAILED',
         401,
@@ -249,6 +300,15 @@ export class AuthService {
         ipHash: input.ipAddress ? this.hashIpAddress(input.ipAddress) : null,
         tokenHash: sha256(sessionToken),
         userAgentHash: input.userAgent ? sha256(input.userAgent) : null,
+      });
+      await this.logs.record({
+        action: 'auth.guest_joined',
+        actorId: created.guest.id,
+        actorLabel: `guest-${created.guest.id.slice(0, 8)}`,
+        actorType: 'guest',
+        category: 'security',
+        targetId: created.session.id,
+        targetType: 'session',
       });
       return {
         absoluteExpiresAt,
@@ -294,10 +354,17 @@ export class AuthService {
     const row = await this.repository.findSessionByTokenHash(
       sha256(sessionToken),
     );
-    if (!row || row.revokedAt) throw this.sessionRequired();
+    if (!row) throw this.sessionRequired();
+    if (row.revokedAt) {
+      this.traces.clearSession(row.id);
+      throw this.sessionRequired();
+    }
 
     const current = await this.resolveCurrentPrincipal(row);
-    if (!current) throw this.sessionRequired();
+    if (!current) {
+      this.traces.clearSession(row.id);
+      throw this.sessionRequired();
+    }
 
     const now = new Date();
     const credentialIsCurrent = constantTimeBufferEqual(
@@ -314,6 +381,18 @@ export class AuthService {
         row.id,
         credentialIsCurrent ? 'expired' : 'credential_changed',
       );
+      this.traces.clearSession(row.id);
+      await this.logs.record({
+        action: 'auth.session_revoked',
+        actorId: row.userId ?? row.guestId,
+        actorType: row.principalType,
+        category: 'security',
+        metadata: {
+          reason: credentialIsCurrent ? 'expired' : 'credential_changed',
+        },
+        targetId: row.id,
+        targetType: 'session',
+      });
       throw this.sessionRequired();
     }
 
@@ -328,8 +407,10 @@ export class AuthService {
         ? await this.repository.touchGuest(row.guestId, idleExpiresAt, row.id)
         : await this.repository.touchSession(row.id, idleExpiresAt);
     if (!touched) {
+      this.traces.clearSession(row.id);
       throw this.sessionRequired();
     }
+    this.traces.touchSession(row.id, idleExpiresAt, row.absoluteExpiresAt);
     return {
       absoluteExpiresAt: row.absoluteExpiresAt,
       idleExpiresAt,
@@ -343,6 +424,16 @@ export class AuthService {
   ): Promise<AuthenticatedAdminSession> {
     const session = await this.authenticate(sessionToken);
     if (session.principal.type !== 'admin') {
+      await this.logs.record({
+        action: 'access.admin_denied',
+        actorId: session.principal.id,
+        actorType: session.principal.type,
+        category: 'security',
+        errorCode: 'AUTH_ADMIN_REQUIRED',
+        level: 'warn',
+        status: 'denied',
+        targetType: 'admin_api',
+      });
       throw new AuthError(
         'AUTH_ADMIN_REQUIRED',
         403,
@@ -364,6 +455,21 @@ export class AuthService {
     } else {
       await this.repository.revokeSession(session.row.id, 'logout');
     }
+    this.traces.clearSession(session.row.id);
+    await this.logs.record({
+      action: 'auth.logout',
+      actorId: session.principal.type === 'admin' ? null : session.principal.id,
+      actorLabel:
+        session.principal.type === 'admin'
+          ? session.principal.username
+          : session.principal.type === 'user'
+            ? session.principal.username
+            : `guest-${session.principal.id.slice(0, 8)}`,
+      actorType: session.principal.type,
+      category: 'security',
+      targetId: session.row.id,
+      targetType: 'session',
+    });
   }
 
   async authenticateWithCsrf(input: {
@@ -380,6 +486,18 @@ export class AuthService {
       session.row.csrfTokenHash,
     );
     if (!csrfHeader || !cookieMatchesHeader || !hashMatches) {
+      await this.logs.record({
+        action: 'auth.csrf_denied',
+        actorId:
+          session.principal.type === 'admin' ? null : session.principal.id,
+        actorType: session.principal.type,
+        category: 'security',
+        errorCode: 'AUTH_CSRF_INVALID',
+        level: 'warn',
+        status: 'denied',
+        targetId: session.row.id,
+        targetType: 'session',
+      });
       throw new AuthError('AUTH_CSRF_INVALID', 403, 'CSRF validation failed.');
     }
     return session;
@@ -392,6 +510,16 @@ export class AuthService {
   }): Promise<AuthenticatedAdminSession> {
     const session = await this.authenticateWithCsrf(input);
     if (session.principal.type !== 'admin') {
+      await this.logs.record({
+        action: 'access.admin_denied',
+        actorId: session.principal.id,
+        actorType: session.principal.type,
+        category: 'security',
+        errorCode: 'AUTH_ADMIN_REQUIRED',
+        level: 'warn',
+        status: 'denied',
+        targetType: 'admin_api',
+      });
       throw new AuthError(
         'AUTH_ADMIN_REQUIRED',
         403,
@@ -506,5 +634,24 @@ export class AuthService {
       401,
       'A valid session is required.',
     );
+  }
+
+  private securityLog(
+    action: string,
+    actorLabel: string,
+    input: {
+      errorCode?: string;
+      level?: 'error' | 'info' | 'warn';
+      status: 'denied' | 'failed' | 'success';
+    },
+  ) {
+    return this.logs.record({
+      action,
+      actorLabel: actorLabel.slice(0, 100),
+      category: 'security',
+      ...(input.errorCode === undefined ? {} : { errorCode: input.errorCode }),
+      ...(input.level === undefined ? {} : { level: input.level }),
+      status: input.status,
+    });
   }
 }

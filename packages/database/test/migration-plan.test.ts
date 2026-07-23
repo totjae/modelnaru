@@ -244,4 +244,17 @@ describe('migration plan', () => {
     expect(sql).toContain('CREATE TRIGGER attachments_queue_file_delete');
     expect(sql).toContain('modelnaru_queue_attachment_file_delete');
   });
+
+  it('adds unified operational logs, retention settings and request traces', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0015_admin_logs_and_request_traces.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE operational_logs');
+    expect(sql).toContain('CREATE TABLE log_settings');
+    expect(sql).toContain('request_trace_limit');
+    expect(sql).toContain('request_trace_enabled');
+    expect(sql).toContain("category IN ('security', 'file', 'system')");
+  });
 });

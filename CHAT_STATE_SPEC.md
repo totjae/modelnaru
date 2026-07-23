@@ -38,6 +38,7 @@
 | 컨텍스트 토큰 한도 | `100000`         | 1,000~2,000,000  | 초과 시 관리자 설정에 따라 자동 요약               |
 | 기본 모델          | `null`           | 허용 모델 UUID   | 대화 설정에서 선택한 다음 호출 모델                |
 | 생성 파라미터      | temperature `1`  | 모델별 policy    | 대화방별로 독립 저장되는 생성 기본값               |
+| 전송 기록 보관 수  | `3`              | 0~3              | 현재 session에서 확인할 최근 요청·응답 수          |
 | 활성 분기          | 생성된 root 분기 | 같은 대화의 분기 | 다음 요청에서 사용할 메시지 경로                   |
 
 대화는 UUID로 식별하며 제목이 같아도 설정을 공유하지 않는다. 설정 모달에서 저장한 기본 모델과 생성 파라미터는 해당 대화 행에만 저장한다. 대화를 다시 열면 저장한 기본 모델과 파라미터를 복원하고, 저장 모델이 삭제·비활성화·권한 회수된 경우에는 활성 분기의 마지막 허용 모델, 그 다음 첫 허용 모델 순서로 대체한다.
@@ -102,6 +103,17 @@
 
 메시지 전송은 `content`, `providerModelId`와 검증된 `temperature`, `topP`, `maxOutputTokens`만 받는다. 재생성은 새 `content` 없이 대상 assistant ID와 새 답변에 사용할 모델·parameter를 받는다. 모델 권한을 먼저 확인하고 컨텍스트 한도를 검사한 뒤 일일 호출량을 예약한다. 브라우저 연결 종료 또는 취소 API 요청은 같은 `AbortController`를 통해 upstream 연결도 중단한다. 모든 mutation은 CSRF 검증을 요구한다.
 
+### 3.7 session 한정 Provider 전송 기록
+
+- 대화별 `request_trace_limit`은 0~3이며 기본값은 3이다. 0이면 새 기록을 만들지 않는다.
+- 실제 Provider로 보낸 protocol·URL·method·header·JSON body와 수신한 원시 이벤트, 최종 본문·token·처리 시간을 API process 메모리에만 저장한다.
+- Authorization·API key 계열 header와 URL query secret은 마스킹하고 이미지 data/base64는 길이 안내로 대체한다.
+- 단일 기록은 최대 2MB, session 전체는 최대 30개다. 초과분은 오래된 순서로 삭제하거나 안전한 미리보기로 절단한다.
+- 일반 사용자와 게스트는 현재 session·자신의 대화 기록만 조회·삭제할 수 있다. 관리자 통합 로그에는 이 본문이 복제되지 않는다.
+- 로그아웃, idle·absolute 만료, 최대 동시 session 초과, 비밀번호 변경, 계정 비활성화·삭제, 대화 삭제와 게스트 설정 저장·만료 정리 때 해당 메모리 기록을 즉시 제거한다.
+- API process 재시작 시 기록은 자연스럽게 사라진다. Valkey와 PostgreSQL에는 기록하지 않는다.
+- API는 `GET /api/conversations/:id/traces`와 `DELETE /api/conversations/:id/traces`를 제공한다.
+
 ## 4. 오류·예외 또는 경계 조건
 
 - `CHAT_INPUT_INVALID`(`400`): UUID, 제목, 설정 범위 또는 허용되지 않은 필드 값
@@ -132,6 +144,7 @@
 - 성공한 재생성만 활성화되고 이전·새 답변 분기를 왕복해도 각 경로가 보존된다.
 - 가장 최근 질문의 답변 후보만 인라인 탐색 대상으로 묶이며 과거 메시지에는 재생성 조작을 표시하지 않는다.
 - controller·service 단위시험, migration 정적 시험, typecheck와 production build가 통과한다.
+- 서로 다른 session이 같은 계정·대화를 열어도 전송 기록을 공유하지 않으며 종료된 session의 기록은 조회할 수 없다.
 
 ## 6. 미결정·보류 항목
 

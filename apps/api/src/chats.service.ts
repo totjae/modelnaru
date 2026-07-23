@@ -8,6 +8,7 @@ import {
   type CreateConversationInput,
   type UpdateConversationInput,
 } from './chats.repository.js';
+import { RequestTraceService } from './request-trace.service.js';
 
 export type ChatErrorCode = 'CHAT_INPUT_INVALID' | 'CHAT_NOT_FOUND';
 
@@ -28,6 +29,9 @@ export class ChatsService {
     private readonly attachmentLifecycle: AttachmentLifecycleService = {
       flushQueuedFiles: () => Promise.resolve(),
     } as AttachmentLifecycleService,
+    private readonly traces: RequestTraceService = {
+      clearConversation: () => undefined,
+    } as unknown as RequestTraceService,
   ) {}
 
   list(principal: AuthenticatedPrincipal) {
@@ -81,6 +85,7 @@ export class ChatsService {
   async delete(principal: AuthenticatedPrincipal, id: string): Promise<void> {
     try {
       await this.repository.delete(this.chatPrincipal(principal), id);
+      this.traces.clearConversation(id);
       await this.attachmentLifecycle.flushQueuedFiles();
     } catch (error) {
       this.mapError(error);

@@ -46,6 +46,10 @@ import { AttachmentsService } from './attachments.service.js';
 import { AttachmentLifecycleController } from './attachment-lifecycle.controller.js';
 import { AttachmentLifecycleRepository } from './attachment-lifecycle.repository.js';
 import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
+import { AdminLogsController } from './admin-logs.controller.js';
+import { AdminLogsRepository } from './admin-logs.repository.js';
+import { AdminLogsService } from './admin-logs.service.js';
+import { RequestTraceService } from './request-trace.service.js';
 
 @Module({
   controllers: [
@@ -60,6 +64,7 @@ import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
     UsageController,
     AttachmentsController,
     AttachmentLifecycleController,
+    AdminLogsController,
   ],
   providers: [
     modelNaruConfigProvider,
@@ -88,6 +93,9 @@ import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
     SummarizationService,
     UsageRepository,
     UsageService,
+    AdminLogsRepository,
+    AdminLogsService,
+    RequestTraceService,
     AttachmentLifecycleRepository,
     AttachmentLifecycleService,
     AttachmentsRepository,

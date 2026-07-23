@@ -40,6 +40,7 @@ interface GuestAccess {
   maximumActiveSessions: number;
   permissions: Permission[];
   resetTimezone: string;
+  requestTraceEnabled: boolean;
   sessionDailyRequestLimit: number;
 }
 
@@ -220,6 +221,7 @@ export function AccessManager({
         maximumActiveSessions: Number(data.get('maximumActiveSessions')),
         permissions: selectedPermissions(data, state.models),
         resetTimezone: formText(data.get('resetTimezone')),
+        requestTraceEnabled: data.get('requestTraceEnabled') === 'on',
         sessionDailyRequestLimit: Number(data.get('sessionDailyRequestLimit')),
       });
       if (!response.ok) throw new Error('save failed');
@@ -337,6 +339,14 @@ export function AccessManager({
                     defaultChecked={state.guest.isEnabled}
                   />{' '}
                   게스트 체험 활성화
+                </label>
+                <label className="check-field">
+                  <input
+                    name="requestTraceEnabled"
+                    type="checkbox"
+                    defaultChecked={state.guest.requestTraceEnabled}
+                  />{' '}
+                  게스트 전송 기록 허용
                 </label>
                 <label htmlFor="guest-access-code">새 공유 코드</label>
                 <input

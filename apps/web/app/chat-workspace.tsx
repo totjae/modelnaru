@@ -42,6 +42,7 @@ interface ConversationSummary {
   historyMessageLimit: number;
   id: string;
   messageCount: number;
+  requestTraceLimit: number;
   systemPrompt: string;
   title: string;
   updatedAt: string;
@@ -86,6 +87,27 @@ interface ConversationDetail extends ConversationSummary {
     messages: ChatMessage[];
     parentBranchId: string | null;
   }>;
+}
+
+interface RequestTrace {
+  completedAt: string | null;
+  conversationId: string;
+  durationMs: number | null;
+  errorCode: string | null;
+  id: string;
+  inputTokens: number | null;
+  modelId: string;
+  outputTokens: number | null;
+  providerTemplateId: string;
+  request: unknown;
+  response: {
+    content: string;
+    rawEvents: unknown[];
+    stopReason: string | null;
+  };
+  startedAt: string;
+  status: 'cancelled' | 'completed' | 'failed' | 'streaming';
+  truncated: boolean;
 }
 
 type StreamEvent =
@@ -307,6 +329,10 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [conversationListOpen, setConversationListOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [traceLoading, setTraceLoading] = useState(false);
+  const [traces, setTraces] = useState<RequestTrace[]>([]);
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const followLatestRef = useRef(true);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -347,6 +373,48 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     };
     setSettingsDirty(false);
     setSettingsOpen(true);
+  }
+
+  async function openTraces() {
+    if (!selectedId) return;
+    setTraceOpen(true);
+    setTraceLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/conversations/${selectedId}/traces`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) throw new Error(await responseMessage(response));
+      const value = (await response.json()) as { traces: RequestTrace[] };
+      setTraces(value.traces);
+      setSelectedTraceId(value.traces[0]?.id ?? null);
+    } catch (caught) {
+      setTraceOpen(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : '전송 기록을 불러오지 못했습니다.',
+      );
+    } finally {
+      setTraceLoading(false);
+    }
+  }
+
+  async function clearTraces() {
+    if (!selectedId || !window.confirm('현재 세션의 전송 기록을 지울까요?')) {
+      return;
+    }
+    const response = await mutation(
+      `/api/conversations/${selectedId}/traces`,
+      'DELETE',
+    );
+    if (!response.ok) {
+      setError(await responseMessage(response));
+      return;
+    }
+    setTraces([]);
+    setSelectedTraceId(null);
   }
 
   const loadDetail = useCallback(async (id: string) => {
@@ -451,7 +519,10 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     if (!settingsOpen) return;
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeSettings();
+      if (event.key === 'Escape') {
+        if (traceOpen) setTraceOpen(false);
+        else closeSettings();
+      }
     };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
@@ -459,7 +530,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [closeSettings, settingsOpen]);
+  }, [closeSettings, settingsOpen, traceOpen]);
 
   async function createConversation() {
     followLatestRef.current = true;
@@ -541,6 +612,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           defaultProviderModelId: selectedModel || null,
           generationParameters: parameters,
           historyMessageLimit: Number(data.get('historyMessageLimit')),
+          requestTraceLimit: Number(data.get('requestTraceLimit')),
           systemPrompt: data.get('systemPrompt'),
           title: data.get('title'),
         },
@@ -627,6 +699,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       ),
     [pendingAttachments, selectedId],
   );
+  const selectedTrace =
+    traces.find((trace) => trace.id === selectedTraceId) ?? null;
 
   const latestMessage = messages.at(-1);
   const alternatives = useMemo(
@@ -1419,6 +1493,22 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                     />
                   </label>
                   <label>
+                    전송 기록 보관
+                    <select
+                      name="requestTraceLimit"
+                      defaultValue={detail.requestTraceLimit}
+                    >
+                      <option value="0">사용하지 않음</option>
+                      <option value="1">최근 요청 1개</option>
+                      <option value="2">최근 요청 2개</option>
+                      <option value="3">최근 요청 3개</option>
+                    </select>
+                    <small>
+                      현재 로그인 세션에만 보관하며 로그아웃하면 즉시
+                      삭제됩니다. API 키와 이미지 원문은 기록하지 않습니다.
+                    </small>
+                  </label>
+                  <label>
                     시스템 프롬프트
                     <textarea
                       name="systemPrompt"
@@ -1429,31 +1519,189 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   </label>
                 </div>
                 <footer className="settings-modal-actions">
-                  <button
-                    type="button"
-                    className="quiet-button"
-                    onClick={() => closeSettings()}
-                    disabled={busy}
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-button"
-                    onClick={() => void deleteConversation()}
-                    disabled={busy}
-                  >
-                    대화 삭제
-                  </button>
-                  <button
-                    className="settings-save-button"
-                    type="submit"
-                    disabled={busy}
-                  >
-                    설정 저장
-                  </button>
+                  <div className="settings-actions-left">
+                    <button
+                      type="button"
+                      className="trace-button"
+                      onClick={() => void openTraces()}
+                      disabled={busy}
+                    >
+                      전송 기록
+                    </button>
+                  </div>
+                  <div className="settings-actions-right">
+                    <button
+                      type="button"
+                      className="quiet-button"
+                      onClick={() => closeSettings()}
+                      disabled={busy}
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => void deleteConversation()}
+                      disabled={busy}
+                    >
+                      대화 삭제
+                    </button>
+                    <button
+                      className="settings-save-button"
+                      type="submit"
+                      disabled={busy}
+                    >
+                      설정 저장
+                    </button>
+                  </div>
                 </footer>
               </form>
+            </section>
+          </div>,
+          document.body,
+        )}
+      {traceOpen &&
+        createPortal(
+          <div
+            className="settings-modal-backdrop trace-modal-layer"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setTraceOpen(false);
+            }}
+          >
+            <section
+              className="request-trace-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="request-trace-title"
+            >
+              <header className="settings-modal-header">
+                <div>
+                  <p className="card-label">SESSION REQUEST TRACE</p>
+                  <h2 id="request-trace-title">요청·응답 전송 기록</h2>
+                </div>
+                <button
+                  type="button"
+                  className="settings-modal-close"
+                  aria-label="전송 기록 닫기"
+                  onClick={() => setTraceOpen(false)}
+                >
+                  ×
+                </button>
+              </header>
+              <div className="trace-privacy-note">
+                현재 로그인 세션에서 이 대화의 최근{' '}
+                {detail?.requestTraceLimit ?? 0}
+                개만 메모리에 보관합니다. 로그아웃 시 삭제되며 인증 정보와
+                이미지 원문은 표시하지 않습니다.
+              </div>
+              <div className="request-trace-layout">
+                <aside className="request-trace-list">
+                  {traceLoading ? (
+                    <p className="muted">불러오는 중…</p>
+                  ) : traces.length === 0 ? (
+                    <p className="muted">
+                      보관된 전송 기록이 없습니다. 기록 수를 1~3으로 저장한 뒤
+                      새 메시지를 보내세요.
+                    </p>
+                  ) : (
+                    traces.map((trace) => (
+                      <button
+                        type="button"
+                        key={trace.id}
+                        className={
+                          trace.id === selectedTraceId ? 'is-active' : ''
+                        }
+                        onClick={() => setSelectedTraceId(trace.id)}
+                      >
+                        <strong>{trace.modelId}</strong>
+                        <span>
+                          {new Date(trace.startedAt).toLocaleString('ko-KR')}
+                        </span>
+                        <span className={`trace-status ${trace.status}`}>
+                          {trace.status}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </aside>
+                <div className="request-trace-detail">
+                  {selectedTrace ? (
+                    <>
+                      <dl className="trace-summary">
+                        <div>
+                          <dt>Provider</dt>
+                          <dd>{selectedTrace.providerTemplateId}</dd>
+                        </div>
+                        <div>
+                          <dt>소요 시간</dt>
+                          <dd>
+                            {selectedTrace.durationMs === null
+                              ? '-'
+                              : `${selectedTrace.durationMs}ms`}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>토큰</dt>
+                          <dd>
+                            입력 {selectedTrace.inputTokens ?? '-'} · 출력{' '}
+                            {selectedTrace.outputTokens ?? '-'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>종료 사유</dt>
+                          <dd>
+                            {selectedTrace.errorCode ??
+                              selectedTrace.response.stopReason ??
+                              '-'}
+                          </dd>
+                        </div>
+                      </dl>
+                      {selectedTrace.truncated && (
+                        <p className="trace-warning">
+                          2MB 제한을 넘어 일부 내용이 생략되었습니다.
+                        </p>
+                      )}
+                      <section>
+                        <h3>Provider 요청</h3>
+                        <pre>
+                          {JSON.stringify(selectedTrace.request, null, 2)}
+                        </pre>
+                      </section>
+                      <section>
+                        <h3>최종 응답 본문</h3>
+                        <pre>
+                          {selectedTrace.response.content || '(본문 없음)'}
+                        </pre>
+                      </section>
+                      <section>
+                        <h3>Provider 원시 응답 이벤트</h3>
+                        <pre>
+                          {JSON.stringify(
+                            selectedTrace.response.rawEvents,
+                            null,
+                            2,
+                          )}
+                        </pre>
+                      </section>
+                    </>
+                  ) : (
+                    <p className="muted">왼쪽에서 전송 기록을 선택하세요.</p>
+                  )}
+                </div>
+              </div>
+              <footer className="trace-modal-actions">
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => void clearTraces()}
+                  disabled={traces.length === 0}
+                >
+                  현재 기록 삭제
+                </button>
+                <button type="button" onClick={() => setTraceOpen(false)}>
+                  닫기
+                </button>
+              </footer>
             </section>
           </div>,
           document.body,

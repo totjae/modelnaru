@@ -17,6 +17,8 @@ import {
   type GuestAccessUpdateInput,
 } from './access.repository.js';
 import type { ProviderAuditContext } from './providers.repository.js';
+import { RequestTraceService } from './request-trace.service.js';
+import { AdminLogsService } from './admin-logs.service.js';
 
 export type AccessErrorCode =
   | 'ACCESS_DAILY_LIMIT_REACHED'
@@ -52,6 +54,12 @@ export class AccessService {
     private readonly attachmentLifecycle: AttachmentLifecycleService = {
       flushQueuedFiles: () => Promise.resolve(),
     } as AttachmentLifecycleService,
+    private readonly traces: RequestTraceService = {
+      clearGuests: () => undefined,
+    } as RequestTraceService,
+    private readonly logs: AdminLogsService = {
+      record: () => Promise.resolve(),
+    } as unknown as AdminLogsService,
   ) {}
 
   state(): Promise<AdminAccessState> {
@@ -94,6 +102,7 @@ export class AccessService {
         },
         audit,
       );
+      this.traces.clearGuests();
       await this.attachmentLifecycle.flushQueuedFiles();
       return await this.repository.adminState();
     } catch (error) {
@@ -144,6 +153,24 @@ export class AccessService {
     try {
       await this.repository.reserveDailyRequest(principal, providerModelId);
     } catch (error) {
+      if (error instanceof AccessDailyLimitError) {
+        await this.logs.record({
+          action: 'access.daily_limit_denied',
+          actorId: principal.id,
+          actorLabel:
+            principal.type === 'user'
+              ? principal.username
+              : `guest-${principal.id.slice(0, 8)}`,
+          actorType: principal.type,
+          category: 'security',
+          errorCode: 'ACCESS_DAILY_LIMIT_REACHED',
+          level: 'warn',
+          metadata: { scope: error.scope },
+          status: 'denied',
+          targetId: providerModelId,
+          targetType: 'provider_model',
+        });
+      }
       this.mapError(error);
     }
   }
@@ -162,6 +189,19 @@ export class AccessService {
     try {
       await this.repository.assertModelAllowed(principal, providerModelId);
     } catch (error) {
+      if (error instanceof AccessModelNotAllowedError) {
+        await this.logs.record({
+          action: 'access.model_denied',
+          actorId: principal.id,
+          actorType: principal.type,
+          category: 'security',
+          errorCode: 'ACCESS_MODEL_FORBIDDEN',
+          level: 'warn',
+          status: 'denied',
+          targetId: providerModelId,
+          targetType: 'provider_model',
+        });
+      }
       this.mapError(error);
     }
   }

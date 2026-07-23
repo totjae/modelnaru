@@ -24,6 +24,7 @@ export interface ChatTurnRecord {
     storageKey: string;
   }>;
   previousActiveBranchId: string;
+  requestTraceLimit: number;
   systemPrompt: string;
   userMessageId: string | null;
 }
@@ -32,6 +33,7 @@ interface RawConversationState {
   active_branch_id: string;
   context_token_limit: number;
   history_message_limit: number;
+  request_trace_limit: number;
   system_prompt: string;
 }
 
@@ -193,14 +195,14 @@ export class ChatMessagesRepository {
         principal.type === 'user'
           ? await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, system_prompt
+                context_token_limit, request_trace_limit, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND user_id = ${principal.id}
               FOR UPDATE
             `
           : await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, system_prompt
+                context_token_limit, request_trace_limit, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND guest_id = ${principal.id}
               FOR UPDATE
@@ -354,6 +356,7 @@ export class ChatMessagesRepository {
             storageKey: attachment.storage_key,
           })),
         previousActiveBranchId: conversation.active_branch_id,
+        requestTraceLimit: conversation.request_trace_limit,
         systemPrompt: conversation.system_prompt,
         userMessageId,
       };
@@ -377,14 +380,14 @@ export class ChatMessagesRepository {
         principal.type === 'user'
           ? await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, system_prompt
+                context_token_limit, request_trace_limit, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND user_id = ${principal.id}
               FOR UPDATE
             `
           : await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, system_prompt
+                context_token_limit, request_trace_limit, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND guest_id = ${principal.id}
               FOR UPDATE
@@ -505,6 +508,7 @@ export class ChatMessagesRepository {
             storageKey: attachment.storage_key,
           })),
         previousActiveBranchId: conversation.active_branch_id,
+        requestTraceLimit: conversation.request_trace_limit,
         systemPrompt: conversation.system_prompt,
         userMessageId: null,
       };

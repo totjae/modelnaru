@@ -13,6 +13,7 @@ import {
   type UserAuditContext,
   type UserRecord,
 } from './users.repository.js';
+import { RequestTraceService } from './request-trace.service.js';
 
 export type UserErrorCode = 'USERNAME_CONFLICT' | 'USER_NOT_FOUND';
 
@@ -55,6 +56,9 @@ export class UsersService {
     private readonly attachmentLifecycle: AttachmentLifecycleService = {
       flushQueuedFiles: () => Promise.resolve(),
     } as AttachmentLifecycleService,
+    private readonly traces: RequestTraceService = {
+      clearPrincipal: () => undefined,
+    } as unknown as RequestTraceService,
   ) {
     this.adminUsername = loadedConfig.config.admin.username.toLowerCase();
   }
@@ -90,7 +94,9 @@ export class UsersService {
   ): Promise<UserRecord> {
     if (patch.username) this.assertUsernameAvailableForUser(patch.username);
     try {
-      return await this.repository.update(id, patch, audit);
+      const user = await this.repository.update(id, patch, audit);
+      if (patch.isEnabled === false) this.traces.clearPrincipal('user', id);
+      return user;
     } catch (error) {
       this.mapRepositoryError(error);
     }
@@ -102,11 +108,13 @@ export class UsersService {
     audit: UserAuditContext,
   ): Promise<UserRecord> {
     try {
-      return await this.repository.setPassword(
+      const user = await this.repository.setPassword(
         id,
         await hashPassword(password),
         audit,
       );
+      this.traces.clearPrincipal('user', id);
+      return user;
     } catch (error) {
       this.mapRepositoryError(error);
     }
@@ -115,6 +123,7 @@ export class UsersService {
   async delete(id: string, audit: UserAuditContext): Promise<void> {
     try {
       await this.repository.delete(id, audit);
+      this.traces.clearPrincipal('user', id);
       await this.attachmentLifecycle.flushQueuedFiles();
     } catch (error) {
       this.mapRepositoryError(error);

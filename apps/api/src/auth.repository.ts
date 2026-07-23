@@ -28,6 +28,7 @@ export interface GuestSettingsRow {
   isEnabled: boolean;
   maximumActiveSessions: number;
   resetTimezone: string;
+  requestTraceEnabled: boolean;
   sessionDailyRequestLimit: number;
   updatedAt: Date;
 }
@@ -99,6 +100,7 @@ interface RawGuestSettingsRow {
   is_enabled: boolean;
   maximum_active_sessions: number;
   reset_timezone: string;
+  request_trace_enabled: boolean;
   session_daily_request_limit: number;
   updated_at: Date;
 }
@@ -147,6 +149,7 @@ function mapGuestSettings(row: RawGuestSettingsRow): GuestSettingsRow {
     isEnabled: row.is_enabled,
     maximumActiveSessions: row.maximum_active_sessions,
     resetTimezone: row.reset_timezone,
+    requestTraceEnabled: row.request_trace_enabled,
     sessionDailyRequestLimit: row.session_daily_request_limit,
     updatedAt: row.updated_at,
   };
@@ -271,12 +274,24 @@ export class AuthRepository {
     });
   }
 
+  async activeSessionIds(accountKey: string): Promise<string[]> {
+    const rows = await this.database.getClient()<Array<{ id: string }>>`
+      SELECT id
+      FROM sessions
+      WHERE account_key = ${accountKey}
+        AND revoked_at IS NULL
+        AND idle_expires_at > now()
+        AND absolute_expires_at > now()
+    `;
+    return rows.map((row) => row.id);
+  }
+
   async getGuestSettings(): Promise<GuestSettingsRow> {
     const rows = await this.database.getClient()<RawGuestSettingsRow[]>`
       SELECT is_enabled, access_code_hash, maximum_active_sessions,
         session_daily_request_limit, global_daily_request_limit,
         idle_timeout_minutes, absolute_timeout_hours, reset_timezone,
-        file_upload_enabled, updated_at
+        file_upload_enabled, request_trace_enabled, updated_at
       FROM guest_settings
       WHERE singleton = true
       LIMIT 1
@@ -294,7 +309,7 @@ export class AuthRepository {
         SELECT is_enabled, access_code_hash, maximum_active_sessions,
           session_daily_request_limit, global_daily_request_limit,
           idle_timeout_minutes, absolute_timeout_hours, reset_timezone,
-          file_upload_enabled, updated_at
+          file_upload_enabled, request_trace_enabled, updated_at
         FROM guest_settings
         WHERE singleton = true
         FOR UPDATE

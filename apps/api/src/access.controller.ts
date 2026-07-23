@@ -115,6 +115,7 @@ function guestAccessBody(body: unknown) {
   if (
     typeof input.isEnabled !== 'boolean' ||
     typeof input.fileUploadEnabled !== 'boolean' ||
+    typeof input.requestTraceEnabled !== 'boolean' ||
     typeof input.resetTimezone !== 'string' ||
     input.resetTimezone.length < 1 ||
     input.resetTimezone.length > 64 ||
@@ -143,6 +144,7 @@ function guestAccessBody(body: unknown) {
     maximumActiveSessions,
     permissions: parsedPermissions,
     resetTimezone: input.resetTimezone,
+    requestTraceEnabled: input.requestTraceEnabled,
   };
 }
 

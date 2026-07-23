@@ -24,7 +24,7 @@ async function fixture() {
     fail: vi.fn(() => Promise.resolve()),
     initializeRetention: vi.fn(() => Promise.resolve()),
     knownStorageKeys: vi.fn(() => Promise.resolve(new Set<string>())),
-    purgeExpiredGuests: vi.fn(() => Promise.resolve(0)),
+    purgeExpiredGuests: vi.fn(() => Promise.resolve([])),
     queueExpired: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
     queued: vi
       .fn()

@@ -27,6 +27,7 @@ describe('ChatsService', () => {
       defaultProviderModelId: null,
       generationParameters: { temperature: 1 },
       historyMessageLimit: 0,
+      requestTraceLimit: 3,
       systemPrompt: '',
       title: '새 대화',
     };

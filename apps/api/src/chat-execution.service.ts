@@ -14,6 +14,7 @@ import {
 import {
   type ChatEvent,
   type ChatParameters,
+  buildProviderStreamRequest,
   ChatUpstreamError,
   streamProvider,
 } from './chat-streaming.js';
@@ -31,6 +32,7 @@ import {
   SummarizationService,
 } from './summarization.service.js';
 import { AttachmentsService } from './attachments.service.js';
+import { RequestTraceService } from './request-trace.service.js';
 
 interface ActiveRequest {
   controller: AbortController;
@@ -42,6 +44,7 @@ export class ChatParameterPolicyError extends Error {}
 export class ChatImageModelUnsupportedError extends Error {}
 
 export interface ExecuteChatInput {
+  absoluteExpiresAt?: Date;
   attachmentIds: string[];
   content: string;
   conversationId: string;
@@ -49,6 +52,7 @@ export interface ExecuteChatInput {
   principal: AuthenticatedPrincipal;
   providerModelId: string;
   regenerateAssistantMessageId?: string;
+  sessionId?: string;
 }
 
 export type RegenerateChatInput = Omit<
@@ -66,6 +70,12 @@ export class ChatExecutionService {
     private readonly providers: ChatProviderService,
     private readonly messages: ChatMessagesRepository,
     private readonly summarization: SummarizationService,
+    private readonly traces: RequestTraceService = {
+      appendRaw: () => undefined,
+      begin: () => Promise.resolve(null),
+      complete: () => undefined,
+      fail: () => undefined,
+    } as unknown as RequestTraceService,
   ) {}
 
   async execute(
@@ -76,6 +86,7 @@ export class ChatExecutionService {
     const principal = this.chatPrincipal(input.principal);
     let assistantMessageId: string | undefined;
     let content = '';
+    let traceId: string | null = null;
     try {
       await this.messages.assertConversation(principal, input.conversationId);
       await this.access.assertModelAllowed(principal, input.providerModelId);
@@ -147,6 +158,27 @@ export class ChatExecutionService {
         );
       }
       await this.access.reserveDailyRequest(principal, input.providerModelId);
+      const providerInput = {
+        apiKey: runtime.apiKey,
+        baseUrl: runtime.baseUrl,
+        messages: context,
+        modelId: runtime.modelId,
+        parameters,
+        systemPrompt: turn.systemPrompt,
+        template: runtime.template,
+      };
+      if (input.sessionId && input.absoluteExpiresAt) {
+        traceId = await this.traces.begin({
+          absoluteExpiresAt: input.absoluteExpiresAt,
+          conversationId: input.conversationId,
+          limit: turn.requestTraceLimit,
+          modelId: runtime.modelId,
+          principal,
+          providerTemplateId: runtime.template.id,
+          request: buildProviderStreamRequest(providerInput),
+          sessionId: input.sessionId,
+        });
+      }
       emit({
         branchId: turn.branchId,
         messageId: turn.assistantMessageId,
@@ -174,14 +206,9 @@ export class ChatExecutionService {
       try {
         await this.messages.markStreaming(turn.assistantMessageId);
         for await (const event of streamProvider({
-          apiKey: runtime.apiKey,
-          baseUrl: runtime.baseUrl,
-          messages: context,
-          modelId: runtime.modelId,
-          parameters,
+          ...providerInput,
+          onRawEvent: (document) => this.traces.appendRaw(traceId, document),
           signal: controller.signal,
-          systemPrompt: turn.systemPrompt,
-          template: runtime.template,
         })) {
           if (event.type === 'text_delta') {
             content += event.text;
@@ -210,8 +237,16 @@ export class ChatExecutionService {
           inputTokens,
           outputTokens,
         });
+        const durationMs = Date.now() - startedAt;
+        this.traces.complete(traceId, {
+          content,
+          durationMs,
+          inputTokens,
+          outputTokens,
+          stopReason: stopReason ?? null,
+        });
         emit({
-          durationMs: Date.now() - startedAt,
+          durationMs,
           ...(stopReason ? { stopReason } : {}),
           type: 'done',
         });
@@ -235,6 +270,11 @@ export class ChatExecutionService {
           status: cancelled ? 'cancelled' : 'failed',
         });
       }
+      this.traces.fail(traceId, {
+        cancelled,
+        content,
+        errorCode: normalized.code,
+      });
       try {
         emit({ ...normalized, type: 'error' });
       } catch {
@@ -250,6 +290,9 @@ export class ChatExecutionService {
   ): Promise<void> {
     return this.execute(
       {
+        ...(input.absoluteExpiresAt
+          ? { absoluteExpiresAt: input.absoluteExpiresAt }
+          : {}),
         attachmentIds: [],
         content: '',
         conversationId: input.conversationId,
@@ -257,6 +300,7 @@ export class ChatExecutionService {
         principal: input.principal,
         providerModelId: input.providerModelId,
         regenerateAssistantMessageId: input.assistantMessageId,
+        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
       },
       emit,
       externalSignal,

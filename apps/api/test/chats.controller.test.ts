@@ -15,7 +15,13 @@ const principal = {
 
 function request(): AuthenticatedRequest {
   return {
-    authenticatedSession: { principal } as never,
+    authenticatedSession: {
+      principal,
+      row: {
+        absoluteExpiresAt: new Date(Date.now() + 60_000),
+        id: '40000000-0000-4000-8000-000000000001',
+      },
+    } as never,
     headers: {},
   };
 }
@@ -39,6 +45,7 @@ describe('ChatsController', () => {
       defaultProviderModelId: null,
       generationParameters: { temperature: 1 },
       historyMessageLimit: 0,
+      requestTraceLimit: 3,
       systemPrompt: '',
       title: '새 대화',
     });

@@ -157,10 +157,21 @@
 | PROVIDER-PARAM-001  | 단위 | parameter policy    | 전체 catalog profile·OpenAI reasoning·Anthropic thinking 규칙   | 통과 |
 | PROVIDER-PARAM-002  | 단위 | request mapping     | Gemini penalty·seed·stop·thinking과 Anthropic/OpenAI 필드 변환  | 통과 |
 | SUMMARY-PARAM-002   | 정적 | 8차 migration·Web   | 고급 JSON·설명·기본 동작·직접 설정 checkbox·충돌 사유 표시      | 통과 |
-| SUMMARY-UNIT-001    | 단위 | 요약 context 구성   | Unicode 추정·호환 요약 재사용·최근 메시지 보존                  | 통과 |
-| SUMMARY-FAIL-001    | 단위 | 요약 실패 처리      | 본 호출 quota 예약 전 표준 오류·failed 상태 저장                | 통과 |
-| SUMMARY-ADMIN-001   | 통합 | 관리자 요약 설정    | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록             | 계획 |
-| SUMMARY-E2E-001     | E2E  | HTTPS 자동 요약     | 실제 모델 요약·원본 보존·재사용·후속 답변 품질                  | 계획 |
+
+## 9.1 관리자 통합 로그·session 전송 기록 시험
+
+| ID                | 종류 | 범위                    | 검증 내용                                                                 | 상태      |
+| ----------------- | ---- | ----------------------- | ------------------------------------------------------------------------- | --------- |
+| LOG-STATIC-001    | 정적 | 15차 migration          | 운영 로그 제약·index, 보관 singleton, 대화 0~3, 게스트 허용 설정          | 통과      |
+| LOG-UNIT-001      | 단위 | 관리자 로그 controller  | 필터 범위 검증, page 매핑과 조회 감사 호출                                | 통과      |
+| LOG-UI-001        | 정적 | 관리자 Web              | 다섯 범주, 기간·수준·상태·검색, 상세·CSV·retention·즉시 정리              | 통과      |
+| TRACE-UNIT-001    | 단위 | API process memory      | 대화별 개수 제한, session 삭제, auth header·query secret·이미지 마스킹    | 통과      |
+| TRACE-SEC-001     | 보안 | session·대화 소유권     | 다른 session·사용자·게스트 기록 조회 차단과 logout·만료·삭제 시 제거      | 부분 통과 |
+| TRACE-E2E-001     | E2E  | 사용자·게스트 HTTPS Web | 실제 Provider 요청·응답 표시, 0~3 설정·수동 삭제·재로그인 후 빈 목록 확인 | 계획      |
+| SUMMARY-UNIT-001  | 단위 | 요약 context 구성       | Unicode 추정·호환 요약 재사용·최근 메시지 보존                            | 통과      |
+| SUMMARY-FAIL-001  | 단위 | 요약 실패 처리          | 본 호출 quota 예약 전 표준 오류·failed 상태 저장                          | 통과      |
+| SUMMARY-ADMIN-001 | 통합 | 관리자 요약 설정        | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록                       | 계획      |
+| SUMMARY-E2E-001   | E2E  | HTTPS 자동 요약         | 실제 모델 요약·원본 보존·재사용·후속 답변 품질                            | 계획      |
 
 ## 10. 실행 환경
 

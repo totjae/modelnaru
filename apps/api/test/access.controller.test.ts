@@ -15,6 +15,7 @@ const body = {
   isEnabled: true,
   maximumActiveSessions: 10,
   permissions: [],
+  requestTraceEnabled: true,
   resetTimezone: 'Asia/Seoul',
   sessionDailyRequestLimit: 20,
 };

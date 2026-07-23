@@ -121,6 +121,7 @@ function createRepository() {
         idleTimeoutMinutes: 60,
         isEnabled: true,
         maximumActiveSessions: 10,
+        requestTraceEnabled: true,
         resetTimezone: 'Asia/Seoul',
         sessionDailyRequestLimit: 20,
         updatedAt: new Date(1_000),
@@ -129,6 +130,7 @@ function createRepository() {
     createSession: vi.fn((input: CreateSessionInput) =>
       Promise.resolve(rowFrom(input)),
     ),
+    activeSessionIds: vi.fn(() => Promise.resolve([])),
     findSessionByTokenHash: vi.fn(),
     findUserById: vi.fn(),
     findUserByUsername: vi.fn(),
@@ -232,6 +234,7 @@ describe('AuthService', () => {
       idleTimeoutMinutes: 60,
       isEnabled: false,
       maximumActiveSessions: 10,
+      requestTraceEnabled: true,
       resetTimezone: 'Asia/Seoul',
       sessionDailyRequestLimit: 20,
       updatedAt: new Date(1_000),

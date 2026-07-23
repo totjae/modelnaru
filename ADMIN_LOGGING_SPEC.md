@@ -131,7 +131,7 @@
 - 처리 시간
 - 요청 ID
 
-목록은 최신순이며 cursor pagination을 사용한다.
+목록은 최신순이며 1부터 시작하는 page와 page size 10~100을 사용한다.
 
 ### 4.2 검색과 필터
 
@@ -190,18 +190,19 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `reason`, `ip_hash`, `user_agent_summary`
 - `request_id`
 
-현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`, `summarization.settings_updated`, `file.retention_updated`와 `file.cleanup_requested`를 기록한다. `usage_events`에는 AI 요청의 주체·모델 snapshot, 상태, token과 처리 시간만 저장해 Usage 대시보드에서 조회한다. 자동 파일 cleanup 결과는 `attachment_settings`의 최근 실행 요약과 구조화된 application log에 남기며 수동 실행은 감사 로그에도 기록한다. 요약 설정 감사 snapshot에는 선택한 model ID, prompt version과 비밀값이 아닌 생성 파라미터만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 통합 관리자 로그 조회 화면과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
+현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`, `summarization.settings_updated`, `file.retention_updated`, 로그 조회·내보내기와 보관 설정 변경을 기록한다. `usage_events`에는 AI 요청의 주체·모델 snapshot, 상태, token과 처리 시간만 저장한다. `operational_logs`에는 인증·보안, 파일 처리와 시스템 작업 이벤트를 저장한다. 관리자 통합 화면은 세 원장을 `AI · 보안 · 감사 · 파일 · 시스템` 범주로 합쳐 조회한다.
 
-### `security_logs`
+자동 파일 cleanup 결과는 `attachment_settings`의 최근 실행 요약과 `operational_logs`에 남기며 수동 실행은 감사 로그에도 기록한다. 요약 설정 감사 snapshot에는 선택한 model ID, prompt version과 비밀값이 아닌 생성 파라미터만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다.
 
-- `id`, `occurred_at`
-- `event_type`, `severity`
-- `user_id`, `session_id`
-- `ip_hash`, `user_agent_summary`
-- `result`, `reason_code`
-- `request_id`, `metadata`
+### `operational_logs`
 
-### `ai_request_logs`
+- `id`, `occurred_at`, `category`, `level`, `action`, `status`
+- `actor_type`, `actor_id`, `actor_label`
+- `target_type`, `target_id`
+- `provider_template_id_snapshot`, `model_id_snapshot`
+- `error_code`, `duration_ms`, `metadata`
+
+### `usage_events`
 
 - `id`, `request_id`, `trace_id`
 - `user_id`, `conversation_id`, `message_id`, `branch_id`
@@ -226,7 +227,7 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `encoding`, `duration_ms`
 - `request_id`, `safe_metadata`
 
-시스템 프로세스 로그는 stdout에 JSON Lines로 기록하고 운영 로그 수집기가 저장한다. 관리자 화면에 필요한 오류·작업 요약은 별도 `system_event_logs` 테이블에도 저장한다.
+시스템 프로세스의 상세 stack은 stdout에 남기고 관리자 화면에 필요한 안전한 요약만 `operational_logs`에 저장한다.
 
 ## 7. 보관 기간 기본값
 
@@ -255,10 +256,9 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 
 ## 9. 내보내기
 
-- 현재 필터 결과를 CSV 또는 JSON으로 내보낼 수 있다.
-- 최대 내보내기 건수와 기간을 제한한다.
-- 내보내기는 백그라운드 작업으로 생성하고 제한 시간 후 삭제한다.
-- 파일 생성·다운로드·삭제를 감사 로그에 남긴다.
+- 현재 필터 결과를 CSV로 내보낼 수 있다.
+- 한 번에 최대 10,000건을 동기식으로 내보낸다.
+- 내보내기 작업을 감사 로그에 남긴다.
 - 민감정보가 제거된 컬럼만 포함한다.
 
 ## 10. 알림과 대시보드
@@ -283,19 +283,14 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 
 외부 이메일·Slack 알림은 2차 범위로 둔다.
 
-## 11. 서버 API 초안
+## 11. 서버 API
 
-- `GET /admin/logs/ai-requests`
-- `GET /admin/logs/security`
-- `GET /admin/logs/audit`
-- `GET /admin/logs/files`
-- `GET /admin/logs/system`
-- `GET /admin/logs/{category}/{id}`
-- `POST /admin/logs/export`
-- `GET /admin/logging/settings`
-- `PATCH /admin/logging/settings`
-- `POST /admin/logging/diagnostic-session`
-- `DELETE /admin/logging/diagnostic-session/{id}`
+- `GET /api/admin/logs`: 기간·범주·수준·상태·검색·page 조회
+- `GET /api/admin/logs/export`: 현재 필터 결과 CSV
+- `GET /api/admin/logs/settings`: 보관 기간과 최근 정리 결과
+- `PUT /api/admin/logs/settings`: 범주별 보관 기간 변경
+- `POST /api/admin/logs/cleanup`: 보관 기간이 지난 로그 즉시 정리
+- `GET /api/admin/logs/:id`: 통합 로그 상세 조회
 
 로그 조회·내보내기·설정 변경은 고정 관리자만 가능하다. 모든 조회와 내보내기도 감사 로그에 남긴다.
 
