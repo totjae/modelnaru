@@ -14,6 +14,7 @@ import { selectConversationModel } from './chat-model-selection';
 import { responseAlternatives } from './chat-response-navigation';
 import { isNearScrollEnd } from './chat-scroll';
 import {
+  defaultChatParameterValues,
   ProviderParameterFields,
   providerParameterRequest,
   type ParameterPolicy,
@@ -193,7 +194,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [assistantId, setAssistantId] = useState<string | null>(null);
-  const [parameterValues, setParameterValues] = useState<ParameterValues>({});
+  const [parameterValues, setParameterValues] = useState<ParameterValues>({
+    ...defaultChatParameterValues,
+  });
   const [conversationListOpen, setConversationListOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -860,7 +863,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 value={selectedModel}
                 onChange={(event) => {
                   setSelectedModel(event.target.value);
-                  setParameterValues({});
+                  setParameterValues({ ...defaultChatParameterValues });
                 }}
                 disabled={busy}
               >

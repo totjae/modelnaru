@@ -69,18 +69,26 @@ export class ProvidersController {
       typeof input?.templateId === 'string' ? input.templateId.trim() : '';
     const name = typeof input?.name === 'string' ? input.name.trim() : '';
     const apiKey = typeof input?.apiKey === 'string' ? input.apiKey.trim() : '';
+    const rawConfiguration = recordBody(input?.configuration);
+    const configuration = Object.fromEntries(
+      Object.entries(rawConfiguration ?? {}).filter(
+        (entry): entry is [string, string] =>
+          /^[A-Za-z0-9_-]{1,64}$/u.test(entry[0]) &&
+          typeof entry[1] === 'string' &&
+          entry[1].length <= 512,
+      ),
+    );
     if (
       !/^[a-z0-9][a-z0-9-]{1,63}$/u.test(templateId) ||
       name.length < 1 ||
       name.length > 100 ||
-      apiKey.length < 8 ||
       apiKey.length > 4_096
     ) {
       this.invalidInput();
     }
     try {
       return await this.providers.create(
-        { apiKey, name, templateId },
+        { apiKey, configuration, name, templateId },
         this.audit(request),
       );
     } catch (error) {

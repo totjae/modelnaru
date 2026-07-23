@@ -65,3 +65,11 @@ fixture는 고정 URL·인증 header·요청 body, 전송 chunk 경계와 무관
 - Vertex AI service account, AWS SigV4와 GitHub Copilot OAuth fixture
 - 모델 목록이 없는 제공자의 수동 모델 ID 등록 범위
 - 정기 모델 동기화 주기와 제거 모델 unavailable 전환 유예기간
+
+## 9. 2026-07-23 Registry 계약 시험
+
+- 전체 registry template이 중복 ID 없이 고정 HTTPS base URL, 인증 방식, OpenAI 호환 채팅 endpoint와 모델 조회 또는 고정 모델 목록을 가진다는 정적 시험을 추가했다.
+- `bearer-optional`은 빈 키에서 Authorization header를 생략하는지 시험한다.
+- 동적 모델 응답은 `data`, `models`, `result`와 최상위 배열을 허용하고 여러 공통 모델 ID 필드를 정규화한다.
+- 고정 모델과 동적 모델이 함께 존재하면 ID 기준으로 합치며 중복을 제거한다.
+- Cloudflare Account ID 치환 결과가 고정 Cloudflare origin을 벗어나지 않는지 시험한다.

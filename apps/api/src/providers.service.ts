@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import {
   providerCatalog,
   providerTemplateById,
+  resolveProviderBaseUrl,
   type ProviderTemplate,
 } from './provider-catalog.js';
 import { ProviderCredentialService } from './provider-credentials.js';
@@ -64,18 +65,28 @@ export class ProvidersService {
   async create(
     input: {
       apiKey: string;
+      configuration: Record<string, string>;
       name: string;
       templateId: string;
     },
     audit: ProviderAuditContext,
   ): Promise<ProviderConnectionRecord> {
     const template = this.availableTemplate(input.templateId);
-    const models = await this.discover(template, input.apiKey);
+    this.validateCredential(template, input.apiKey);
+    const baseUrl = resolveProviderBaseUrl(template, input.configuration);
+    if (!baseUrl) {
+      throw new ProviderError(
+        'PROVIDER_INPUT_INVALID',
+        422,
+        'Provider configuration is invalid.',
+      );
+    }
+    const models = await this.discover(template, input.apiKey, baseUrl);
     const credential = await this.credentials.encrypt(input.apiKey);
     try {
       return await this.repository.create(
         {
-          baseUrl: template.baseUrl!,
+          baseUrl,
           credential,
           credentialHint:
             input.apiKey.length >= 8 ? input.apiKey.slice(-4) : null,
@@ -105,7 +116,7 @@ export class ProvidersService {
     if (!connection) throw this.notFound();
     const template = this.availableTemplate(connection.templateId);
     const apiKey = await this.credentials.decrypt(connection);
-    const models = await this.discover(template, apiKey);
+    const models = await this.discover(template, apiKey, connection.baseUrl);
     return this.mapNotFound(() =>
       this.repository.syncModels(id, models, audit),
     );
@@ -141,9 +152,13 @@ export class ProvidersService {
     return template;
   }
 
-  private async discover(template: ProviderTemplate, apiKey: string) {
+  private async discover(
+    template: ProviderTemplate,
+    apiKey: string,
+    baseUrl: string,
+  ) {
     try {
-      return await this.discovery.discover(template, apiKey);
+      return await this.discovery.discover(template, apiKey, baseUrl);
     } catch (error) {
       if (error instanceof ProviderConnectionError) {
         const status =
@@ -156,6 +171,22 @@ export class ProvidersService {
         throw new ProviderError(error.code, status, error.message);
       }
       throw error;
+    }
+  }
+
+  private validateCredential(template: ProviderTemplate, apiKey: string): void {
+    const optional =
+      template.authType === 'bearer-optional' || template.authType === 'none';
+    if (
+      (!optional && apiKey.length < 8) ||
+      apiKey.length > 4_096 ||
+      (apiKey.length > 0 && apiKey.length < 8)
+    ) {
+      throw new ProviderError(
+        'PROVIDER_INPUT_INVALID',
+        422,
+        'Provider credential is invalid.',
+      );
     }
   }
 

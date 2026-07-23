@@ -180,3 +180,11 @@
 ## 5. 미결정·보류 항목
 
 - production container image 배포 방식은 최초 실제 배포 전에 확정한다.
+
+### ADR-019: Provider Manager registry snapshot과 기본 Temperature
+
+- 상태: 확정
+- 결정일: 2026-07-23
+- 결정: Provider Manager 1.10.0이 참조하는 원격 registry의 API template 32개를 검수한 서버 내장 snapshot으로 제공한다. 동적 조회가 없는 template은 static model을 사용한다. 일반 채팅은 Temperature 1.0을 초기 직접 설정값으로 사용하되 모델 정책이 허용하지 않으면 전송하지 않는다.
+- 이유: 원격 JSON을 실행 중 신뢰하면 공급망 변경이 즉시 운영 요청 경로에 반영되며, 이름만 추가하고 잘못된 공통 endpoint를 사용하면 등록 성공 후 채팅이 실패한다.
+- 영향: API 키 기반 registry Provider는 즉시 등록 가능하다. Vertex·Bedrock·Copilot은 보안상 전용 인증 adapter 전에는 등록할 수 없다. 자동 요약 파라미터는 채팅 기본값과 분리한다.

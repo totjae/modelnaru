@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import {
+  providerBaseUrlMatchesTemplate,
   providerTemplateById,
   type ProviderTemplate,
 } from './provider-catalog.js';
@@ -58,7 +59,7 @@ export class ChatProviderService {
     if (
       !template?.canRegister ||
       !template.baseUrl ||
-      row.base_url !== template.baseUrl
+      !providerBaseUrlMatchesTemplate(template, row.base_url)
     ) {
       throw new ChatProviderUnavailableError();
     }
@@ -68,7 +69,7 @@ export class ChatProviderService {
         ciphertext: row.credential_ciphertext,
         nonce: row.credential_nonce,
       }),
-      baseUrl: template.baseUrl,
+      baseUrl: row.base_url,
       contextWindow: row.context_window,
       maxOutputTokens: row.max_output_tokens,
       modelId: row.model_id,

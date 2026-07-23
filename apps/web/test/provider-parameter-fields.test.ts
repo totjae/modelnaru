@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { providerParameterRequest } from '../app/provider-parameter-fields';
+import {
+  defaultChatParameterValues,
+  providerParameterRequest,
+} from '../app/provider-parameter-fields';
 
 describe('provider parameter request', () => {
+  it('uses Temperature 1.0 as the normal chat default', () => {
+    expect(defaultChatParameterValues).toEqual({ temperature: '1' });
+    expect(providerParameterRequest(defaultChatParameterValues)).toEqual({
+      temperature: 1,
+    });
+  });
+
   it('omits values that are not supported by the selected model policy', () => {
     expect(
       providerParameterRequest(

@@ -5,8 +5,17 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { csrfToken } from './client-auth';
 
 interface ProviderTemplate {
+  authType?:
+    'bearer' | 'bearer-optional' | 'google-api-key' | 'none' | 'x-api-key';
   canRegister: boolean;
   category: 'advanced' | 'featured' | 'template';
+  configurationFields?: Array<{
+    key: string;
+    label: string;
+    maximumLength: number;
+    minimumLength: number;
+    placeholder?: string;
+  }>;
   id: string;
   name: string;
   supportLevel: 'coming_soon' | 'compatible' | 'experimental' | 'verified';
@@ -88,9 +97,14 @@ export function ProviderManager() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const registrable = useMemo(
     () => templates.filter((template) => template.canRegister),
     [templates],
+  );
+  const selectedTemplate = useMemo(
+    () => registrable.find((template) => template.id === selectedTemplateId),
+    [registrable, selectedTemplateId],
   );
 
   async function load() {
@@ -140,6 +154,12 @@ export function ProviderManager() {
         'POST',
         {
           apiKey: data.get('apiKey'),
+          configuration: Object.fromEntries(
+            (selectedTemplate?.configurationFields ?? []).map((field) => [
+              field.key,
+              data.get(`configuration.${field.key}`),
+            ]),
+          ),
           name: data.get('name'),
           templateId: data.get('templateId'),
         },
@@ -152,6 +172,7 @@ export function ProviderManager() {
       setConnections((current) => [...current, connection]);
       setExpanded(connection.id);
       form.reset();
+      setSelectedTemplateId('');
       setNotice(
         `${connection.name} 연결과 모델 ${connection.models.length}개를 등록했습니다. 사용할 모델을 활성화하세요.`,
       );
@@ -283,7 +304,13 @@ export function ProviderManager() {
       <form className="provider-create-form" onSubmit={createConnection}>
         <div>
           <label htmlFor="provider-template">서비스 제공자</label>
-          <select id="provider-template" name="templateId" required>
+          <select
+            id="provider-template"
+            name="templateId"
+            value={selectedTemplateId}
+            onChange={(event) => setSelectedTemplateId(event.target.value)}
+            required
+          >
             <option value="">선택하세요</option>
             {registrable.map((template) => (
               <option key={template.id} value={template.id}>
@@ -292,6 +319,21 @@ export function ProviderManager() {
             ))}
           </select>
         </div>
+        {(selectedTemplate?.configurationFields ?? []).map((field) => (
+          <div key={field.key}>
+            <label htmlFor={`provider-configuration-${field.key}`}>
+              {field.label}
+            </label>
+            <input
+              id={`provider-configuration-${field.key}`}
+              name={`configuration.${field.key}`}
+              minLength={field.minimumLength}
+              maxLength={field.maximumLength}
+              placeholder={field.placeholder}
+              required
+            />
+          </div>
+        ))}
         <div>
           <label htmlFor="provider-name">연결 이름</label>
           <input id="provider-name" name="name" maxLength={100} required />
@@ -305,8 +347,15 @@ export function ProviderManager() {
             minLength={8}
             maxLength={4096}
             autoComplete="new-password"
-            required
+            required={
+              selectedTemplate?.authType !== 'bearer-optional' &&
+              selectedTemplate?.authType !== 'none'
+            }
           />
+          {(selectedTemplate?.authType === 'bearer-optional' ||
+            selectedTemplate?.authType === 'none') && (
+            <small>이 Provider는 API 키 없이도 등록할 수 있습니다.</small>
+          )}
         </div>
         <button type="submit" disabled={busy === 'create'}>
           {busy === 'create' ? '연결 확인 중…' : '연결 시험 및 등록'}

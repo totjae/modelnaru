@@ -71,6 +71,7 @@ describe('ProvidersController', () => {
     expect(providers.create).toHaveBeenCalledWith(
       {
         apiKey: 'provider-key-1234',
+        configuration: {},
         name: 'Gateway',
         templateId: 'llm-gateway',
       },

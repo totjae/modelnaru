@@ -42,7 +42,7 @@ describe('provider parameter policy', () => {
     ).toBe(true);
   });
 
-  it('keeps sampling controls and removes conflicting values when reasoning is enabled', () => {
+  it('keeps unsupported reasoning sampling controls visible but omits them', () => {
     const template = providerTemplateById('openai')!;
     expect(providerParameterPolicy(template, 'gpt-5-mini').profile).toBe(
       'openai-reasoning',
@@ -51,7 +51,12 @@ describe('provider parameter policy', () => {
       normalizeProviderParameters(template, 'gpt-5-mini', {
         temperature: 0.5,
       }),
-    ).toMatchObject({ temperature: 0.5 });
+    ).toEqual({});
+    expect(
+      providerParameterPolicy(template, 'gpt-5-mini').disabledFields,
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'temperature' })]),
+    );
     expect(
       normalizeProviderParameters(template, 'gpt-5-mini', {
         reasoningEffort: 'low',

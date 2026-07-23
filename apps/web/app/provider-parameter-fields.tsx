@@ -17,6 +17,10 @@ export interface ParameterPolicy {
 
 export type ParameterValues = Record<string, string | undefined>;
 
+export const defaultChatParameterValues: ParameterValues = Object.freeze({
+  temperature: '1',
+});
+
 const labels: Record<string, string> = {
   frequencyPenalty: 'Frequency penalty',
   maxOutputTokens: '최대 출력 토큰',
@@ -79,7 +83,7 @@ const defaults: Record<string, string> = {
 };
 
 function initialValue(field: ParameterField): string {
-  if (field.key === 'temperature') return '0.7';
+  if (field.key === 'temperature') return '1';
   if (field.key === 'topP') return '1';
   if (field.key === 'maxOutputTokens') return '2048';
   if (field.key === 'topK') return '40';

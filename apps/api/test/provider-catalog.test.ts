@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   providerCatalog,
+  providerBaseUrlMatchesTemplate,
   providerTemplateById,
+  resolveProviderBaseUrl,
   validateProviderCatalog,
 } from '../src/provider-catalog.js';
 
@@ -21,9 +23,26 @@ describe('provider catalog', () => {
         'copilot',
         'openrouter',
         'deepseek',
-        'together-ai',
+        'together',
       ]),
     );
+  });
+
+  it('resolves fixed configuration placeholders without accepting arbitrary URLs', () => {
+    const cloudflare = providerTemplateById('cloudflare-ai-gateway')!;
+    const resolved = resolveProviderBaseUrl(cloudflare, {
+      accountId: 'account_123',
+    });
+    expect(resolved).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/account_123/ai',
+    );
+    expect(providerBaseUrlMatchesTemplate(cloudflare, resolved!)).toBe(true);
+    expect(
+      providerBaseUrlMatchesTemplate(
+        cloudflare,
+        'https://attacker.example/accounts/account_123/ai',
+      ),
+    ).toBe(false);
   });
 
   it('only enables templates with complete fixed discovery contracts', () => {
@@ -32,10 +51,14 @@ describe('provider catalog', () => {
     )) {
       expect(template.baseUrl).toMatch(/^https:\/\//u);
       expect(template.authType).toBeTruthy();
-      expect(template.modelListPath).toBeTruthy();
+      expect(
+        Boolean(template.modelListPath || template.staticModels?.length),
+      ).toBe(true);
       expect(template.modelResponseType).toBeTruthy();
     }
     expect(providerTemplateById('llm-gateway')?.canRegister).toBe(true);
+    expect(providerTemplateById('openrouter')?.canRegister).toBe(true);
+    expect(providerTemplateById('deepseek')?.canRegister).toBe(true);
     expect(providerTemplateById('bedrock')?.canRegister).toBe(false);
   });
 

@@ -193,3 +193,13 @@ pnpm build
 
 - 실제 Ubuntu HTTPS 관리자 login 검증 후 Playwright E2E 자동화 범위를 확정한다.
 - Anthropic·Google 실제 credential smoke test 결과를 `PROVIDER_CONTRACT_TESTS.md`에 기록한다.
+
+## 15. 2026-07-23 Provider registry 확장 시험
+
+- 카탈로그 40개 항목의 ID 중복, HTTPS URL, 인증 방식과 모델 공급 경로를 정적으로 검증한다.
+- bearer-optional 빈 키의 Authorization 생략과 static model 정규화를 검증한다.
+- Cloudflare Account ID가 고정 origin 안에서만 URL로 치환되는지 검증한다.
+- Provider 등록 controller가 template configuration을 service에 전달하되 비밀값을 응답하지 않는지 검증한다.
+- 일반 채팅 기본 parameter가 Temperature `1.0`으로 변환되는지 Web 단위 시험으로 검증한다.
+- GPT-5·o 계열 추론 모델에서는 기본 Temperature가 upstream 요청에서 제거되는지 검증한다.
+- 실제 Provider별 credential smoke test는 Ubuntu 배포에서 관리자가 해당 키를 보유한 항목만 별도로 수행한다.

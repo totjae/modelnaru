@@ -49,6 +49,7 @@ describe('ProvidersService', () => {
     await service.create(
       {
         apiKey: 'plaintext-provider-key',
+        configuration: {},
         name: 'Gateway',
         templateId: 'llm-gateway',
       },
@@ -58,6 +59,7 @@ describe('ProvidersService', () => {
     expect(discovery.discover).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'llm-gateway' }),
       'plaintext-provider-key',
+      'https://api.llmgateway.io/v1',
     );
     const persisted = repository.create.mock.calls[0]?.[0];
     expect(JSON.stringify(persisted)).not.toContain('plaintext-provider-key');
@@ -75,7 +77,12 @@ describe('ProvidersService', () => {
     );
     await expect(
       service.create(
-        { apiKey: 'provider-key', name: 'Bedrock', templateId: 'bedrock' },
+        {
+          apiKey: 'provider-key',
+          configuration: {},
+          name: 'Bedrock',
+          templateId: 'bedrock',
+        },
         audit,
       ),
     ).rejects.toMatchObject({

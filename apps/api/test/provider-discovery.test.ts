@@ -5,6 +5,7 @@ import {
   discoverProviderModels,
   normalizeProviderModels,
   providerDiscoveryHeaders,
+  staticProviderModels,
 } from '../src/provider-discovery.js';
 
 describe('provider model discovery', () => {
@@ -21,6 +22,15 @@ describe('provider model discovery', () => {
     expect(
       providerDiscoveryHeaders(providerTemplateById('google')!, 'key'),
     ).toMatchObject({ 'x-goog-api-key': 'key' });
+  });
+
+  it('supports optional bearer credentials and static registry models', () => {
+    expect(
+      providerDiscoveryHeaders(providerTemplateById('cerebras')!, ''),
+    ).not.toHaveProperty('Authorization');
+    expect(
+      staticProviderModels(providerTemplateById('deepseek')!),
+    ).toMatchObject([{ id: 'deepseek-v4-flash' }, { id: 'deepseek-v4-pro' }]);
   });
 
   it('normalizes OpenAI-compatible and Google model fixtures', () => {

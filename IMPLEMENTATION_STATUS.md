@@ -34,3 +34,12 @@
 | 외부 backup          | 보류      | 초기에는 구성하지 않음                                                               |
 
 이 문서는 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)의 절차에 따라 각 개발 작업에서 갱신한다.
+
+## 2026-07-23 Provider registry 확장
+
+- Provider Manager 원격 registry 32개 template: 구현 완료
+- bearer·bearer-optional 인증, 동적 모델 조회, static model 병합: 구현 완료
+- Cloudflare Account ID 고정 URL 치환과 검증: 구현 완료
+- 일반 채팅 Temperature 1.0 초기값: 구현 완료
+- Vertex AI·AWS Bedrock·GitHub Copilot 전용 인증 adapter: 보류
+- Gemini Express·NovelAI 실제 계약 adapter: 보류

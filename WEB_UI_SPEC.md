@@ -120,3 +120,11 @@ Next.js Web의 모든 화면, 공통 컴포넌트, 반응형 레이아웃과 상
 - 최종 로고와 아이콘 세트
 - 채팅 화면의 정확한 3열 너비와 모바일 drawer 동작
 - 채팅의 tool call·첨부파일 등에 배정할 세부 보조색
+
+## 12. Provider 등록 필드와 채팅 기본 Temperature
+
+- Provider 선택에 따라 API 키 필수 여부와 template별 추가 필드를 동적으로 표시한다.
+- `bearer-optional`과 `none` 인증은 API 키가 선택 사항임을 표시한다.
+- Cloudflare AI Gateway 선택 시 Account ID 입력란을 표시한다.
+- 새 채팅 workspace의 Temperature 직접 설정은 기본으로 활성화하며 값은 `1.0`이다.
+- 모델이 Temperature를 지원하지 않거나 다른 설정과 충돌하면 요청에서는 제외하고 비활성화 이유를 표시한다.

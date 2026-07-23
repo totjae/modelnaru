@@ -243,16 +243,29 @@ export function providerParameterPolicy(
   modelId: string,
 ): ProviderParameterPolicy {
   const policy = policies[profileFor(template, modelId)];
-  return policy.profile === 'anthropic' &&
+  if (policy.profile === 'openai-reasoning') {
+    return {
+      ...policy,
+      disabledFields: ['temperature', 'topP'].map((key) => ({
+        key: key as ProviderParameterKey,
+        reason:
+          '이 추론 모델은 sampling 값을 지원하지 않아 Provider 기본값을 사용합니다.',
+      })),
+    };
+  }
+  if (
+    policy.profile === 'anthropic' &&
     usesAdaptiveAnthropicThinking(modelId)
-    ? {
-        ...policy,
-        disabledFields: ['temperature', 'topP', 'topK'].map((key) => ({
-          key: key as ProviderParameterKey,
-          reason: '이 모델의 adaptive thinking에서는 적용되지 않습니다.',
-        })),
-      }
-    : policy;
+  ) {
+    return {
+      ...policy,
+      disabledFields: ['temperature', 'topP', 'topK'].map((key) => ({
+        key: key as ProviderParameterKey,
+        reason: '이 모델의 adaptive thinking에서는 적용되지 않습니다.',
+      })),
+    };
+  }
+  return policy;
 }
 
 export class ProviderParameterValidationError extends Error {}
@@ -316,7 +329,7 @@ export function normalizeProviderParameters(
     delete output.topP;
     delete output.topK;
   }
-  if (output.reasoningEffort) {
+  if (policy.profile === 'openai-reasoning') {
     delete output.temperature;
     delete output.topP;
   }

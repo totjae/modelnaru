@@ -90,7 +90,10 @@ export function providerDiscoveryHeaders(
   apiKey: string,
 ): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (template.authType === 'bearer') {
+  if (
+    template.authType === 'bearer' ||
+    (template.authType === 'bearer-optional' && apiKey)
+  ) {
     headers.Authorization = `Bearer ${apiKey}`;
   } else if (template.authType === 'x-api-key') {
     headers['anthropic-version'] = '2023-06-01';
@@ -107,7 +110,11 @@ export function normalizeProviderModels(
 ): DiscoveredProviderModel[] {
   const root = asRecord(document);
   const source =
-    template.modelResponseType === 'google' ? root?.models : root?.data;
+    template.modelResponseType === 'google'
+      ? root?.models
+      : Array.isArray(document)
+        ? document
+        : (root?.data ?? root?.models ?? root?.result);
   if (!Array.isArray(source)) {
     throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
   }
@@ -117,7 +124,9 @@ export function normalizeProviderModels(
     const record = asRecord(item);
     if (!record) continue;
     const rawId = stringValue(
-      template.modelResponseType === 'google' ? record.name : record.id,
+      template.modelResponseType === 'google'
+        ? record.name
+        : (record.id ?? record.model_id ?? record.modelId ?? record.model_name),
     );
     const id = rawId?.replace(/^models\//u, '');
     if (
@@ -159,15 +168,35 @@ export function normalizeProviderModels(
   );
 }
 
+export function staticProviderModels(
+  template: ProviderTemplate,
+): DiscoveredProviderModel[] {
+  return (template.staticModels ?? []).map((id) => ({
+    contextWindow: null,
+    displayName: null,
+    id,
+    maxOutputTokens: null,
+    metadata: {},
+  }));
+}
+
 export async function discoverProviderModels(
   template: ProviderTemplate,
   apiKey: string,
   fetchImplementation: FetchImplementation = fetch,
+  baseUrlOverride?: string,
 ): Promise<DiscoveredProviderModel[]> {
-  if (!template.baseUrl || !template.modelListPath) {
+  if (!template.baseUrl) {
     throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
   }
-  const baseUrl = template.baseUrl.replace(/\/$/u, '');
+  const staticModels = staticProviderModels(template);
+  if (!template.modelListPath) {
+    if (staticModels.length === 0) {
+      throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
+    }
+    return staticModels;
+  }
+  const baseUrl = (baseUrlOverride ?? template.baseUrl).replace(/\/$/u, '');
   const headers = providerDiscoveryHeaders(template, apiKey);
   if (template.credentialValidationPath) {
     await fetchProviderText(
@@ -187,7 +216,13 @@ export async function discoverProviderModels(
   } catch {
     throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
   }
-  return normalizeProviderModels(template, document);
+  const discovered = normalizeProviderModels(template, document);
+  const models = new Map(
+    [...discovered, ...staticModels].map((model) => [model.id, model]),
+  );
+  return [...models.values()].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
 }
 
 @Injectable()
@@ -195,7 +230,8 @@ export class ProviderDiscoveryService {
   discover(
     template: ProviderTemplate,
     apiKey: string,
+    baseUrl?: string,
   ): Promise<DiscoveredProviderModel[]> {
-    return discoverProviderModels(template, apiKey);
+    return discoverProviderModels(template, apiKey, fetch, baseUrl);
   }
 }
