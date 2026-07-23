@@ -2264,10 +2264,11 @@ h1 {
   min-width: 0;
   padding: 14px 16px 16px;
   border-top: 1px solid var(--line);
-  align-items: end;
+  align-items: stretch;
   flex: 0 0 auto;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) 96px;
+  grid-template-rows: auto minmax(42px, 1fr) minmax(42px, 1fr);
 }
 
 .visually-hidden {
@@ -2282,12 +2283,7 @@ h1 {
 }
 
 .attachment-composer {
-  display: grid;
-  min-width: 0;
-  align-items: stretch;
-  gap: 9px;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) 96px;
+  display: contents;
 }
 
 .attachment-add-button {
@@ -2304,7 +2300,7 @@ h1 {
   font-size: 11px;
   font-weight: 750;
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   justify-content: center;
 }
 
@@ -2325,7 +2321,7 @@ h1 {
   overflow-y: auto;
   flex: 1;
   gap: 5px;
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 1;
 }
 
@@ -2403,12 +2399,17 @@ h1 {
 }
 
 .composer textarea {
+  height: 100%;
   min-width: 0;
   max-height: min(220px, 32dvh);
+  grid-column: 1;
+  grid-row: 2 / 4;
 }
 
 .composer > button {
   min-width: 0;
+  grid-column: 2;
+  grid-row: 3;
 }
 
 .composer .stop-button {
@@ -3089,24 +3090,30 @@ h1 {
 
   .composer {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
   }
 
-  .attachment-composer {
-    grid-template-columns: 1fr;
-  }
-
-  .attachment-add-button,
   .pending-attachments {
     width: 100%;
     grid-column: 1;
-  }
-
-  .attachment-add-button {
     grid-row: 1;
   }
 
-  .pending-attachments {
+  .attachment-add-button {
+    width: 100%;
+    grid-column: 1;
     grid-row: 2;
+  }
+
+  .composer textarea {
+    height: auto;
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .composer > button {
+    grid-column: 1;
+    grid-row: 4;
   }
 
   .pending-attachments li {
