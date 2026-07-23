@@ -332,55 +332,71 @@ export default function HomePage() {
           <p className="eyebrow">HOW IT WORKS · INFRASTRUCTURE</p>
           <h2 id="architecture-title">한 대의 서버 안에서, 경계는 분명하게</h2>
           <p>
-            ModelNaru는 Ubuntu 미니 PC에 Docker Compose로 배포됩니다. 외부에는
-            HTTPS만 열고 데이터베이스와 캐시는 내부 네트워크에 격리합니다.
+            브라우저에서 시작된 요청은 웹 진입, 애플리케이션, 데이터 계층을
+            차례로 거칩니다. 서비스는 컨테이너 단위로 역할을 나누되 하나의 대화
+            흐름으로 연결됩니다.
           </p>
         </div>
         <ol className="architecture-flow">
           <li className="architecture-node node-blue">
-            <span>01 · PUBLIC</span>
-            <strong>HTTPS · Nginx</strong>
-            <p>80·443 요청과 인증서를 처리하고 내부 서비스로 전달합니다.</p>
+            <span>01 · WEB SERVICE</span>
+            <strong>사용자 · 관리자 · 게스트</strong>
+            <p>
+              채팅, 운영 관리와 체험 기능을 역할별 화면으로 제공하고 모든 요청을
+              하나의 암호화된 웹 서비스에서 시작합니다.
+            </p>
           </li>
           <li className="architecture-node node-violet">
-            <span>02 · DOCKER EDGE</span>
-            <strong>Gateway · 32432</strong>
-            <p>호스트의 loopback에만 연결된 단일 진입점입니다.</p>
+            <span>02 · REVERSE PROXY</span>
+            <strong>Nginx</strong>
+            <p>
+              기존 도메인과 인증서 운영을 재사용하고 Web과 API를 같은 출처로
+              묶습니다. AI 답변 스트리밍도 끊기지 않도록 전달 방식을 제어합니다.
+            </p>
           </li>
           <li className="architecture-node node-cyan">
             <span>03 · APPLICATION</span>
             <strong>Next.js · NestJS</strong>
-            <p>화면, 인증, 대화, 파일 처리와 AI 스트리밍을 담당합니다.</p>
+            <p>
+              Next.js는 역할별 화면과 채팅 상태를, NestJS는 인증·권한·대화·파일
+              처리와 Provider 연동을 기능별 모듈로 나누어 담당합니다.
+            </p>
           </li>
           <li className="architecture-node node-green">
-            <span>04 · PRIVATE DATA</span>
+            <span>04 · DATA</span>
             <strong>PostgreSQL · Valkey</strong>
-            <p>대화·권한·로그와 세션 보조 상태를 외부 비공개로 보관합니다.</p>
+            <p>
+              PostgreSQL은 계정·권한·대화·사용량·감사 기록의 기준 원장입니다.
+              Valkey는 빠른 임시 상태와 작업 처리를 보조하도록 분리했습니다.
+            </p>
           </li>
         </ol>
         <div className="infrastructure-detail-grid">
           <article>
             <span className="feature-index">A</span>
-            <h3>AI 제공자 연결</h3>
+            <h3>모델이 바뀌어도 대화는 이어지게</h3>
             <p>
-              서버가 암호화된 자격증명으로 외부 AI API를 호출하고 답변을
-              스트리밍합니다. 브라우저에는 API 키를 전달하지 않습니다.
+              서로 다른 AI 제공자의 요청과 응답을 공통 흐름으로 정리하면서도
+              제공자별 생성 파라미터는 유지했습니다. 같은 대화 안에서 모델을
+              바꾸고 답변을 분기로 보존할 수 있습니다.
             </p>
           </article>
           <article>
             <span className="feature-index">B</span>
-            <h3>로컬 파일 저장소</h3>
+            <h3>공간은 나누고 비밀은 서버에만</h3>
             <p>
-              원본 첨부는 공개 경로 밖에 보관합니다. TXT·PDF·이미지를 처리하고
-              스캔 PDF는 한국어·영어 OCR을 수행합니다.
+              사용자와 게스트의 대화·파일을 소유권 기준으로 격리하고 모든 권한을
+              서버에서 다시 확인합니다. Provider 자격증명은 암호화하며
+              브라우저와 일반 로그에 노출하지 않습니다.
             </p>
           </article>
           <article>
             <span className="feature-index">C</span>
-            <h3>작은 서버에 맞춘 제한</h3>
+            <h3>운영자가 이해하고 통제할 수 있게</h3>
             <p>
-              AI 생성과 PDF·OCR 작업의 동시 실행 수를 제한해 Intel N100과 16GB
-              RAM 환경에서 안정적으로 운영합니다.
+              계정과 모델 권한, 호출 제한, 자동 요약, 파일 보관과 사용량·감사
+              기록을 관리자 화면에 모았습니다. 기능의 편리함뿐 아니라 운영
+              과정의 확인 가능성을 함께 설계했습니다.
             </p>
           </article>
         </div>

@@ -12,27 +12,27 @@
 
 ## 현재 상태
 
-| 영역                 | 상태      | 비고                                                                                                                                                                                                           |
-| -------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 상위 요구사항        | 명세 완료 | 전체 요구·provider·log·기술·배포·config 문서 존재                                                                                                                                                              |
-| 개발 문서 관리 지침  | 명세 완료 | root `AGENTS.md`, 문서 색인·갱신 기준·신규 문서 등록 형식                                                                                                                                                      |
-| 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                                                                                                                                                      |
-| 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                                                                                                                                                              |
-| `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                                                                                                                                               |
-| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~15차 권한·게스트·채팅·요약·사용량·attachment·로그 migration 로컬 검증, startup hook DB readiness 대기 적용                                                                              |
-| 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인                                                                                                                             |
-| 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                                                                                                                                            |
-| provider registry    | 구현 완료 | 전체 catalog parameter profile, 핵심 4개 등록·암호화·동기화 UI와 실제 key 확인                                                                                                                                 |
-| Web UI 기반          | 구현 중   | 비로그인 인프라·역할·게스트 체험 포트폴리오, 관리자 탭·Usage·서버 보관 설정, Provider 활성 모델 초록 상태 버튼, 보라 MN·슬림 헤더·고정 높이 대화 목록·행별 삭제·설정 모달·낮은 화면 입력창 보존, 시각 E2E 대기 |
-| 모델 권한·호출 제한  | 구현 완료 | 사용자·게스트 allowlist·일일 제한 관리자 UI와 DB 원자적 예약 구현, AI 호출 연결 대기                                                                                                                           |
-| 게스트 체험          | 구현 중   | 공유 코드·독립 session·권한·할당량·대화 소유권과 logout·설정 저장 시 원본 cleanup queue 처리 구현, HTTPS E2E 대기                                                                                              |
-| AI streaming         | 구현 중   | Provider별 동적 parameter policy·3종 SSE·upstream 취소 구현, 전체 adapter는 후속                                                                                                                               |
-| 대화·branch·요약     | 구현 중   | CRUD·분기·자동 요약·대화방별 모델·동적 Provider 파라미터 저장 구현, Ubuntu 재검증 대기                                                                                                                         |
-| 파일 처리            | 구현 중   | 텍스트·PDF·JPEG·PNG·WebP 저장·추출·멀티모달, 로컬 Poppler·Tesseract 한국어·영어 스캔 PDF OCR, DB 보관 설정·1시간 cleanup worker·cascade queue·고아 정리·만료 metadata UI 구현. 악성 검사 후속                  |
-| 관리자 log           | 구현 완료 | Usage·audit·보안·파일·시스템 통합 조회, 필터·상세·CSV·범주별 retention과 cleanup 구현. Ubuntu migration·화면 E2E 대기                                                                                          |
-| session 전송 기록    | 구현 완료 | 사용자·게스트 대화별 0~3개, session 최대 30개·2MB 메모리 기록, secret·이미지 마스킹, 종료·삭제 연동과 Web 상세 모달 구현. Ubuntu E2E 대기                                                                      |
-| Ubuntu 배포          | 검증 완료 | Ubuntu Compose·외부 Nginx·HTTPS·gateway·health 실통신 확인                                                                                                                                                     |
-| 외부 backup          | 보류      | 초기에는 구성하지 않음                                                                                                                                                                                         |
+| 영역                 | 상태      | 비고                                                                                                                                                                                                                          |
+| -------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 상위 요구사항        | 명세 완료 | 전체 요구·provider·log·기술·배포·config 문서 존재                                                                                                                                                                             |
+| 개발 문서 관리 지침  | 명세 완료 | root `AGENTS.md`, 문서 색인·갱신 기준·신규 문서 등록 형식                                                                                                                                                                     |
+| 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                                                                                                                                                                     |
+| 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                                                                                                                                                                             |
+| `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                                                                                                                                                              |
+| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~15차 권한·게스트·채팅·요약·사용량·attachment·로그 migration 로컬 검증, startup hook DB readiness 대기 적용                                                                                             |
+| 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인                                                                                                                                            |
+| 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                                                                                                                                                           |
+| provider registry    | 구현 완료 | 전체 catalog parameter profile, 핵심 4개 등록·암호화·동기화 UI와 실제 key 확인                                                                                                                                                |
+| Web UI 기반          | 구현 중   | 실제 port·하드웨어를 제외한 계층·설계 원칙 중심 포트폴리오, 관리자 탭·Usage·서버 보관 설정, Provider 활성 모델 초록 상태 버튼, 보라 MN·슬림 헤더·고정 높이 대화 목록·행별 삭제·설정 모달·낮은 화면 입력창 보존, 시각 E2E 대기 |
+| 모델 권한·호출 제한  | 구현 완료 | 사용자·게스트 allowlist·일일 제한 관리자 UI와 DB 원자적 예약 구현, AI 호출 연결 대기                                                                                                                                          |
+| 게스트 체험          | 구현 중   | 공유 코드·독립 session·권한·할당량·대화 소유권과 logout·설정 저장 시 원본 cleanup queue 처리 구현, HTTPS E2E 대기                                                                                                             |
+| AI streaming         | 구현 중   | Provider별 동적 parameter policy·3종 SSE·upstream 취소 구현, 전체 adapter는 후속                                                                                                                                              |
+| 대화·branch·요약     | 구현 중   | CRUD·분기·자동 요약·대화방별 모델·동적 Provider 파라미터 저장 구현, Ubuntu 재검증 대기                                                                                                                                        |
+| 파일 처리            | 구현 중   | 텍스트·PDF·JPEG·PNG·WebP 저장·추출·멀티모달, 로컬 Poppler·Tesseract 한국어·영어 스캔 PDF OCR, DB 보관 설정·1시간 cleanup worker·cascade queue·고아 정리·만료 metadata UI 구현. 악성 검사 후속                                 |
+| 관리자 log           | 구현 완료 | Usage·audit·보안·파일·시스템 통합 조회, 필터·상세·CSV·범주별 retention과 cleanup 구현. Ubuntu migration·화면 E2E 대기                                                                                                         |
+| session 전송 기록    | 구현 완료 | 사용자·게스트 대화별 0~3개, session 최대 30개·2MB 메모리 기록, secret·이미지 마스킹, 종료·삭제 연동과 Web 상세 모달 구현. Ubuntu E2E 대기                                                                                     |
+| Ubuntu 배포          | 검증 완료 | Ubuntu Compose·외부 Nginx·HTTPS·gateway·health 실통신 확인                                                                                                                                                                    |
+| 외부 backup          | 보류      | 초기에는 구성하지 않음                                                                                                                                                                                                        |
 
 이 문서는 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)의 절차에 따라 각 개발 작업에서 갱신한다.
 
