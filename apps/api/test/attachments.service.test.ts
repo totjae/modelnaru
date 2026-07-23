@@ -45,7 +45,12 @@ async function fixture(maximumFileBytes = 1024) {
   };
   const loaded = {
     config: {
-      limits: { maximumAttachmentsPerMessage: 10, maximumFileBytes },
+      limits: {
+        maximumAttachmentsPerMessage: 10,
+        maximumFileBytes,
+        maximumPdfPages: 100,
+        maximumPdfWorkers: 1,
+      },
       storage: {
         attachmentRetentionDays: 30,
         minimumFreeBytesForUpload: 0,
@@ -91,8 +96,10 @@ describe('AttachmentsService', () => {
       expect.objectContaining({
         encoding: 'utf-8',
         extractedText: '첨부 내용',
+        fileKind: 'text',
         includeInFutureMessages: true,
         originalName: 'notes.md',
+        pageCount: null,
       }),
     );
     const prefixes = await readdir(storageRoot);

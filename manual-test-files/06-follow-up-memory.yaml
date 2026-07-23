@@ -1,0 +1,8 @@
+document_id: MN-YAML-GREEN-663
+secret_phrase: '보라색 등대는 새벽 세 시에 켜진다'
+contact:
+  name: 나루지기
+  extension: 7714
+rules:
+  - '이 문구는 후속 메시지 포함 기능 시험에만 사용한다.'
+  - '사용자가 묻기 전에는 비밀 문구를 먼저 언급하지 않는다.'

@@ -21,17 +21,32 @@ import {
   textFileExtension,
   validateTextMediaType,
 } from './text-attachments.js';
+import {
+  extractPdfAttachment,
+  PdfInvalidError,
+  PdfOcrRequiredError,
+  PdfPageLimitError,
+  PdfPasswordProtectedError,
+  PdfTextTooLargeError,
+} from './pdf-attachments.js';
 
 export class FileInputError extends Error {}
 export class FileStorageLowError extends Error {}
 export class FileTooLargeError extends Error {}
 export class FileTypeUnsupportedError extends Error {}
 export class FileTextTooLargeError extends Error {}
+export class FilePdfInvalidError extends Error {}
+export class FilePdfOcrRequiredError extends Error {}
+export class FilePdfPageLimitError extends Error {}
+export class FilePdfPasswordProtectedError extends Error {}
 
 export type UploadByteStream = AsyncIterable<Uint8Array>;
 
 @Injectable()
 export class AttachmentsService {
+  private activePdfWorkers = 0;
+  private readonly pdfWaiters: Array<() => void> = [];
+
   constructor(
     private readonly repository: AttachmentsRepository,
     @Inject(MODELNARU_CONFIG) private readonly loaded: LoadedConfig,
@@ -49,8 +64,9 @@ export class AttachmentsService {
   ): Promise<AttachmentRecord> {
     const principal = this.chatPrincipal(principalValue);
     await this.repository.assertConversation(principal, input.conversationId);
-    const originalName = this.parseFileName(input.fileName);
-    const mediaType = this.parseMediaType(input.mediaType);
+    const parsedName = this.parseFileName(input.fileName);
+    const originalName = parsedName.originalName;
+    const mediaType = this.parseMediaType(input.mediaType, parsedName.fileKind);
     await this.assertStorageCapacity();
 
     const id = randomUUID();
@@ -69,20 +85,30 @@ export class AttachmentsService {
         this.loaded.config.limits.maximumFileBytes,
       );
       const bytes = await readFile(temporaryPath);
-      const extracted = extractTextAttachment(bytes);
+      const extracted =
+        parsedName.fileKind === 'pdf'
+          ? await this.withPdfWorker(() =>
+              extractPdfAttachment(
+                bytes,
+                this.loaded.config.limits.maximumPdfPages,
+              ),
+            )
+          : extractTextAttachment(bytes);
       await mkdir(dirname(finalPath), { recursive: true });
       await rename(temporaryPath, finalPath);
       finalCreated = true;
       return await this.repository.createReady(principal, {
         byteSize,
         conversationId: input.conversationId,
-        encoding: extracted.encoding,
+        encoding: 'encoding' in extracted ? extracted.encoding : null,
         extractedText: extracted.text,
+        fileKind: parsedName.fileKind,
         id,
         includeInFutureMessages: input.includeInFutureMessages,
         maximumPending: this.loaded.config.limits.maximumAttachmentsPerMessage,
         mediaType,
         originalName,
+        pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
         retentionDays: this.loaded.config.storage.attachmentRetentionDays,
         storageKey,
       });
@@ -95,6 +121,21 @@ export class AttachmentsService {
       }
       if (error instanceof TextAttachmentTypeError) {
         throw new FileTypeUnsupportedError();
+      }
+      if (error instanceof PdfTextTooLargeError) {
+        throw new FileTextTooLargeError();
+      }
+      if (error instanceof PdfPageLimitError) {
+        throw new FilePdfPageLimitError();
+      }
+      if (error instanceof PdfPasswordProtectedError) {
+        throw new FilePdfPasswordProtectedError();
+      }
+      if (error instanceof PdfOcrRequiredError) {
+        throw new FilePdfOcrRequiredError();
+      }
+      if (error instanceof PdfInvalidError) {
+        throw new FilePdfInvalidError();
       }
       throw error;
     }
@@ -142,18 +183,32 @@ export class AttachmentsService {
     return principal;
   }
 
-  private parseFileName(header: string): string {
+  private parseFileName(header: string): {
+    fileKind: 'pdf' | 'text';
+    originalName: string;
+  } {
     try {
       const decoded = decodeURIComponent(header);
+      if (decoded.toLocaleLowerCase('en-US').endsWith('.pdf')) {
+        return { fileKind: 'pdf', originalName: safeOriginalName(decoded) };
+      }
       textFileExtension(decoded);
-      return safeOriginalName(decoded);
+      return { fileKind: 'text', originalName: safeOriginalName(decoded) };
     } catch {
       throw new FileTypeUnsupportedError();
     }
   }
 
-  private parseMediaType(value: string): string {
+  private parseMediaType(value: string, fileKind: 'pdf' | 'text'): string {
     try {
+      if (fileKind === 'pdf') {
+        if (
+          value.split(';', 1)[0]!.trim().toLowerCase() !== 'application/pdf'
+        ) {
+          throw new FileTypeUnsupportedError();
+        }
+        return 'application/pdf';
+      }
       return validateTextMediaType(value);
     } catch {
       throw new FileTypeUnsupportedError();
@@ -198,5 +253,19 @@ export class AttachmentsService {
     }
     if (total === 0) throw new FileInputError();
     return total;
+  }
+
+  private async withPdfWorker<T>(task: () => Promise<T>): Promise<T> {
+    const maximum = this.loaded.config.limits.maximumPdfWorkers;
+    if (this.activePdfWorkers >= maximum) {
+      await new Promise<void>((resolve) => this.pdfWaiters.push(resolve));
+    }
+    this.activePdfWorkers += 1;
+    try {
+      return await task();
+    } finally {
+      this.activePdfWorkers -= 1;
+      this.pdfWaiters.shift()?.();
+    }
   }
 }

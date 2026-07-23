@@ -60,10 +60,12 @@ export interface MessageRecord {
 export interface MessageAttachmentRecord {
   byteSize: number;
   expiresAt: Date;
+  fileKind: 'pdf' | 'text';
   id: string;
   includeInFutureMessages: boolean;
   mediaType: string;
   originalName: string;
+  pageCount: number | null;
 }
 
 export interface ConversationDetail extends ConversationRecord {
@@ -132,11 +134,13 @@ interface RawMessageRow {
 interface RawMessageAttachmentRow {
   byte_size: string | number;
   expires_at: Date;
+  file_kind: 'pdf' | 'text';
   id: string;
   include_in_future_messages: boolean;
   media_type: string;
   message_id: string;
   original_name: string;
+  page_count: number | null;
 }
 
 export class ConversationNotFoundError extends Error {}
@@ -288,7 +292,8 @@ export class ChatsRepository {
       ORDER BY branch_id, sequence_number
     `;
     const attachmentRows = await sql<RawMessageAttachmentRow[]>`
-      SELECT id, message_id, original_name, media_type, byte_size,
+      SELECT id, message_id, original_name, media_type, file_kind, byte_size,
+        page_count,
         include_in_future_messages, expires_at
       FROM attachments
       WHERE conversation_id = ${id}
@@ -302,10 +307,12 @@ export class ChatsRepository {
       records.push({
         byteSize: Number(attachment.byte_size),
         expiresAt: attachment.expires_at,
+        fileKind: attachment.file_kind,
         id: attachment.id,
         includeInFutureMessages: attachment.include_in_future_messages,
         mediaType: attachment.media_type,
         originalName: attachment.original_name,
+        pageCount: attachment.page_count,
       });
       attachmentsByMessage.set(attachment.message_id, records);
     }

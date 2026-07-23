@@ -63,10 +63,12 @@ interface ChatMessage {
 interface MessageAttachment {
   byteSize: number;
   expiresAt: string;
+  fileKind: 'pdf' | 'text';
   id: string;
   includeInFutureMessages: boolean;
   mediaType: string;
   originalName: string;
+  pageCount: number | null;
 }
 
 interface PendingAttachment extends MessageAttachment {
@@ -94,7 +96,8 @@ type StreamEvent =
       type: 'error';
     };
 
-const textAttachmentAccept = [
+const attachmentAccept = [
+  '.pdf',
   '.txt',
   '.md',
   '.markdown',
@@ -167,6 +170,18 @@ async function responseMessage(response: Response): Promise<string> {
     }
     if (body.error?.code === 'FILE_TYPE_UNSUPPORTED') {
       return '현재 지원하지 않는 파일 형식이거나 텍스트 파일이 아닙니다.';
+    }
+    if (body.error?.code === 'FILE_PDF_PAGE_LIMIT') {
+      return 'PDF는 최대 100페이지까지 첨부할 수 있습니다.';
+    }
+    if (body.error?.code === 'FILE_PDF_PASSWORD_PROTECTED') {
+      return '암호로 보호된 PDF는 첨부할 수 없습니다.';
+    }
+    if (body.error?.code === 'FILE_PDF_OCR_REQUIRED') {
+      return '텍스트가 없는 스캔 PDF입니다. 현재 OCR은 지원하지 않습니다.';
+    }
+    if (body.error?.code === 'FILE_PDF_INVALID') {
+      return 'PDF가 손상되었거나 올바른 PDF 형식이 아닙니다.';
     }
     if (body.error?.code === 'FILE_ATTACHMENT_LIMIT') {
       return '메시지 하나에는 파일을 최대 10개까지 첨부할 수 있습니다.';
@@ -1082,6 +1097,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                             <span>{attachment.originalName}</span>
                             <small>
                               {fileSizeLabel(attachment.byteSize)}
+                              {attachment.pageCount !== null
+                                ? ` · ${attachment.pageCount}페이지`
+                                : ''}
                               {attachment.includeInFutureMessages
                                 ? ' · 후속 포함'
                                 : ''}
@@ -1172,7 +1190,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   id="chat-file-input"
                   className="visually-hidden"
                   type="file"
-                  accept={textAttachmentAccept}
+                  accept={attachmentAccept}
                   multiple
                   disabled={
                     busy || uploading || currentPendingAttachments.length >= 10
@@ -1199,6 +1217,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                         <span>
                           <strong>{attachment.originalName}</strong>
                           <small>{fileSizeLabel(attachment.byteSize)}</small>
+                          {attachment.pageCount !== null && (
+                            <small>{attachment.pageCount}페이지</small>
+                          )}
                         </span>
                         <label>
                           <input

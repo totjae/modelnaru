@@ -202,4 +202,17 @@ describe('migration plan', () => {
     expect(sql).toContain('char_length(extracted_text) <= 2000000');
     expect(sql).toContain('CREATE INDEX attachments_expiry_idx');
   });
+
+  it('adds PDF page metadata and ready-state constraints', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0012_pdf_attachments.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('ADD COLUMN page_count integer');
+    expect(sql).toContain('attachments_page_count_check');
+    expect(sql).toContain('page_count BETWEEN 1 AND 500');
+    expect(sql).toContain('attachments_ready_pdf_check');
+    expect(sql).toContain("file_kind <> 'pdf'");
+  });
 });

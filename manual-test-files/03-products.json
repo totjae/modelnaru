@@ -1,0 +1,23 @@
+{
+  "documentId": "MN-JSON-ORANGE-552",
+  "currency": "KRW",
+  "products": [
+    {
+      "name": "나루 라이트",
+      "unitPrice": 12000,
+      "quantity": 3
+    },
+    {
+      "name": "나루 프로",
+      "unitPrice": 28500,
+      "quantity": 2
+    },
+    {
+      "name": "나루 미니",
+      "unitPrice": 7500,
+      "quantity": 4
+    }
+  ],
+  "discount": 3000,
+  "memo": "총액은 품목별 단가와 수량을 곱해 합산한 뒤 할인액을 차감한다."
+}

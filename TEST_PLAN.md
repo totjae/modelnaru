@@ -137,6 +137,9 @@
 | FILE-STORAGE-001    | 단위 | 원본 저장           | UUID 경로·0600 임시 파일·byte 상한·실패 시 partial 정리         | 통과 |
 | FILE-API-001        | 단위 | 업로드·메시지 API   | octet stream header·CSRF 전제·attachment ID 전달·파일-only 입력 | 통과 |
 | FILE-E2E-001        | E2E  | HTTPS 텍스트 첨부   | 원본·추출 저장, AI 활용, 후속 포함 전환, 삭제·격리              | 계획 |
+| FILE-PDF-001        | 단위 | PDF 텍스트 추출     | signature·실제 텍스트·페이지 수·페이지 제한·OCR 필요·손상 구분  | 통과 |
+| FILE-PDF-002        | 정적 | 12차 migration      | PDF page_count 범위·ready 추출문·인코딩 제약                    | 통과 |
+| FILE-PDF-E2E-001    | E2E  | HTTPS PDF 첨부      | 텍스트 PDF AI 활용·페이지 표시·암호·스캔·100페이지 거부         | 계획 |
 | UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결              | 통과 |
 | UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용         | 통과 |
 | SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index   | 통과 |
@@ -168,12 +171,12 @@ pnpm build
 
 ## 12. 실제 결과
 
-2026-07-22 개발 환경에서 다음 결과를 확인했다.
+2026-07-23 개발 환경에서 다음 결과를 확인했다.
 
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 140개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 145개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인

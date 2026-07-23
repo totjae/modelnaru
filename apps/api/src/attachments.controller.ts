@@ -25,6 +25,10 @@ import { AttachmentNotFoundError } from './attachments.repository.js';
 import {
   AttachmentsService,
   FileInputError,
+  FilePdfInvalidError,
+  FilePdfOcrRequiredError,
+  FilePdfPageLimitError,
+  FilePdfPasswordProtectedError,
   FileStorageLowError,
   FileTextTooLargeError,
   FileTooLargeError,
@@ -188,6 +192,30 @@ export class AttachmentsController {
         'The extracted text is too large.',
         413,
       );
+    }
+    if (error instanceof FilePdfPageLimitError) {
+      this.error(
+        'FILE_PDF_PAGE_LIMIT',
+        'The PDF exceeds the configured page limit.',
+        413,
+      );
+    }
+    if (error instanceof FilePdfPasswordProtectedError) {
+      this.error(
+        'FILE_PDF_PASSWORD_PROTECTED',
+        'Password-protected PDFs are not supported.',
+        422,
+      );
+    }
+    if (error instanceof FilePdfOcrRequiredError) {
+      this.error(
+        'FILE_PDF_OCR_REQUIRED',
+        'The PDF does not contain an extractable text layer.',
+        422,
+      );
+    }
+    if (error instanceof FilePdfInvalidError) {
+      this.error('FILE_PDF_INVALID', 'The PDF is invalid or damaged.', 422);
     }
     if (error instanceof FileTypeUnsupportedError) {
       this.error(

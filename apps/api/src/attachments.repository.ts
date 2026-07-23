@@ -9,9 +9,11 @@ export interface AttachmentRecord {
   createdAt: Date;
   expiresAt: Date;
   id: string;
+  fileKind: 'pdf' | 'text';
   includeInFutureMessages: boolean;
   mediaType: string;
   originalName: string;
+  pageCount: number | null;
   status: 'failed' | 'processing' | 'ready';
 }
 
@@ -20,9 +22,11 @@ interface RawAttachmentRow {
   created_at: Date;
   expires_at: Date;
   id: string;
+  file_kind: 'pdf' | 'text';
   include_in_future_messages: boolean;
   media_type: string;
   original_name: string;
+  page_count: number | null;
   status: 'failed' | 'processing' | 'ready';
   storage_key: string;
 }
@@ -33,9 +37,11 @@ function mapAttachment(row: RawAttachmentRow): AttachmentRecord {
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     id: row.id,
+    fileKind: row.file_kind,
     includeInFutureMessages: row.include_in_future_messages,
     mediaType: row.media_type,
     originalName: row.original_name,
+    pageCount: row.page_count,
     status: row.status,
   };
 }
@@ -72,13 +78,15 @@ export class AttachmentsRepository {
     input: {
       byteSize: number;
       conversationId: string;
-      encoding: string;
+      encoding: string | null;
       extractedText: string;
+      fileKind: 'pdf' | 'text';
       id: string;
       includeInFutureMessages: boolean;
       maximumPending: number;
       mediaType: string;
       originalName: string;
+      pageCount: number | null;
       retentionDays: number;
       storageKey: string;
     },
@@ -110,16 +118,17 @@ export class AttachmentsRepository {
       const rows = await transaction<RawAttachmentRow[]>`
         INSERT INTO attachments (
           id, conversation_id, original_name, media_type, file_kind,
-          byte_size, storage_key, extracted_text, text_encoding,
+          byte_size, storage_key, extracted_text, text_encoding, page_count,
           include_in_future_messages, status, expires_at
         ) VALUES (
           ${input.id}, ${input.conversationId}, ${input.originalName},
-          ${input.mediaType}, 'text', ${input.byteSize}, ${input.storageKey},
+          ${input.mediaType}, ${input.fileKind}, ${input.byteSize}, ${input.storageKey},
           ${input.extractedText}, ${input.encoding},
+          ${input.pageCount},
           ${input.includeInFutureMessages}, 'ready',
           now() + (${input.retentionDays} * interval '1 day')
         )
-        RETURNING id, original_name, media_type, byte_size,
+        RETURNING id, original_name, media_type, file_kind, byte_size, page_count,
           include_in_future_messages, status, storage_key, created_at,
           expires_at
       `;
@@ -143,7 +152,8 @@ export class AttachmentsRepository {
               AND a.message_id IS NULL
               AND a.conversation_id = c.id
               AND c.user_id = ${principal.id}
-            RETURNING a.id, a.original_name, a.media_type, a.byte_size,
+            RETURNING a.id, a.original_name, a.media_type, a.file_kind,
+              a.byte_size, a.page_count,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `
@@ -155,7 +165,8 @@ export class AttachmentsRepository {
               AND a.message_id IS NULL
               AND a.conversation_id = c.id
               AND c.guest_id = ${principal.id}
-            RETURNING a.id, a.original_name, a.media_type, a.byte_size,
+            RETURNING a.id, a.original_name, a.media_type, a.file_kind,
+              a.byte_size, a.page_count,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `;
@@ -171,7 +182,8 @@ export class AttachmentsRepository {
     const rows =
       principal.type === 'user'
         ? await sql<RawAttachmentRow[]>`
-            SELECT a.id, a.original_name, a.media_type, a.byte_size,
+            SELECT a.id, a.original_name, a.media_type, a.file_kind,
+              a.byte_size, a.page_count,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
             FROM attachments a
@@ -184,7 +196,8 @@ export class AttachmentsRepository {
             ORDER BY a.created_at, a.id
           `
         : await sql<RawAttachmentRow[]>`
-            SELECT a.id, a.original_name, a.media_type, a.byte_size,
+            SELECT a.id, a.original_name, a.media_type, a.file_kind,
+              a.byte_size, a.page_count,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
             FROM attachments a
@@ -220,7 +233,8 @@ export class AttachmentsRepository {
               AND a.message_id IS NULL
               AND a.conversation_id = c.id
               AND c.user_id = ${principal.id}
-            RETURNING a.id, a.original_name, a.media_type, a.byte_size,
+            RETURNING a.id, a.original_name, a.media_type, a.file_kind,
+              a.byte_size, a.page_count,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `
@@ -233,7 +247,8 @@ export class AttachmentsRepository {
               AND a.message_id IS NULL
               AND a.conversation_id = c.id
               AND c.guest_id = ${principal.id}
-            RETURNING a.id, a.original_name, a.media_type, a.byte_size,
+            RETURNING a.id, a.original_name, a.media_type, a.file_kind,
+              a.byte_size, a.page_count,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `;

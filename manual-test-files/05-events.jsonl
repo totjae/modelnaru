@@ -1,0 +1,4 @@
+{"sequence":1,"event":"login","actor":"user01","result":"success","marker":"MN-JSONL-BLUE-117"}
+{"sequence":2,"event":"file_upload","actor":"user01","file":"report.txt","result":"success","marker":"MN-JSONL-BLUE-117"}
+{"sequence":3,"event":"chat_request","actor":"user01","model":"gpt-5-mini","result":"success","marker":"MN-JSONL-BLUE-117"}
+{"sequence":4,"event":"file_delete","actor":"user01","file":"report.txt","result":"denied","reason":"attachment is already linked","marker":"MN-JSONL-BLUE-117"}
