@@ -168,6 +168,7 @@ export class SummarizationRepository {
     branchId: string;
     conversationId: string;
     coveredMessageCount: number;
+    durationMs: number;
     firstMessageId: string;
     inputTokens: number | null;
     lastMessageId: string;
@@ -178,18 +179,57 @@ export class SummarizationRepository {
     summary: string;
     templateId: string;
   }): Promise<void> {
-    await this.database.getClient()`
-      INSERT INTO context_summaries (
-        conversation_id, branch_id, first_message_id, last_message_id,
-        provider_model_id, provider_template_id_snapshot, model_id_snapshot,
-        prompt_version, covered_message_count, summary, input_tokens, output_tokens
-      ) VALUES (
-        ${input.conversationId}, ${input.branchId}, ${input.firstMessageId},
-        ${input.lastMessageId}, ${input.providerModelId}, ${input.templateId},
-        ${input.modelId}, ${input.promptVersion}, ${input.coveredMessageCount},
-        ${input.summary}, ${input.inputTokens}, ${input.outputTokens}
-      ) ON CONFLICT DO NOTHING
-    `;
+    await this.database.getClient().begin(async (transaction) => {
+      const inserted = await transaction<{ id: string }[]>`
+        INSERT INTO context_summaries (
+          conversation_id, branch_id, first_message_id, last_message_id,
+          provider_model_id, provider_template_id_snapshot, model_id_snapshot,
+          prompt_version, covered_message_count, summary, input_tokens, output_tokens
+        ) VALUES (
+          ${input.conversationId}, ${input.branchId}, ${input.firstMessageId},
+          ${input.lastMessageId}, ${input.providerModelId}, ${input.templateId},
+          ${input.modelId}, ${input.promptVersion}, ${input.coveredMessageCount},
+          ${input.summary}, ${input.inputTokens}, ${input.outputTokens}
+        ) ON CONFLICT DO NOTHING
+        RETURNING id
+      `;
+      if (!inserted[0]) return;
+      const owners = await transaction<
+        Array<{
+          guest_id: string | null;
+          user_id: string | null;
+          username: string | null;
+        }>
+      >`
+        SELECT c.user_id, c.guest_id, u.username
+        FROM conversations c
+        LEFT JOIN users u ON u.id = c.user_id
+        WHERE c.id = ${input.conversationId}
+      `;
+      const owner = owners[0];
+      const principalId = owner?.user_id ?? owner?.guest_id;
+      const principalType = owner?.user_id ? 'user' : 'guest';
+      const principalLabel =
+        owner?.username ??
+        (owner?.guest_id ? `게스트 ${owner.guest_id.slice(0, 8)}` : null);
+      if (!principalId || !principalLabel) {
+        throw new Error('Summarization owner is missing');
+      }
+      await transaction`
+        INSERT INTO usage_events (
+          principal_type, principal_id, principal_label, provider_model_id,
+          provider_template_id_snapshot, model_id_snapshot, operation_type,
+          status, input_tokens, output_tokens, duration_ms,
+          started_at, completed_at
+        ) VALUES (
+          ${principalType}, ${principalId}, ${principalLabel},
+          ${input.providerModelId}, ${input.templateId}, ${input.modelId},
+          'summary', 'completed', ${input.inputTokens}, ${input.outputTokens},
+          ${input.durationMs},
+          now() - (${input.durationMs} * interval '1 millisecond'), now()
+        )
+      `;
+    });
   }
 
   private async audit(

@@ -2,12 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 
-import { AccessManager } from './access-manager';
+import { AdminWorkspace } from './admin-workspace';
 import { ChatWorkspace } from './chat-workspace';
 import { csrfToken } from './client-auth';
-import { ProviderManager } from './provider-manager';
-import { UserManager } from './user-manager';
-import { SummarizationManager } from './summarization-manager';
 
 type Principal =
   | { type: 'admin'; username: string }
@@ -188,10 +185,7 @@ export default function HomePage() {
           </div>
         </header>
         {error && <div className="banner error-banner">{error}</div>}
-        <UserManager />
-        <ProviderManager />
-        <AccessManager />
-        <SummarizationManager />
+        <AdminWorkspace />
       </main>
     );
   }

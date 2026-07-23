@@ -141,7 +141,11 @@ function ModelPermissionList({
   );
 }
 
-export function AccessManager() {
+export function AccessManager({
+  scope = 'all',
+}: {
+  scope?: 'all' | 'guest' | 'users';
+}) {
   const [state, setState] = useState<AccessState | null>(null);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -236,7 +240,13 @@ export function AccessManager() {
       <div className="section-heading">
         <div>
           <p className="card-label">ACCESS & DAILY LIMITS</p>
-          <h2 id="access-heading">모델 권한과 게스트 체험</h2>
+          <h2 id="access-heading">
+            {scope === 'users'
+              ? '사용자 모델 권한'
+              : scope === 'guest'
+                ? '게스트 체험'
+                : '모델 권한과 게스트 체험'}
+          </h2>
         </div>
         <button className="quiet-button" type="button" onClick={load}>
           새로고침
@@ -254,178 +264,182 @@ export function AccessManager() {
       {!state || busy === 'load' ? (
         <p className="empty-state">권한 정보를 불러오는 중…</p>
       ) : (
-        <div className="access-grid">
-          <div className="access-panel">
-            <h3>사용자별 모델 권한</h3>
-            {state.users.length === 0 ? (
-              <p className="empty-state">등록된 사용자가 없습니다.</p>
-            ) : (
-              <>
-                <label htmlFor="access-user">사용자</label>
-                <select
-                  id="access-user"
-                  value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
-                >
-                  {state.users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.displayName || user.username} (@{user.username})
-                    </option>
-                  ))}
-                </select>
-                {selectedUser && (
-                  <form
-                    key={`${selectedUser.id}:${JSON.stringify(selectedUser.permissions)}`}
-                    onSubmit={saveUser}
+        <div className={`access-grid${scope !== 'all' ? ' single' : ''}`}>
+          {scope !== 'guest' && (
+            <div className="access-panel">
+              <h3>사용자별 모델 권한</h3>
+              {state.users.length === 0 ? (
+                <p className="empty-state">등록된 사용자가 없습니다.</p>
+              ) : (
+                <>
+                  <label htmlFor="access-user">사용자</label>
+                  <select
+                    id="access-user"
+                    value={selectedUserId}
+                    onChange={(event) => setSelectedUserId(event.target.value)}
                   >
-                    <label htmlFor="user-daily-limit">
-                      계정 전체 일일 호출 제한
-                    </label>
+                    {state.users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName || user.username} (@{user.username})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedUser && (
+                    <form
+                      key={`${selectedUser.id}:${JSON.stringify(selectedUser.permissions)}`}
+                      onSubmit={saveUser}
+                    >
+                      <label htmlFor="user-daily-limit">
+                        계정 전체 일일 호출 제한
+                      </label>
+                      <input
+                        id="user-daily-limit"
+                        name="dailyRequestLimit"
+                        type="number"
+                        min={1}
+                        max={100000}
+                        defaultValue={selectedUser.dailyRequestLimit ?? ''}
+                        placeholder="비워두면 무제한"
+                      />
+                      <ModelPermissionList
+                        models={state.models}
+                        permissions={selectedUser.permissions}
+                      />
+                      <button
+                        type="submit"
+                        disabled={busy === `user:${selectedUser.id}`}
+                      >
+                        사용자 권한 저장
+                      </button>
+                    </form>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {scope !== 'users' && (
+            <div className="access-panel guest-panel">
+              <h3>게스트 체험</h3>
+              <p>
+                활성 세션 {state.guest.activeSessionCount}/
+                {state.guest.maximumActiveSessions} · 코드{' '}
+                {state.guest.accessCodeConfigured ? '설정됨' : '미설정'}
+              </p>
+              <form
+                key={`guest:${JSON.stringify(state.guest.permissions)}:${state.guest.isEnabled}`}
+                onSubmit={saveGuest}
+              >
+                <label className="check-field">
+                  <input
+                    name="isEnabled"
+                    type="checkbox"
+                    defaultChecked={state.guest.isEnabled}
+                  />{' '}
+                  게스트 체험 활성화
+                </label>
+                <label htmlFor="guest-access-code">새 공유 코드</label>
+                <input
+                  id="guest-access-code"
+                  name="accessCode"
+                  type="password"
+                  minLength={6}
+                  maxLength={128}
+                  placeholder={
+                    state.guest.accessCodeConfigured
+                      ? '변경할 때만 입력'
+                      : '6자 이상 필수'
+                  }
+                  autoComplete="new-password"
+                />
+                <div className="access-number-grid">
+                  <label>
+                    최대 활성 세션
                     <input
-                      id="user-daily-limit"
-                      name="dailyRequestLimit"
+                      name="maximumActiveSessions"
+                      type="number"
+                      min={1}
+                      max={100}
+                      defaultValue={state.guest.maximumActiveSessions}
+                      required
+                    />
+                  </label>
+                  <label>
+                    세션당 일일 호출
+                    <input
+                      name="sessionDailyRequestLimit"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      defaultValue={state.guest.sessionDailyRequestLimit}
+                      required
+                    />
+                  </label>
+                  <label>
+                    게스트 전체 일일 호출
+                    <input
+                      name="globalDailyRequestLimit"
                       type="number"
                       min={1}
                       max={100000}
-                      defaultValue={selectedUser.dailyRequestLimit ?? ''}
-                      placeholder="비워두면 무제한"
+                      defaultValue={state.guest.globalDailyRequestLimit}
+                      required
                     />
-                    <ModelPermissionList
-                      models={state.models}
-                      permissions={selectedUser.permissions}
+                  </label>
+                  <label>
+                    미사용 만료(분)
+                    <input
+                      name="idleTimeoutMinutes"
+                      type="number"
+                      min={15}
+                      max={360}
+                      defaultValue={state.guest.idleTimeoutMinutes}
+                      required
                     />
-                    <button
-                      type="submit"
-                      disabled={busy === `user:${selectedUser.id}`}
-                    >
-                      사용자 권한 저장
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="access-panel guest-panel">
-            <h3>게스트 체험</h3>
-            <p>
-              활성 세션 {state.guest.activeSessionCount}/
-              {state.guest.maximumActiveSessions} · 코드{' '}
-              {state.guest.accessCodeConfigured ? '설정됨' : '미설정'}
-            </p>
-            <form
-              key={`guest:${JSON.stringify(state.guest.permissions)}:${state.guest.isEnabled}`}
-              onSubmit={saveGuest}
-            >
-              <label className="check-field">
-                <input
-                  name="isEnabled"
-                  type="checkbox"
-                  defaultChecked={state.guest.isEnabled}
-                />{' '}
-                게스트 체험 활성화
-              </label>
-              <label htmlFor="guest-access-code">새 공유 코드</label>
-              <input
-                id="guest-access-code"
-                name="accessCode"
-                type="password"
-                minLength={6}
-                maxLength={128}
-                placeholder={
-                  state.guest.accessCodeConfigured
-                    ? '변경할 때만 입력'
-                    : '6자 이상 필수'
-                }
-                autoComplete="new-password"
-              />
-              <div className="access-number-grid">
-                <label>
-                  최대 활성 세션
+                  </label>
+                  <label>
+                    최대 유지(시간)
+                    <input
+                      name="absoluteTimeoutHours"
+                      type="number"
+                      min={1}
+                      max={72}
+                      defaultValue={state.guest.absoluteTimeoutHours}
+                      required
+                    />
+                  </label>
+                  <label>
+                    초기화 timezone
+                    <input
+                      name="resetTimezone"
+                      defaultValue={state.guest.resetTimezone}
+                      maxLength={64}
+                      required
+                    />
+                  </label>
+                </div>
+                <label className="check-field">
                   <input
-                    name="maximumActiveSessions"
-                    type="number"
-                    min={1}
-                    max={100}
-                    defaultValue={state.guest.maximumActiveSessions}
-                    required
-                  />
+                    name="fileUploadEnabled"
+                    type="checkbox"
+                    defaultChecked={state.guest.fileUploadEnabled}
+                    disabled
+                  />{' '}
+                  게스트 파일 첨부(파일 기능 구현 후 활성화)
                 </label>
-                <label>
-                  세션당 일일 호출
-                  <input
-                    name="sessionDailyRequestLimit"
-                    type="number"
-                    min={1}
-                    max={1000}
-                    defaultValue={state.guest.sessionDailyRequestLimit}
-                    required
-                  />
-                </label>
-                <label>
-                  게스트 전체 일일 호출
-                  <input
-                    name="globalDailyRequestLimit"
-                    type="number"
-                    min={1}
-                    max={100000}
-                    defaultValue={state.guest.globalDailyRequestLimit}
-                    required
-                  />
-                </label>
-                <label>
-                  미사용 만료(분)
-                  <input
-                    name="idleTimeoutMinutes"
-                    type="number"
-                    min={15}
-                    max={360}
-                    defaultValue={state.guest.idleTimeoutMinutes}
-                    required
-                  />
-                </label>
-                <label>
-                  최대 유지(시간)
-                  <input
-                    name="absoluteTimeoutHours"
-                    type="number"
-                    min={1}
-                    max={72}
-                    defaultValue={state.guest.absoluteTimeoutHours}
-                    required
-                  />
-                </label>
-                <label>
-                  초기화 timezone
-                  <input
-                    name="resetTimezone"
-                    defaultValue={state.guest.resetTimezone}
-                    maxLength={64}
-                    required
-                  />
-                </label>
-              </div>
-              <label className="check-field">
-                <input
-                  name="fileUploadEnabled"
-                  type="checkbox"
-                  defaultChecked={state.guest.fileUploadEnabled}
-                  disabled
-                />{' '}
-                게스트 파일 첨부(파일 기능 구현 후 활성화)
-              </label>
-              <p className="guest-session-notice">
-                설정을 저장하면 현재 게스트 세션이 모두 종료됩니다.
-              </p>
-              <ModelPermissionList
-                models={state.models}
-                permissions={state.guest.permissions}
-              />
-              <button type="submit" disabled={busy === 'guest'}>
-                게스트 설정 저장
-              </button>
-            </form>
-          </div>
+                <p className="guest-session-notice">
+                  설정을 저장하면 현재 게스트 세션이 모두 종료됩니다.
+                </p>
+                <ModelPermissionList
+                  models={state.models}
+                  permissions={state.guest.permissions}
+                />
+                <button type="submit" disabled={busy === 'guest'}>
+                  게스트 설정 저장
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       )}
     </section>

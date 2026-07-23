@@ -107,6 +107,8 @@
 
 ## 4. 관리자 로그 화면
 
+관리자 첫 화면의 `Usage`는 전체 로그 검색보다 먼저 구현하는 요약 화면이다. 대화 본문과 요청 파라미터를 제외한 별도 `usage_events` 원장에서 상대 기간별 요청 수, 대화·자동 요약 유형, 상태, 입력·출력 token, 처리 시간과 사용자·모델 snapshot을 집계한다. 사용자·대화 삭제 후에도 통계 원장은 유지하며 상세 통합 로그의 조회·내보내기 기능과는 구분한다.
+
 관리자 메뉴에 “로그”를 두고 다음 탭을 제공한다.
 
 - AI 요청
@@ -188,7 +190,7 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `reason`, `ip_hash`, `user_agent_summary`
 - `request_id`
 
-현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`와 `summarization.settings_updated`를 기록한다. 요약 설정 감사 snapshot에는 선택한 model ID, prompt version과 비밀값이 아닌 생성 파라미터만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 관리자 로그 조회 화면, retention job과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
+현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`와 `summarization.settings_updated`를 기록한다. `usage_events`에는 AI 요청의 주체·모델 snapshot, 상태, token과 처리 시간만 저장해 Usage 대시보드에서 조회한다. 요약 설정 감사 snapshot에는 선택한 model ID, prompt version과 비밀값이 아닌 생성 파라미터만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 통합 관리자 로그 조회 화면, retention job과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
 
 ### `security_logs`
 

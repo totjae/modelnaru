@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import type { JSONValue } from '@modelnaru/database';
+import type { DatabaseTransaction, JSONValue } from '@modelnaru/database';
 
 import {
   composeBranchMessages,
@@ -83,6 +83,37 @@ function composeContext(
 @Injectable()
 export class ChatMessagesRepository {
   constructor(private readonly database: DatabaseService) {}
+
+  private async beginUsageEvent(
+    transaction: DatabaseTransaction,
+    principal: ChatPrincipal,
+    input: {
+      assistantMessageId: string;
+      modelId: string;
+      providerModelId: string;
+      templateId: string;
+    },
+  ): Promise<void> {
+    const principalLabel =
+      principal.type === 'user'
+        ? (
+            await transaction<{ username: string }[]>`
+              SELECT username FROM users WHERE id = ${principal.id}
+            `
+          )[0]?.username
+        : `게스트 ${principal.id.slice(0, 8)}`;
+    if (!principalLabel) throw new ConversationNotFoundError();
+    await transaction`
+      INSERT INTO usage_events (
+        assistant_message_id, principal_type, principal_id, principal_label,
+        provider_model_id, provider_template_id_snapshot, model_id_snapshot
+      ) VALUES (
+        ${input.assistantMessageId}, ${principal.type}, ${principal.id},
+        ${principalLabel}, ${input.providerModelId}, ${input.templateId},
+        ${input.modelId}
+      )
+    `;
+  }
 
   async assertConversation(
     principal: ChatPrincipal,
@@ -180,6 +211,12 @@ export class ChatMessagesRepository {
           ${transaction.json(storedParameters)}
         )
       `;
+      await this.beginUsageEvent(transaction, principal, {
+        assistantMessageId,
+        modelId: input.modelId,
+        providerModelId: input.providerModelId,
+        templateId: input.templateId,
+      });
       await transaction`
         UPDATE conversations SET updated_at = now()
         WHERE id = ${input.conversationId}
@@ -298,6 +335,12 @@ export class ChatMessagesRepository {
           ${transaction.json(storedParameters)}
         )
       `;
+      await this.beginUsageEvent(transaction, principal, {
+        assistantMessageId,
+        modelId: input.modelId,
+        providerModelId: input.providerModelId,
+        templateId: input.templateId,
+      });
       await transaction`
         UPDATE conversations SET updated_at = now()
         WHERE id = ${input.conversationId}
@@ -365,6 +408,19 @@ export class ChatMessagesRepository {
         RETURNING id
       `;
       if (!rows[0]) throw new ChatMessageStateError();
+      await transaction`
+        UPDATE usage_events
+        SET status = 'completed',
+          input_tokens = ${input.inputTokens},
+          output_tokens = ${input.outputTokens},
+          duration_ms = GREATEST(
+            0,
+            floor(extract(epoch FROM (now() - started_at)) * 1000)::integer
+          ),
+          completed_at = now()
+        WHERE assistant_message_id = ${assistantMessageId}
+          AND status = 'pending'
+      `;
       if (input.activateBranch) {
         await transaction`
           UPDATE conversations
@@ -384,14 +440,27 @@ export class ChatMessagesRepository {
       status: 'cancelled' | 'failed';
     },
   ): Promise<void> {
-    await this.database.getClient()`
-      UPDATE messages
-      SET status = ${input.status}, content = ${input.content},
-        error_code = ${input.errorCode}, completed_at = NULL
-      WHERE id = ${assistantMessageId}
-        AND role = 'assistant'
-        AND status IN ('pending', 'streaming')
-    `;
+    await this.database.getClient().begin(async (transaction) => {
+      await transaction`
+        UPDATE messages
+        SET status = ${input.status}, content = ${input.content},
+          error_code = ${input.errorCode}, completed_at = NULL
+        WHERE id = ${assistantMessageId}
+          AND role = 'assistant'
+          AND status IN ('pending', 'streaming')
+      `;
+      await transaction`
+        UPDATE usage_events
+        SET status = ${input.status},
+          duration_ms = GREATEST(
+            0,
+            floor(extract(epoch FROM (now() - started_at)) * 1000)::integer
+          ),
+          completed_at = now()
+        WHERE assistant_message_id = ${assistantMessageId}
+          AND status = 'pending'
+      `;
+    });
   }
 
   async cancelPending(
@@ -399,33 +468,45 @@ export class ChatMessagesRepository {
     conversationId: string,
     assistantMessageId: string,
   ): Promise<void> {
-    const sql = this.database.getClient();
-    const rows =
-      principal.type === 'user'
-        ? await sql<{ id: string }[]>`
-            UPDATE messages m
-            SET status = 'cancelled', error_code = 'CHAT_CANCELLED'
-            FROM conversations c
-            WHERE m.id = ${assistantMessageId}
-              AND m.conversation_id = ${conversationId}
-              AND m.conversation_id = c.id
-              AND c.user_id = ${principal.id}
-              AND m.role = 'assistant'
-              AND m.status IN ('pending', 'streaming')
-            RETURNING m.id
-          `
-        : await sql<{ id: string }[]>`
-            UPDATE messages m
-            SET status = 'cancelled', error_code = 'CHAT_CANCELLED'
-            FROM conversations c
-            WHERE m.id = ${assistantMessageId}
-              AND m.conversation_id = ${conversationId}
-              AND m.conversation_id = c.id
-              AND c.guest_id = ${principal.id}
-              AND m.role = 'assistant'
-              AND m.status IN ('pending', 'streaming')
-            RETURNING m.id
-          `;
-    if (!rows[0]) throw new ChatMessageStateError();
+    await this.database.getClient().begin(async (transaction) => {
+      const rows =
+        principal.type === 'user'
+          ? await transaction<{ id: string }[]>`
+              UPDATE messages m
+              SET status = 'cancelled', error_code = 'CHAT_CANCELLED'
+              FROM conversations c
+              WHERE m.id = ${assistantMessageId}
+                AND m.conversation_id = ${conversationId}
+                AND m.conversation_id = c.id
+                AND c.user_id = ${principal.id}
+                AND m.role = 'assistant'
+                AND m.status IN ('pending', 'streaming')
+              RETURNING m.id
+            `
+          : await transaction<{ id: string }[]>`
+              UPDATE messages m
+              SET status = 'cancelled', error_code = 'CHAT_CANCELLED'
+              FROM conversations c
+              WHERE m.id = ${assistantMessageId}
+                AND m.conversation_id = ${conversationId}
+                AND m.conversation_id = c.id
+                AND c.guest_id = ${principal.id}
+                AND m.role = 'assistant'
+                AND m.status IN ('pending', 'streaming')
+              RETURNING m.id
+            `;
+      if (!rows[0]) throw new ChatMessageStateError();
+      await transaction`
+        UPDATE usage_events
+        SET status = 'cancelled',
+          duration_ms = GREATEST(
+            0,
+            floor(extract(epoch FROM (now() - started_at)) * 1000)::integer
+          ),
+          completed_at = now()
+        WHERE assistant_message_id = ${assistantMessageId}
+          AND status = 'pending'
+      `;
+    });
   }
 }

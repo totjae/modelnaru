@@ -503,6 +503,301 @@ h1 {
   background: var(--selected-surface);
 }
 
+.admin-workspace {
+  margin-top: 24px;
+}
+
+.admin-navigation {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  display: flex;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
+  box-shadow: 0 14px 38px var(--shadow);
+  backdrop-filter: blur(18px);
+  gap: 5px;
+}
+
+.admin-navigation button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-navigation button:hover {
+  color: var(--text);
+}
+
+.admin-navigation button.active {
+  border-color: var(--violet);
+  background: color-mix(in srgb, var(--violet) 10%, transparent);
+  color: var(--violet);
+}
+
+.admin-tab-panel {
+  min-width: 0;
+  padding-top: 32px;
+}
+
+.admin-tab-panel > .user-management,
+.admin-tab-panel > .provider-management,
+.admin-tab-panel > .access-management,
+.admin-tab-panel > .summarization-management {
+  margin-top: 0;
+}
+
+.admin-tab-panel > .provider-management {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.admin-tab-panel > .user-management + .access-management {
+  margin-top: 56px;
+  padding-top: 44px;
+  border-top: 1px solid var(--line);
+}
+
+.usage-dashboard .card-label {
+  color: var(--orange);
+}
+
+.usage-heading {
+  align-items: flex-end;
+}
+
+.usage-heading h2 {
+  font-size: clamp(30px, 4vw, 44px);
+}
+
+.usage-heading p:last-child {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.usage-periods {
+  display: flex;
+  margin-top: 24px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-x: auto;
+  background: var(--subtle-fill);
+  gap: 4px;
+}
+
+.usage-periods button {
+  min-width: 64px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.usage-periods button.active {
+  border-color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 10%, transparent);
+  color: var(--orange);
+}
+
+.usage-summary-grid {
+  display: grid;
+  margin-top: 18px;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.usage-summary-card {
+  display: grid;
+  min-width: 0;
+  min-height: 138px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-top: 2px solid currentColor;
+  border-radius: 15px;
+  background: var(--subtle-fill);
+  color: var(--blue);
+  align-content: space-between;
+  gap: 9px;
+}
+
+.usage-summary-card.token {
+  color: var(--violet);
+}
+
+.usage-summary-card.requests {
+  color: var(--cyan);
+}
+
+.usage-summary-card.success {
+  color: var(--green);
+}
+
+.usage-summary-card.users {
+  color: var(--orange);
+}
+
+.usage-summary-card span,
+.usage-summary-card small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-summary-card strong {
+  overflow: hidden;
+  color: currentColor;
+  font-size: clamp(25px, 3vw, 34px);
+  letter-spacing: -0.04em;
+  text-overflow: ellipsis;
+}
+
+.usage-breakdown-grid {
+  display: grid;
+  margin-top: 16px;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.usage-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.usage-panel-heading {
+  display: flex;
+  min-height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.usage-panel-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.usage-panel-heading span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.usage-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.usage-table th,
+.usage-table td {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: right;
+}
+
+.usage-table th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.usage-table th:first-child,
+.usage-table td:first-child {
+  text-align: left;
+}
+
+.usage-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.usage-table tbody tr:hover {
+  background: var(--subtle-fill);
+}
+
+.usage-table td strong,
+.usage-table td small {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-table td small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.recent-usage {
+  margin-top: 16px;
+}
+
+.recent-usage .usage-table {
+  min-width: 760px;
+}
+
+.usage-status {
+  display: inline-block;
+  padding: 4px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.usage-status.completed {
+  color: var(--green);
+}
+
+.usage-status.failed {
+  color: var(--red);
+}
+
+.usage-status.cancelled {
+  color: var(--orange);
+}
+
+.usage-status.pending {
+  color: var(--blue);
+}
+
+.usage-updated-at {
+  margin: 12px 2px 0;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+}
+
 .user-management {
   margin-top: 46px;
 }
@@ -1044,6 +1339,10 @@ h1 {
   gap: 18px;
 }
 
+.access-grid.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .access-panel {
   padding: 22px;
   border: 1px solid var(--line);
@@ -1215,8 +1514,9 @@ h1 {
 
 .chat-workspace {
   display: grid;
-  min-height: 680px;
+  min-height: min(680px, calc(100dvh - 110px));
   height: calc(100vh - 170px);
+  height: calc(100dvh - 110px);
   margin-top: 28px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1377,6 +1677,7 @@ h1 {
 
 .chat-toolbar {
   display: flex;
+  flex: 0 0 auto;
   min-height: 46px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--line);
@@ -1706,9 +2007,11 @@ h1 {
 
 .composer {
   display: grid;
+  min-width: 0;
   padding: 14px 16px 16px;
   border-top: 1px solid var(--line);
   align-items: end;
+  flex: 0 0 auto;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) 96px;
 }
@@ -1718,6 +2021,15 @@ h1 {
   padding: 11px 12px;
   resize: vertical;
   line-height: 1.55;
+}
+
+.composer textarea {
+  min-width: 0;
+  max-height: min(220px, 32dvh);
+}
+
+.composer > button {
+  min-width: 0;
 }
 
 .composer .stop-button {
@@ -1874,6 +2186,14 @@ h1 {
     justify-content: flex-start;
   }
 
+  .usage-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .usage-breakdown-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .chat-workspace {
     height: auto;
     min-height: 760px;
@@ -1905,6 +2225,30 @@ h1 {
   .user-shell {
     width: min(100% - 24px, 1180px);
     padding-top: 24px;
+  }
+
+  .admin-workspace {
+    margin-top: 16px;
+  }
+
+  .admin-tab-panel {
+    padding-top: 24px;
+  }
+
+  .admin-navigation button {
+    padding-inline: 13px;
+  }
+
+  .usage-heading {
+    align-items: flex-start;
+  }
+
+  .usage-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .usage-summary-card {
+    min-height: 120px;
   }
 
   .admin-header {

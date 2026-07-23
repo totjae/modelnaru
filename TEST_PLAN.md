@@ -92,41 +92,53 @@
 | GUEST-CLEANUP-001   | 통합 | 임시 데이터 삭제  | logout·만료·관리자 종료 후 기한 내 연쇄 삭제                     | 계획 |
 | GUEST-E2E-001       | E2E  | HTTPS 게스트 체험 | 코드 참가·독립 대화·호출 제한·logout                             | 계획 |
 
+## 8.1 관리자 Usage·메뉴 시험 항목
+
+| ID               | 종류 | 대상                   | 인수 조건                                                              | 상태      |
+| ---------------- | ---- | ---------------------- | ---------------------------------------------------------------------- | --------- |
+| USAGE-STATIC-001 | 정적 | 9차 migration          | 본문 없는 원장·snapshot·상태·token·삭제 후 보존 FK와 기간 index        | 통과      |
+| USAGE-UNIT-001   | 단위 | 기간 검증              | 7개 상대 기간만 허용하고 시작 시각을 요청 시각에서 정확히 계산         | 통과      |
+| USAGE-API-001    | 단위 | 관리자 조회 API        | 기본 1일·no-store·잘못된 기간 400·사용자/게스트 접근 거부              | 부분 통과 |
+| USAGE-INT-001    | 통합 | 요청 원장·PostgreSQL   | 생성·재생성의 완료·실패·취소와 token·처리시간이 원자적으로 기록        | 계획      |
+| USAGE-UI-001     | 정적 | 관리자 Usage·메뉴 분리 | 첫 화면 Usage, 5개 메뉴, 7개 기간, 요약·사용자별·모델별·최근 요청 표시 | 통과      |
+| USAGE-E2E-001    | E2E  | Ubuntu 관리자 대시보드 | 실제 호출 후 기간·사용자·모델 집계와 사용자 삭제 후 기록 보존          | 계획      |
+
 ## 9. 채팅 기반 시험 항목
 
-| ID                  | 종류 | 대상                | 인수 조건                                                      | 상태 |
-| ------------------- | ---- | ------------------- | -------------------------------------------------------------- | ---- |
-| CHAT-STATIC-001     | 정적 | 5차 migration       | 소유권·cascade·root branch·상태·순서·모델 snapshot 제약        | 통과 |
-| CHAT-UNIT-001       | 단위 | service·controller  | 기본값·입력 범위·관리자 거부·소유권 not-found mapping          | 통과 |
-| CHAT-INT-001        | 통합 | PostgreSQL CRUD     | 사용자·게스트 격리와 생성 transaction·수정·삭제                | 계획 |
-| CHAT-SECURITY-001   | 보안 | session·CSRF·소유권 | 다른 주체 ID 비노출, 모든 mutation CSRF 적용                   | 계획 |
-| PROVIDER-ORDER-001  | 단위 | Provider catalog    | 핵심 4개 고정 상단, LLM Gateway 포함 나머지 표시 이름 알파벳순 | 통과 |
-| CHAT-STREAM-001     | 단위 | Provider adapter    | OpenAI·Anthropic·Gemini URL·header·body와 SSE chunk 정규화     | 통과 |
-| CHAT-CONTEXT-001    | 단위 | 컨텍스트 한도       | 초과 시 quota 예약 전 실패 상태와 표준 오류 저장               | 통과 |
-| CHAT-CANCEL-001     | 통합 | 중지·연결 종료      | upstream abort와 assistant `cancelled`·부분 본문 보존          | 계획 |
-| CHAT-E2E-001        | E2E  | HTTPS 텍스트 채팅   | 실제 허용 모델로 생성·stream·저장·새로고침·모델 변경           | 계획 |
-| CHAT-MODEL-001      | 단위 | 모델 선택 복원      | 마지막 허용 모델 복원·권한 제외 시 현재/첫 모델 fallback       | 통과 |
-| CHAT-BRANCH-001     | 단위 | 분기 경로 합성      | 부모 prefix 공유·반복 재생성·잘못된 fork 거부                  | 통과 |
-| CHAT-REGEN-001      | 단위 | 재생성 service·API  | 전용 저장 경로·입력 검증·분기 전환 소유권 전달                 | 통과 |
-| CHAT-REGEN-E2E-001  | E2E  | HTTPS 답변 재생성   | 원본 보존·성공 시 활성화·실패 시 유지·분기 왕복·후속 문맥      | 계획 |
-| CHAT-REGEN-LAST-001 | 단위 | 재생성 대상 제한    | 마지막 assistant만 허용하고 과거·생성 중 답변 거부             | 통과 |
-| CHAT-NAV-001        | 단위 | 인라인 답변 탐색    | 동일 질문의 branch 자체 답변만 후보로 구성                     | 통과 |
-| CHAT-SCROLL-001     | 단위 | 최신 답변 자동 추적 | 하단 임계값 안에서는 추적하고 과거 내용 열람 시 추적 중단      | 통과 |
-| CHAT-REFRESH-001    | 정적 | 응답 완료 상태 갱신 | 전체 loading 전환 없이 상세·목록 데이터만 갱신                 | 통과 |
-| CHAT-LAYOUT-001     | 정적 | 채팅 패널 재구성    | 대화 목록 접기·설정 모달 순서·내부 스크롤·역할별 테두리 적용   | 통과 |
-| CHAT-SETTINGS-001   | 정적 | 대화 설정 모달      | 기본 닫힘·큰 모달·Esc·바깥 클릭·미저장 확인·모바일 전체 화면   | 통과 |
-| CHAT-HEADER-001     | 정적 | 채팅 상단 헤더      | 브랜드·공간·ID·로그아웃 한 줄 배치와 좁은 화면 말줄임          | 통과 |
-| UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결             | 통과 |
-| UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용        | 통과 |
-| SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index  | 통과 |
-| SUMMARY-PARAM-001   | 단위 | 7차 migration·API   | sampling 범위·nullable 기본값·최대 출력 범위 검증              | 통과 |
-| PROVIDER-PARAM-001  | 단위 | parameter policy    | 전체 catalog profile·OpenAI reasoning·Anthropic thinking 규칙  | 통과 |
-| PROVIDER-PARAM-002  | 단위 | request mapping     | Gemini penalty·seed·stop·thinking과 Anthropic/OpenAI 필드 변환 | 통과 |
-| SUMMARY-PARAM-002   | 정적 | 8차 migration·Web   | 고급 JSON·설명·기본 동작·직접 설정 checkbox·충돌 사유 표시     | 통과 |
-| SUMMARY-UNIT-001    | 단위 | 요약 context 구성   | Unicode 추정·호환 요약 재사용·최근 메시지 보존                 | 통과 |
-| SUMMARY-FAIL-001    | 단위 | 요약 실패 처리      | 본 호출 quota 예약 전 표준 오류·failed 상태 저장               | 통과 |
-| SUMMARY-ADMIN-001   | 통합 | 관리자 요약 설정    | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록            | 계획 |
-| SUMMARY-E2E-001     | E2E  | HTTPS 자동 요약     | 실제 모델 요약·원본 보존·재사용·후속 답변 품질                 | 계획 |
+| ID                  | 종류 | 대상                | 인수 조건                                                       | 상태 |
+| ------------------- | ---- | ------------------- | --------------------------------------------------------------- | ---- |
+| CHAT-STATIC-001     | 정적 | 5차 migration       | 소유권·cascade·root branch·상태·순서·모델 snapshot 제약         | 통과 |
+| CHAT-UNIT-001       | 단위 | service·controller  | 기본값·입력 범위·관리자 거부·소유권 not-found mapping           | 통과 |
+| CHAT-INT-001        | 통합 | PostgreSQL CRUD     | 사용자·게스트 격리와 생성 transaction·수정·삭제                 | 계획 |
+| CHAT-SECURITY-001   | 보안 | session·CSRF·소유권 | 다른 주체 ID 비노출, 모든 mutation CSRF 적용                    | 계획 |
+| PROVIDER-ORDER-001  | 단위 | Provider catalog    | 핵심 4개 고정 상단, LLM Gateway 포함 나머지 표시 이름 알파벳순  | 통과 |
+| CHAT-STREAM-001     | 단위 | Provider adapter    | OpenAI·Anthropic·Gemini URL·header·body와 SSE chunk 정규화      | 통과 |
+| CHAT-CONTEXT-001    | 단위 | 컨텍스트 한도       | 초과 시 quota 예약 전 실패 상태와 표준 오류 저장                | 통과 |
+| CHAT-CANCEL-001     | 통합 | 중지·연결 종료      | upstream abort와 assistant `cancelled`·부분 본문 보존           | 계획 |
+| CHAT-E2E-001        | E2E  | HTTPS 텍스트 채팅   | 실제 허용 모델로 생성·stream·저장·새로고침·모델 변경            | 계획 |
+| CHAT-MODEL-001      | 단위 | 모델 선택 복원      | 마지막 허용 모델 복원·권한 제외 시 현재/첫 모델 fallback        | 통과 |
+| CHAT-BRANCH-001     | 단위 | 분기 경로 합성      | 부모 prefix 공유·반복 재생성·잘못된 fork 거부                   | 통과 |
+| CHAT-REGEN-001      | 단위 | 재생성 service·API  | 전용 저장 경로·입력 검증·분기 전환 소유권 전달                  | 통과 |
+| CHAT-REGEN-E2E-001  | E2E  | HTTPS 답변 재생성   | 원본 보존·성공 시 활성화·실패 시 유지·분기 왕복·후속 문맥       | 계획 |
+| CHAT-REGEN-LAST-001 | 단위 | 재생성 대상 제한    | 마지막 assistant만 허용하고 과거·생성 중 답변 거부              | 통과 |
+| CHAT-NAV-001        | 단위 | 인라인 답변 탐색    | 동일 질문의 branch 자체 답변만 후보로 구성                      | 통과 |
+| CHAT-SCROLL-001     | 단위 | 최신 답변 자동 추적 | 하단 임계값 안에서는 추적하고 과거 내용 열람 시 추적 중단       | 통과 |
+| CHAT-REFRESH-001    | 정적 | 응답 완료 상태 갱신 | 전체 loading 전환 없이 상세·목록 데이터만 갱신                  | 통과 |
+| CHAT-LAYOUT-001     | 정적 | 채팅 패널 재구성    | 대화 목록 접기·설정 모달 순서·내부 스크롤·역할별 테두리 적용    | 통과 |
+| CHAT-LAYOUT-002     | 정적 | 낮은 화면 높이      | 입력창·전송 버튼은 축소·잘림 없이 유지되고 메시지 목록만 스크롤 | 통과 |
+| CHAT-SETTINGS-001   | 정적 | 대화 설정 모달      | 기본 닫힘·큰 모달·Esc·바깥 클릭·미저장 확인·모바일 전체 화면    | 통과 |
+| CHAT-HEADER-001     | 정적 | 채팅 상단 헤더      | 브랜드·공간·ID·로그아웃 한 줄 배치와 좁은 화면 말줄임           | 통과 |
+| UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결              | 통과 |
+| UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용         | 통과 |
+| SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index   | 통과 |
+| SUMMARY-PARAM-001   | 단위 | 7차 migration·API   | sampling 범위·nullable 기본값·최대 출력 범위 검증               | 통과 |
+| PROVIDER-PARAM-001  | 단위 | parameter policy    | 전체 catalog profile·OpenAI reasoning·Anthropic thinking 규칙   | 통과 |
+| PROVIDER-PARAM-002  | 단위 | request mapping     | Gemini penalty·seed·stop·thinking과 Anthropic/OpenAI 필드 변환  | 통과 |
+| SUMMARY-PARAM-002   | 정적 | 8차 migration·Web   | 고급 JSON·설명·기본 동작·직접 설정 checkbox·충돌 사유 표시      | 통과 |
+| SUMMARY-UNIT-001    | 단위 | 요약 context 구성   | Unicode 추정·호환 요약 재사용·최근 메시지 보존                  | 통과 |
+| SUMMARY-FAIL-001    | 단위 | 요약 실패 처리      | 본 호출 quota 예약 전 표준 오류·failed 상태 저장                | 통과 |
+| SUMMARY-ADMIN-001   | 통합 | 관리자 요약 설정    | 관리자·CSRF·활성 모델 검증·prompt version·감사 기록             | 계획 |
+| SUMMARY-E2E-001     | E2E  | HTTPS 자동 요약     | 실제 모델 요약·원본 보존·재사용·후속 답변 품질                  | 계획 |
 
 ## 10. 실행 환경
 
@@ -152,7 +164,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 109개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 125개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인

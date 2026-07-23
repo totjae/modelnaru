@@ -37,6 +37,9 @@ import { UsersService } from './users.service.js';
 import { SummarizationController } from './summarization.controller.js';
 import { SummarizationRepository } from './summarization.repository.js';
 import { SummarizationService } from './summarization.service.js';
+import { UsageController } from './usage.controller.js';
+import { UsageRepository } from './usage.repository.js';
+import { UsageService } from './usage.service.js';
 
 @Module({
   controllers: [
@@ -48,6 +51,7 @@ import { SummarizationService } from './summarization.service.js';
     PrincipalAccessController,
     ChatsController,
     SummarizationController,
+    UsageController,
   ],
   providers: [
     modelNaruConfigProvider,
@@ -74,6 +78,8 @@ import { SummarizationService } from './summarization.service.js';
     ChatExecutionService,
     SummarizationRepository,
     SummarizationService,
+    UsageRepository,
+    UsageService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },
   ],
 })

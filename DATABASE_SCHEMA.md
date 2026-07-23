@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가한다. 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
 
 ## 3. Migration 규칙
 
@@ -187,14 +187,42 @@ Index:
 - 대화·branch·포함 메시지 삭제 시 관련 요약도 cascade 삭제한다. Provider 모델 삭제 시 실제 FK만 `NULL`로 바꾸고 snapshot은 유지한다.
 - 같은 branch 끝점·prompt version·Provider 모델의 중복 생성을 partial unique index로 방지한다.
 
-## 15. 오류·경계 조건
+## 15. `usage_events`
+
+`0009_usage_ledger.sql`은 AI 요청의 집계용 원장을 대화 본문과 분리해 저장한다.
+
+| Column                          | Type           | 조건                                  | 설명                                 |
+| ------------------------------- | -------------- | ------------------------------------- | ------------------------------------ |
+| `id`                            | `uuid`         | PK                                    | 사용량 이벤트 ID                     |
+| `assistant_message_id`          | `uuid`         | nullable unique, `ON DELETE SET NULL` | 원 요청 추적용 메시지 ID             |
+| `principal_type`                | `varchar(16)`  | `user` 또는 `guest`                   | 호출 주체 종류                       |
+| `principal_id`                  | `uuid`         | not null, FK 없음                     | 삭제 후에도 집계 가능한 당시 주체 ID |
+| `principal_label`               | `varchar(100)` | not null                              | 당시 사용자명 또는 축약 게스트 표시  |
+| `provider_model_id`             | `uuid`         | nullable, `ON DELETE SET NULL`        | 현재 Provider 모델과의 선택적 연결   |
+| `provider_template_id_snapshot` | `varchar(64)`  | not null                              | 호출 당시 Provider template          |
+| `model_id_snapshot`             | `varchar(255)` | not null                              | 호출 당시 모델 ID                    |
+| `operation_type`                | `varchar(16)`  | `chat` 또는 `summary`                 | 일반 대화 또는 자동 요약 호출        |
+| `status`                        | `varchar(16)`  | pending/completed/failed/cancelled    | 요청 상태                            |
+| `input_tokens`                  | `integer`      | nullable, 0 이상                      | Provider가 보고한 입력 token         |
+| `output_tokens`                 | `integer`      | nullable, 0 이상                      | Provider가 보고한 출력 token         |
+| `duration_ms`                   | `integer`      | nullable, 0 이상                      | 요청 시작부터 종료까지 걸린 시간     |
+| `started_at`                    | `timestamptz`  | not null                              | 요청 원장 생성 시각                  |
+| `completed_at`                  | `timestamptz`  | nullable                              | 완료·실패·취소 시각                  |
+
+- 새 assistant 요청을 만들 때 같은 transaction에서 `pending` 원장을 생성하고 완료·실패·취소 전환과 함께 갱신한다. 새 컨텍스트 요약 저장도 같은 transaction에서 완료 원장을 생성하며 재사용한 기존 요약은 새 호출로 세지 않는다.
+- 대화·사용자·게스트가 삭제돼도 원장은 보존한다. 메시지와 Provider 모델 FK만 `NULL`이 되며 snapshot은 유지한다.
+- 대화 본문, system prompt, 응답 본문, API key와 생성 parameter는 저장하지 않는다.
+- migration 적용 시 기존 assistant 메시지를 한 번 backfill한다. 기존 실패·취소 메시지의 종료 시각은 마지막 갱신 시각을 사용한다.
+- 전체 기간, 주체별 기간과 모델별 기간 index를 둔다.
+
+## 16. 오류·경계 조건
 
 - 적용 기록은 있는데 repository에 migration 파일이 없으면 downgrade 또는 불완전 배포로 보고 실패한다.
 - 기존 migration checksum이 다르면 파일 변조로 보고 실패한다.
 - migration 실패 시 해당 파일의 transaction을 rollback하고 API를 시작하지 않는다.
 - DB URL과 password는 migration log에 출력하지 않는다.
 
-## 16. 검증·인수 조건
+## 17. 검증·인수 조건
 
 - migration 계획 정렬·checksum 단위시험 통과
 - SQL에 users·sessions 제약과 필수 index가 존재
@@ -213,8 +241,9 @@ Index:
 - 대화마다 root branch가 하나이며 활성 branch가 같은 대화에 속함
 - 메시지 역할·상태·분기 순서·모델 snapshot 제약이 존재
 - 요약 설정 singleton, prompt 범위와 요약 범위 message FK·중복 방지 index가 존재
+- 사용량 원장은 본문 없이 주체·모델 snapshot, 상태, token과 처리 시간만 저장하고 원본 삭제 후에도 유지됨
 
-## 17. 미결정·보류 항목
+## 18. 미결정·보류 항목
 
 - 첨부 table과 원본 파일 삭제 관계는 파일 상세 명세 작성 후 추가한다.
 - 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.

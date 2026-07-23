@@ -148,4 +148,24 @@ describe('migration plan', () => {
     expect(sql).toContain('temperature BETWEEN 0 AND 2');
     expect(sql).toContain('top_p BETWEEN 0 AND 1');
   });
+
+  it('defines a content-free usage ledger with durable snapshots', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0009_usage_ledger.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE TABLE usage_events');
+    expect(sql).toContain('assistant_message_id uuid UNIQUE');
+    expect(sql).toContain('ON DELETE SET NULL');
+    expect(sql).toContain('principal_label varchar(100)');
+    expect(sql).toContain('provider_template_id_snapshot varchar(64)');
+    expect(sql).toContain('model_id_snapshot varchar(255)');
+    expect(sql).toContain("operation_type IN ('chat', 'summary')");
+    expect(sql).toContain('usage_events_started_idx');
+    expect(sql).toContain('INSERT INTO usage_events');
+    expect(sql).toContain("m.role = 'assistant'");
+    expect(sql).toContain('FROM context_summaries s');
+    expect(sql).not.toContain('content text');
+  });
 });

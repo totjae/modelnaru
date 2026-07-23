@@ -174,6 +174,7 @@ export class SummarizationService {
     let summary = '';
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
+    const startedAt = Date.now();
     try {
       for await (const event of streamProvider({
         apiKey: runtime.apiKey,
@@ -218,6 +219,7 @@ export class SummarizationService {
       branchId: input.branchId,
       conversationId: input.conversationId,
       coveredMessageCount: prefix.length,
+      durationMs: Date.now() - startedAt,
       firstMessageId: first.id,
       inputTokens,
       lastMessageId: last.id,
