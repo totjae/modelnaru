@@ -27,7 +27,10 @@ import {
   FileInputError,
   FileImageDimensionsError,
   FilePdfInvalidError,
+  FilePdfOcrFailedError,
+  FilePdfOcrNoTextError,
   FilePdfOcrRequiredError,
+  FilePdfOcrUnavailableError,
   FilePdfPageLimitError,
   FilePdfPasswordProtectedError,
   FileStorageLowError,
@@ -213,6 +216,23 @@ export class AttachmentsController {
         'FILE_PDF_OCR_REQUIRED',
         'The PDF does not contain an extractable text layer.',
         422,
+      );
+    }
+    if (error instanceof FilePdfOcrNoTextError) {
+      this.error(
+        'FILE_PDF_OCR_NO_TEXT',
+        'OCR could not recognize text in the PDF.',
+        422,
+      );
+    }
+    if (error instanceof FilePdfOcrFailedError) {
+      this.error('FILE_PDF_OCR_FAILED', 'PDF OCR processing failed.', 422);
+    }
+    if (error instanceof FilePdfOcrUnavailableError) {
+      this.error(
+        'FILE_PDF_OCR_UNAVAILABLE',
+        'PDF OCR is unavailable on this server.',
+        503,
       );
     }
     if (error instanceof FilePdfInvalidError) {

@@ -228,6 +228,7 @@ Index:
 - `file_kind`는 `text`, `pdf`, `image`, `status`는 `processing`, `ready`, `failed`로 제한한다. 현재 API는 `text`·`pdf`의 `ready` 행을 생성한다.
 - text ready 행은 최대 2,000,000자의 `extracted_text`와 `text_encoding`을 반드시 가진다.
 - `0012_pdf_attachments.sql`은 nullable `page_count`를 추가한다. PDF ready 행은 추출문과 1~500 범위의 페이지 수가 필요하며 텍스트 인코딩은 `NULL`이다. 실제 업로드 상한은 config 기본값인 100페이지로 더 엄격하게 검사한다.
+- `0016_pdf_ocr.sql`은 `ocr_page_count`를 추가한다. 값은 0~500이며 PDF에서는 전체 `page_count` 이하, PDF가 아닌 attachment에서는 항상 0이어야 한다.
 - `0013_image_attachments.sql`은 nullable `image_width`, `image_height`와 `provider_models.supports_image_input`을 추가한다. 이미지 ready 행은 양쪽 크기가 모두 필요하고 추출문·인코딩·페이지 수는 `NULL`이다. 모델 capability 기본값은 `false`이며 동기화로 덮어쓰지 않는다.
 - `0014_attachment_lifecycle.sql`은 `expired` 상태, singleton `attachment_settings`, 재시도 가능한 `attachment_cleanup_queue`와 cascade 삭제 전 원본 key를 보존하는 trigger를 추가한다.
 - `include_in_future_messages`는 이후 Provider context에 추출문을 계속 포함할지 결정한다.

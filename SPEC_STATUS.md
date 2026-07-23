@@ -91,7 +91,6 @@
 - 보안 업데이트와 secret rotation 주기
 - 개인정보 처리 및 이용 안내 문구
 - 모바일·접근성 지원 수준
-- 스캔 PDF OCR 도입 여부
 - 사용자별 token·비용 기반 제한과 요금 환산 정책
 - 관리자 대화 본문 열람 기능
 - MCP·batch·router·hook 등 확장 기능

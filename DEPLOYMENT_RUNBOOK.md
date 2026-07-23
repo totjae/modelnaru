@@ -60,6 +60,15 @@ docker compose run --rm migrate
 
 Production container는 build 결과물을 `node`로 직접 실행하며 시작 시 `pnpm`, Corepack 또는 외부 package registry에 접근하지 않는다. 따라서 backend internal network에서도 migration과 API가 시작되어야 한다.
 
+PDF OCR 도구는 API image에 포함된다. 재빌드 후 다음 명령에서 Poppler와 한국어·영어 Tesseract 데이터가 확인돼야 한다.
+
+```bash
+docker compose exec api pdftoppm -v
+docker compose exec api tesseract --list-langs
+```
+
+언어 목록에는 `eng`, `kor`가 모두 있어야 한다. OCR은 host package를 사용하지 않으므로 Ubuntu host에 Tesseract를 별도로 설치하지 않는다.
+
 ### 6.1 관리자 로그인 점검
 
 배포 후 `https://chat.mihoservice.xyz`에서 서버 설정의 관리자 ID·비밀번호와 인증 앱의 현재 6자리 TOTP code로 로그인한다. 새로고침 후 session 유지와 로그아웃을 확인한다. 브라우저 개발자 도구에서는 `modelnaru_session` cookie가 Secure·HttpOnly·SameSite이고 `modelnaru_csrf`가 Secure·SameSite인지 확인한다. 실제 cookie 원문은 log나 지원 요청에 첨부하지 않는다.

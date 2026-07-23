@@ -257,4 +257,16 @@ describe('migration plan', () => {
     expect(sql).toContain('request_trace_enabled');
     expect(sql).toContain("category IN ('security', 'file', 'system')");
   });
+
+  it('adds bounded PDF OCR page metadata', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0016_pdf_ocr.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('ADD COLUMN ocr_page_count integer');
+    expect(sql).toContain('attachments_ocr_page_count_check');
+    expect(sql).toContain('ocr_page_count <= COALESCE(page_count, 0)');
+    expect(sql).toContain("file_kind <> 'pdf' AND ocr_page_count = 0");
+  });
 });

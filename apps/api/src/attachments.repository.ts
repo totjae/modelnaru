@@ -14,6 +14,7 @@ export interface AttachmentRecord {
   imageWidth: number | null;
   includeInFutureMessages: boolean;
   mediaType: string;
+  ocrPageCount: number;
   originalName: string;
   pageCount: number | null;
   status: 'expired' | 'failed' | 'processing' | 'ready';
@@ -29,6 +30,7 @@ interface RawAttachmentRow {
   image_width: number | null;
   include_in_future_messages: boolean;
   media_type: string;
+  ocr_page_count: number;
   original_name: string;
   page_count: number | null;
   status: 'expired' | 'failed' | 'processing' | 'ready';
@@ -46,6 +48,7 @@ function mapAttachment(row: RawAttachmentRow): AttachmentRecord {
     imageWidth: row.image_width,
     includeInFutureMessages: row.include_in_future_messages,
     mediaType: row.media_type,
+    ocrPageCount: row.ocr_page_count,
     originalName: row.original_name,
     pageCount: row.page_count,
     status: row.status,
@@ -93,6 +96,7 @@ export class AttachmentsRepository {
       includeInFutureMessages: boolean;
       maximumPending: number;
       mediaType: string;
+      ocrPageCount: number;
       originalName: string;
       pageCount: number | null;
       retentionDays: number;
@@ -127,19 +131,19 @@ export class AttachmentsRepository {
         INSERT INTO attachments (
           id, conversation_id, original_name, media_type, file_kind,
           byte_size, storage_key, extracted_text, text_encoding, page_count,
-          image_width, image_height,
+          ocr_page_count, image_width, image_height,
           include_in_future_messages, status, expires_at
         ) VALUES (
           ${input.id}, ${input.conversationId}, ${input.originalName},
           ${input.mediaType}, ${input.fileKind}, ${input.byteSize}, ${input.storageKey},
           ${input.extractedText}, ${input.encoding},
-          ${input.pageCount},
+          ${input.pageCount}, ${input.ocrPageCount},
           ${input.imageWidth}, ${input.imageHeight},
           ${input.includeInFutureMessages}, 'ready',
           now() + (${input.retentionDays} * interval '1 day')
         )
         RETURNING id, original_name, media_type, file_kind, byte_size,
-          page_count, image_width, image_height,
+          page_count, ocr_page_count, image_width, image_height,
           include_in_future_messages, status, storage_key, created_at,
           expires_at
       `;
@@ -164,7 +168,8 @@ export class AttachmentsRepository {
               AND a.conversation_id = c.id
               AND c.user_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
-              a.byte_size, a.page_count, a.image_width, a.image_height,
+              a.byte_size, a.page_count, a.ocr_page_count,
+              a.image_width, a.image_height,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `
@@ -177,7 +182,8 @@ export class AttachmentsRepository {
               AND a.conversation_id = c.id
               AND c.guest_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
-              a.byte_size, a.page_count, a.image_width, a.image_height,
+              a.byte_size, a.page_count, a.ocr_page_count,
+              a.image_width, a.image_height,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `;
@@ -194,7 +200,8 @@ export class AttachmentsRepository {
       principal.type === 'user'
         ? await sql<RawAttachmentRow[]>`
             SELECT a.id, a.original_name, a.media_type, a.file_kind,
-              a.byte_size, a.page_count, a.image_width, a.image_height,
+              a.byte_size, a.page_count, a.ocr_page_count,
+              a.image_width, a.image_height,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
             FROM attachments a
@@ -208,7 +215,8 @@ export class AttachmentsRepository {
           `
         : await sql<RawAttachmentRow[]>`
             SELECT a.id, a.original_name, a.media_type, a.file_kind,
-              a.byte_size, a.page_count, a.image_width, a.image_height,
+              a.byte_size, a.page_count, a.ocr_page_count,
+              a.image_width, a.image_height,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
             FROM attachments a
@@ -245,7 +253,8 @@ export class AttachmentsRepository {
               AND a.conversation_id = c.id
               AND c.user_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
-              a.byte_size, a.page_count, a.image_width, a.image_height,
+              a.byte_size, a.page_count, a.ocr_page_count,
+              a.image_width, a.image_height,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `
@@ -259,7 +268,8 @@ export class AttachmentsRepository {
               AND a.conversation_id = c.id
               AND c.guest_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
-              a.byte_size, a.page_count, a.image_width, a.image_height,
+              a.byte_size, a.page_count, a.ocr_page_count,
+              a.image_width, a.image_height,
               a.include_in_future_messages, a.status, a.storage_key,
               a.created_at, a.expires_at
           `;

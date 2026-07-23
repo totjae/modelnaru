@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -71,6 +72,7 @@ interface MessageAttachment {
   id: string;
   includeInFutureMessages: boolean;
   mediaType: string;
+  ocrPageCount: number;
   originalName: string;
   pageCount: number | null;
   status: 'expired' | 'ready';
@@ -208,7 +210,16 @@ async function responseMessage(response: Response): Promise<string> {
       return '암호로 보호된 PDF는 첨부할 수 없습니다.';
     }
     if (body.error?.code === 'FILE_PDF_OCR_REQUIRED') {
-      return '텍스트가 없는 스캔 PDF입니다. 현재 OCR은 지원하지 않습니다.';
+      return '텍스트가 없는 스캔 PDF이며 OCR 처리가 필요합니다.';
+    }
+    if (body.error?.code === 'FILE_PDF_OCR_NO_TEXT') {
+      return 'OCR을 실행했지만 인식할 수 있는 글자가 없습니다.';
+    }
+    if (body.error?.code === 'FILE_PDF_OCR_FAILED') {
+      return 'PDF OCR 처리에 실패했습니다. 해상도나 문서 상태를 확인하세요.';
+    }
+    if (body.error?.code === 'FILE_PDF_OCR_UNAVAILABLE') {
+      return '서버에서 PDF OCR을 사용할 수 없습니다. 관리자에게 문의하세요.';
     }
     if (body.error?.code === 'FILE_PDF_INVALID') {
       return 'PDF가 손상되었거나 올바른 PDF 형식이 아닙니다.';
@@ -1099,11 +1110,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             ))
           )}
         </nav>
-        <p className="chat-isolation-note">
-          {isGuest
-            ? '이 대화는 현재 게스트 세션에만 보입니다.'
-            : '이 계정의 대화는 다른 사용자와 분리됩니다.'}
-        </p>
+        {isGuest && (
+          <p className="chat-isolation-note">
+            이 대화는 현재 게스트 세션에만 보입니다.
+          </p>
+        )}
       </aside>
 
       <div className="chat-main">
@@ -1198,6 +1209,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                               {fileSizeLabel(attachment.byteSize)}
                               {attachment.pageCount !== null
                                 ? ` · ${attachment.pageCount}페이지`
+                                : ''}
+                              {attachment.ocrPageCount > 0
+                                ? ` · OCR ${attachment.ocrPageCount}페이지`
                                 : ''}
                               {attachment.imageWidth !== null &&
                               attachment.imageHeight !== null
@@ -1326,6 +1340,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                           {attachment.pageCount !== null && (
                             <small>{attachment.pageCount}페이지</small>
                           )}
+                          {attachment.ocrPageCount > 0 && (
+                            <small>OCR {attachment.ocrPageCount}페이지</small>
+                          )}
                           {attachment.imageWidth !== null &&
                             attachment.imageHeight !== null && (
                               <small>
@@ -1371,6 +1388,17 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                     : '메시지를 입력하세요'
                 }
                 disabled={busy || uploading || models.length === 0}
+                onKeyDown={(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+                  if (
+                    event.key !== 'Enter' ||
+                    event.shiftKey ||
+                    event.nativeEvent.isComposing
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }}
               />
               {busy ? (
                 <button

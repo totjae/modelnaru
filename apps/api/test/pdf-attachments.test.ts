@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractPdfAttachment,
   PdfInvalidError,
+  PdfOcrNoTextError,
   PdfOcrRequiredError,
   PdfPageLimitError,
 } from '../src/pdf-attachments.js';
@@ -42,6 +43,7 @@ describe('PDF attachments', () => {
     await expect(
       extractPdfAttachment(pdfBytes('ModelNaru PDF TEST 7429'), 100),
     ).resolves.toEqual({
+      ocrPageCount: 0,
       pageCount: 1,
       text: '[PDF 1페이지]\nModelNaru PDF TEST 7429',
     });
@@ -57,6 +59,27 @@ describe('PDF attachments', () => {
     await expect(
       extractPdfAttachment(pdfBytes(''), 100),
     ).rejects.toBeInstanceOf(PdfOcrRequiredError);
+  });
+
+  it('uses OCR text for a scanned PDF when an OCR engine is available', async () => {
+    await expect(
+      extractPdfAttachment(pdfBytes(''), 100, {
+        recognize: () =>
+          Promise.resolve(new Map([[1, 'OCR로 읽은 한국어 문장']])),
+      }),
+    ).resolves.toEqual({
+      ocrPageCount: 1,
+      pageCount: 1,
+      text: '[PDF 1페이지 · OCR]\nOCR로 읽은 한국어 문장',
+    });
+  });
+
+  it('rejects a scanned PDF when OCR recognizes no text', async () => {
+    await expect(
+      extractPdfAttachment(pdfBytes(''), 100, {
+        recognize: () => Promise.resolve(new Map([[1, '']])),
+      }),
+    ).rejects.toBeInstanceOf(PdfOcrNoTextError);
   });
 
   it('rejects data that only claims to be a PDF', async () => {

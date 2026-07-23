@@ -2282,16 +2282,18 @@ h1 {
 }
 
 .attachment-composer {
-  display: flex;
+  display: grid;
   min-width: 0;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 9px;
   grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 96px;
 }
 
 .attachment-add-button {
   display: inline-flex;
-  min-height: 32px;
+  width: 100%;
+  min-height: 42px;
   padding: 0 10px;
   border: 1px solid var(--orange);
   border-radius: 9px;
@@ -2301,6 +2303,9 @@ h1 {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 750;
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: center;
 }
 
 .attachment-add-button:hover {
@@ -2320,6 +2325,8 @@ h1 {
   overflow-y: auto;
   flex: 1;
   gap: 5px;
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .pending-attachments li {
@@ -2779,7 +2786,7 @@ h1 {
 
 .theme-control {
   position: fixed;
-  right: 18px;
+  left: 18px;
   bottom: 18px;
   z-index: 30;
   display: flex;
@@ -3085,11 +3092,21 @@ h1 {
   }
 
   .attachment-composer {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .attachment-add-button,
+  .pending-attachments {
+    width: 100%;
+    grid-column: 1;
+  }
+
+  .attachment-add-button {
+    grid-row: 1;
   }
 
   .pending-attachments {
-    width: 100%;
+    grid-row: 2;
   }
 
   .pending-attachments li {

@@ -90,6 +90,7 @@
 | GUEST-POLICY-001    | 통합 | 게스트 설정 저장  | 설정 저장 시 기존 게스트 session을 항상 모두 종료                | 계획 |
 | UI-STATIC-001       | 정적 | 공통 UI theme     | 라이트·다크 token·역할별 7색 단색 포인트·focus·checkbox 정렬     | 통과 |
 | UI-THEME-001        | E2E  | 테마 전환         | 시스템 추종·수동 전환·새로고침 후 선택 복원                      | 계획 |
+| UI-COMPOSER-001     | 정적 | 채팅 작성 영역    | 파일·전송 버튼 동일 크기·Enter 전송·Shift+Enter 줄바꿈·IME 보호  | 통과 |
 | GUEST-ISOLATION-001 | 보안 | 게스트 소유권     | 같은 코드를 쓴 두 guest가 상대 대화·첨부를 조회하지 못함         | 계획 |
 | GUEST-CLEANUP-001   | 통합 | 임시 데이터 삭제  | logout·만료·관리자 종료 후 기한 내 연쇄 삭제                     | 계획 |
 | GUEST-E2E-001       | E2E  | HTTPS 게스트 체험 | 코드 참가·독립 대화·호출 제한·logout                             | 계획 |
@@ -141,6 +142,10 @@
 | FILE-E2E-001        | E2E  | HTTPS 텍스트 첨부   | 원본·추출 저장, AI 활용, 후속 포함 전환, 삭제·격리              | 계획 |
 | FILE-PDF-001        | 단위 | PDF 텍스트 추출     | signature·실제 텍스트·페이지 수·페이지 제한·OCR 필요·손상 구분  | 통과 |
 | FILE-PDF-002        | 정적 | 12차 migration      | PDF page_count 범위·ready 추출문·인코딩 제약                    | 통과 |
+| FILE-OCR-001        | 단위 | 스캔 PDF OCR 전환   | 텍스트 레이어 없음·페이지 구분·무결과 오류                      | 통과 |
+| FILE-OCR-002        | 단위 | 로컬 OCR engine     | 페이지별 렌더링·kor+eng 인식·임시 파일 정리                     | 통과 |
+| FILE-OCR-003        | 정적 | 16차 migration      | OCR 페이지 수 범위·PDF 전체 페이지 수 이하 제약                 | 통과 |
+| FILE-OCR-E2E-001    | E2E  | Ubuntu 스캔 PDF     | 실제 한국어·영어 OCR·AI 컨텍스트·임시 파일 정리·N100 처리 시간  | 계획 |
 | FILE-PDF-E2E-001    | E2E  | HTTPS PDF 첨부      | 텍스트 PDF AI 활용·페이지 표시·암호·스캔·100페이지 거부         | 계획 |
 | FILE-IMAGE-001      | 단위 | 이미지 본문 검증    | JPEG·PNG·WebP 확장자/MIME·signature·해상도·픽셀 상한            | 통과 |
 | FILE-IMAGE-002      | 단위 | 멀티모달 변환       | OpenAI image_url·Anthropic image block·Gemini inline_data       | 통과 |

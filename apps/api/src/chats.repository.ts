@@ -67,6 +67,7 @@ export interface MessageAttachmentRecord {
   id: string;
   includeInFutureMessages: boolean;
   mediaType: string;
+  ocrPageCount: number;
   originalName: string;
   pageCount: number | null;
   status: 'expired' | 'ready';
@@ -148,6 +149,7 @@ interface RawMessageAttachmentRow {
   include_in_future_messages: boolean;
   media_type: string;
   message_id: string;
+  ocr_page_count: number;
   original_name: string;
   page_count: number | null;
   status: 'expired' | 'ready';
@@ -306,7 +308,7 @@ export class ChatsRepository {
     `;
     const attachmentRows = await sql<RawMessageAttachmentRow[]>`
       SELECT id, message_id, original_name, media_type, file_kind, byte_size,
-        page_count, image_width, image_height,
+        page_count, ocr_page_count, image_width, image_height,
         include_in_future_messages, expires_at, status
       FROM attachments
       WHERE conversation_id = ${id}
@@ -326,6 +328,7 @@ export class ChatsRepository {
         id: attachment.id,
         includeInFutureMessages: attachment.include_in_future_messages,
         mediaType: attachment.media_type,
+        ocrPageCount: attachment.ocr_page_count,
         originalName: attachment.original_name,
         pageCount: attachment.page_count,
         status: attachment.status,

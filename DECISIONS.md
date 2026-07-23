@@ -201,6 +201,15 @@
 - 대안: 브라우저 전역 상태만 유지, 마지막 assistant 메시지를 설정 원본으로 사용, 사용자 계정 단위 기본값만 저장.
 - 영향: 제목이 같아도 대화 UUID가 다르면 설정이 독립된다. 기존 대화는 활성 분기의 최신 assistant 메시지로 한 번 backfill하며, 저장 모델을 사용할 수 없으면 마지막 허용 모델 또는 첫 허용 모델로 대체한다. 저장 설정은 권한이 아니므로 호출 시 서버가 다시 검증한다.
 
+### ADR-023: 로컬 Poppler·Tesseract 기반 스캔 PDF OCR
+
+- 상태: 확정
+- 결정일: 2026-07-24
+- 결정: 텍스트 레이어가 전혀 없는 PDF만 Poppler `pdftoppm`으로 페이지별 200 DPI PNG를 만들고 Tesseract `kor+eng`로 OCR한다. API container에 실행 파일과 언어 데이터를 포함한다.
+- 이유: 1~3명이 사용하는 N100 서버에서 별도 Python worker와 대형 OCR model을 상시 운영하지 않고도 한국어·영어 스캔 문서를 외부 전송 없이 처리하기 위함이다.
+- 대안: PaddleOCR Python worker, 외부 Cloud Vision, OCR 미지원 유지.
+- 영향: OCR은 PDF·OCR worker를 각각 기본 1개로 제한하며 페이지별 명령 제한을 적용한다. 임시 이미지는 즉시 삭제하고 `ocr_page_count`만 metadata로 보존한다. 표·필기·복잡한 다단 편집은 인식 정확도가 낮을 수 있다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

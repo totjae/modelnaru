@@ -18,6 +18,11 @@ RUN pnpm --filter @modelnaru/config build \
 
 FROM dependencies AS api
 ENV NODE_ENV=production
+RUN apk add --no-cache \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-data-eng \
+    tesseract-ocr-data-kor
 COPY --from=build /workspace/packages/config/dist /workspace/packages/config/dist
 COPY --from=build /workspace/packages/database/dist /workspace/packages/database/dist
 COPY --from=build /workspace/apps/api/dist /workspace/apps/api/dist

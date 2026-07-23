@@ -25,11 +25,15 @@ import {
 import {
   extractPdfAttachment,
   PdfInvalidError,
+  PdfOcrFailedError,
+  PdfOcrNoTextError,
   PdfOcrRequiredError,
+  PdfOcrUnavailableError,
   PdfPageLimitError,
   PdfPasswordProtectedError,
   PdfTextTooLargeError,
 } from './pdf-attachments.js';
+import { LocalPdfOcrEngine } from './pdf-ocr.js';
 import {
   extractImageAttachment,
   ImageDimensionsError,
@@ -44,7 +48,10 @@ export class FileTooLargeError extends Error {}
 export class FileTypeUnsupportedError extends Error {}
 export class FileTextTooLargeError extends Error {}
 export class FilePdfInvalidError extends Error {}
+export class FilePdfOcrFailedError extends Error {}
+export class FilePdfOcrNoTextError extends Error {}
 export class FilePdfOcrRequiredError extends Error {}
+export class FilePdfOcrUnavailableError extends Error {}
 export class FilePdfPageLimitError extends Error {}
 export class FilePdfPasswordProtectedError extends Error {}
 export class FileImageDimensionsError extends Error {}
@@ -53,7 +60,9 @@ export type UploadByteStream = AsyncIterable<Uint8Array>;
 
 @Injectable()
 export class AttachmentsService {
+  private activeOcrWorkers = 0;
   private activePdfWorkers = 0;
+  private readonly ocrWaiters: Array<() => void> = [];
   private readonly pdfWaiters: Array<() => void> = [];
 
   constructor(
@@ -113,6 +122,14 @@ export class AttachmentsService {
               extractPdfAttachment(
                 bytes,
                 this.loaded.config.limits.maximumPdfPages,
+                {
+                  recognize: (pdfBytes, pageCount) =>
+                    this.withOcrWorker(() =>
+                      new LocalPdfOcrEngine(
+                        this.loaded.paths.storageTemp,
+                      ).recognize(pdfBytes, pageCount),
+                    ),
+                },
               ),
             )
           : parsedName.fileKind === 'image'
@@ -138,6 +155,7 @@ export class AttachmentsService {
         maximumPending: this.loaded.config.limits.maximumAttachmentsPerMessage,
         mediaType,
         originalName,
+        ocrPageCount: 'ocrPageCount' in extracted ? extracted.ocrPageCount : 0,
         pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
         retentionDays,
         storageKey,
@@ -155,6 +173,8 @@ export class AttachmentsService {
           byteSize,
           fileKind: parsedName.fileKind,
           mediaType,
+          ocrPageCount:
+            'ocrPageCount' in extracted ? extracted.ocrPageCount : 0,
           pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
         },
         targetId: created.id,
@@ -191,6 +211,15 @@ export class AttachmentsService {
       }
       if (error instanceof PdfPasswordProtectedError) {
         throw new FilePdfPasswordProtectedError();
+      }
+      if (error instanceof PdfOcrUnavailableError) {
+        throw new FilePdfOcrUnavailableError();
+      }
+      if (error instanceof PdfOcrFailedError) {
+        throw new FilePdfOcrFailedError();
+      }
+      if (error instanceof PdfOcrNoTextError) {
+        throw new FilePdfOcrNoTextError();
       }
       if (error instanceof PdfOcrRequiredError) {
         throw new FilePdfOcrRequiredError();
@@ -353,6 +382,20 @@ export class AttachmentsService {
     } finally {
       this.activePdfWorkers -= 1;
       this.pdfWaiters.shift()?.();
+    }
+  }
+
+  private async withOcrWorker<T>(task: () => Promise<T>): Promise<T> {
+    const maximum = this.loaded.config.limits.maximumOcrWorkers;
+    if (this.activeOcrWorkers >= maximum) {
+      await new Promise<void>((resolve) => this.ocrWaiters.push(resolve));
+    }
+    this.activeOcrWorkers += 1;
+    try {
+      return await task();
+    } finally {
+      this.activeOcrWorkers -= 1;
+      this.ocrWaiters.shift()?.();
     }
   }
 }

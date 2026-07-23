@@ -6,7 +6,7 @@
 
 ## 2. 적용 범위
 
-현재 구현은 텍스트 계열 파일, 텍스트 레이어가 있는 PDF와 JPEG·PNG·WebP 이미지의 업로드·검증·원본 저장·메시지 연결을 포함한다. 이미지 원본은 OCR로 변환하지 않고 이미지 입력이 허용된 멀티모달 모델에 직접 전달한다. 스캔 PDF OCR, DOCX, GIF와 HEIC는 제외한다.
+현재 구현은 텍스트 계열 파일, 텍스트 PDF, 스캔 PDF OCR과 JPEG·PNG·WebP 이미지의 업로드·검증·원본 저장·메시지 연결을 포함한다. 일반 이미지 원본은 OCR로 변환하지 않고 이미지 입력이 허용된 멀티모달 모델에 직접 전달한다. DOCX, GIF와 HEIC는 제외한다.
 
 ## 3. 상세 명세
 
@@ -32,7 +32,12 @@
 - 페이지 수는 `config.yaml`의 `limits.maximumPdfPages` 이하이며 기본 100페이지다.
 - `page_count`를 attachment metadata로 저장하고 Web의 전송 전·전송 후 attachment 표시에 사용한다.
 - 암호 입력이 필요한 PDF, 손상된 PDF와 PDF로 위장한 파일은 거부한다.
-- 전체 문서에서 추출 가능한 텍스트가 없으면 스캔 PDF로 판단해 `FILE_PDF_OCR_REQUIRED`로 거부한다. OCR을 자동 수행하거나 이미지를 모델에 대신 전송하지 않는다.
+- 전체 문서에서 추출 가능한 텍스트가 없으면 스캔 PDF로 판단하고 로컬 Poppler로 각 페이지를 200 DPI PNG로 렌더링한 뒤 Tesseract `kor+eng` OCR을 실행한다.
+- OCR은 외부 서비스로 파일을 전송하지 않는다. 페이지 임시 이미지는 페이지 처리 직후 삭제하고 작업 디렉터리는 성공·실패와 관계없이 정리한다.
+- OCR 결과도 `[PDF N페이지 · OCR]` 구분자를 포함하며 일반 PDF 추출문과 같은 2,000,000자 제한을 적용한다.
+- OCR 처리 페이지 수는 `ocr_page_count`에 저장하며 Web attachment metadata에서 표시한다.
+- 동시에 실행하는 OCR 작업은 `limits.maximumOcrWorkers`로 제한하며 N100 기본 설정은 1개다. Tesseract 내부 OpenMP thread도 1개로 제한한다.
+- OCR이 글자를 하나도 인식하지 못하거나 처리 도구 실행이 실패하면 원인을 구분해 업로드를 거부한다.
 - 빈 페이지나 이미지 페이지만 일부 포함돼도 문서 전체에 추출 가능한 텍스트가 하나 이상 있으면 처리한다.
 - PDF 추출문도 텍스트 파일과 같은 2,000,000자 상한을 적용한다.
 - 동시에 실행하는 PDF 추출 작업은 `limits.maximumPdfWorkers`로 제한하며 N100 기본 설정은 1개다. 추가 요청은 업로드 임시 파일을 유지한 채 순서대로 대기한다.
@@ -95,6 +100,9 @@
 - `FILE_PDF_PAGE_LIMIT`(`413`): 설정한 PDF 페이지 수 제한 초과
 - `FILE_PDF_PASSWORD_PROTECTED`(`422`): 암호 입력이 필요한 PDF
 - `FILE_PDF_OCR_REQUIRED`(`422`): 추출할 텍스트 레이어가 없는 스캔 PDF
+- `FILE_PDF_OCR_NO_TEXT`(`422`): OCR을 실행했으나 인식 가능한 텍스트가 없음
+- `FILE_PDF_OCR_FAILED`(`422`): 렌더링 또는 OCR 처리 실패
+- `FILE_PDF_OCR_UNAVAILABLE`(`503`): 서버에 Poppler 또는 Tesseract 실행 환경이 없음
 - `FILE_PDF_INVALID`(`422`): 손상되었거나 PDF로 해석할 수 없는 본문
 - `FILE_IMAGE_DIMENSIONS_EXCEEDED`(`413`): 설정한 decoded pixel 제한 초과
 - `FILE_STORAGE_LOW`(`507`): 최소 여유 공간 미만
@@ -106,7 +114,7 @@
 ## 5. 검증·인수 조건
 
 - 지원 텍스트 파일과 PDF의 원본·추출문이 저장되고 실제 AI context에 포함된다.
-- 텍스트 PDF는 페이지 수와 페이지별 추출문이 보존되고, 100페이지 초과·암호·스캔·손상 PDF는 서로 구분되는 오류로 거부된다.
+- 텍스트 PDF는 페이지 수와 페이지별 추출문이 보존되고, 스캔 PDF는 한국어·영어 OCR 결과와 처리 페이지 수가 보존된다. 100페이지 초과·암호·손상·OCR 무결과·OCR 실행 실패는 서로 구분되는 오류로 거부된다.
 - JPEG·PNG·WebP는 확장자·MIME·실제 본문 형식과 decoded pixel 수가 검증되고 가로·세로 metadata가 저장된다.
 - 이미지 입력이 꺼진 모델에는 이미지 원본을 전송하거나 호출량을 차감하지 않는다.
 - 같은 제목의 파일도 UUID object key로 충돌하지 않는다.
@@ -119,4 +127,3 @@
 ## 6. 미결정·보류 항목
 
 - 악성 파일 검사
-- 스캔 PDF OCR
