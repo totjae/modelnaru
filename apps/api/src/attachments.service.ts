@@ -9,6 +9,7 @@ import {
   type AttachmentRecord,
   AttachmentsRepository,
 } from './attachments.repository.js';
+import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
 import type { ChatPrincipal } from './chats.repository.js';
 import { ConversationNotFoundError } from './chats.repository.js';
@@ -57,6 +58,11 @@ export class AttachmentsService {
   constructor(
     private readonly repository: AttachmentsRepository,
     @Inject(MODELNARU_CONFIG) private readonly loaded: LoadedConfig,
+    private readonly lifecycle: AttachmentLifecycleService = {
+      flushQueuedFiles: () => Promise.resolve(),
+      retentionDays: () =>
+        Promise.resolve(loaded.config.storage.attachmentRetentionDays),
+    } as AttachmentLifecycleService,
   ) {}
 
   async upload(
@@ -87,6 +93,7 @@ export class AttachmentsService {
       `${id}.${randomUUID()}.upload`,
     );
     const finalPath = this.storagePath(storageKey);
+    const retentionDays = await this.lifecycle.retentionDays();
     let finalCreated = false;
     try {
       await mkdir(dirname(temporaryPath), { recursive: true });
@@ -128,7 +135,7 @@ export class AttachmentsService {
         mediaType,
         originalName,
         pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
-        retentionDays: this.loaded.config.storage.attachmentRetentionDays,
+        retentionDays,
         storageKey,
       });
     } catch (error) {
@@ -171,12 +178,12 @@ export class AttachmentsService {
     conversationId: string,
     attachmentId: string,
   ): Promise<void> {
-    const storageKey = await this.repository.deletePending(
+    await this.repository.deletePending(
       this.chatPrincipal(principalValue),
       conversationId,
       attachmentId,
     );
-    await rm(this.storagePath(storageKey), { force: true });
+    await this.lifecycle.flushQueuedFiles();
   }
 
   listPending(

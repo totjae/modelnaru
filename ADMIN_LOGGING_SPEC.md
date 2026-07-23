@@ -190,7 +190,7 @@ Authorization, Cookie, API key, private key, session token, OAuth token과 proxy
 - `reason`, `ip_hash`, `user_agent_summary`
 - `request_id`
 
-현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`와 `summarization.settings_updated`를 기록한다. `usage_events`에는 AI 요청의 주체·모델 snapshot, 상태, token과 처리 시간만 저장해 Usage 대시보드에서 조회한다. 요약 설정 감사 snapshot에는 선택한 model ID, prompt version과 비밀값이 아닌 생성 파라미터만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 통합 관리자 로그 조회 화면, retention job과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
+현재 `audit_logs` table에는 사용자 생성·수정·비활성화·비밀번호 변경·삭제, Provider 연결·모델 변경, `user.model_access_updated`, `guest.settings_updated`, `summarization.settings_updated`, `file.retention_updated`와 `file.cleanup_requested`를 기록한다. `usage_events`에는 AI 요청의 주체·모델 snapshot, 상태, token과 처리 시간만 저장해 Usage 대시보드에서 조회한다. 자동 파일 cleanup 결과는 `attachment_settings`의 최근 실행 요약과 구조화된 application log에 남기며 수동 실행은 감사 로그에도 기록한다. 요약 설정 감사 snapshot에는 선택한 model ID, prompt version과 비밀값이 아닌 생성 파라미터만 기록하며 prompt 본문은 남기지 않는다. password·password hash·게스트 코드·API key·ciphertext는 before/after snapshot에 포함하지 않는다. 통합 관리자 로그 조회 화면과 인증 실패·일일 제한 거부 같은 별도 보안 이벤트 저장은 관리자 log 단계까지 보류한다.
 
 ### `security_logs`
 

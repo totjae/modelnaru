@@ -3,6 +3,7 @@ import { verify } from '@node-rs/argon2';
 
 import type { LoadedConfig } from '@modelnaru/config';
 
+import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import {
   constantTimeBufferEqual,
   constantTimeStringEqual,
@@ -90,6 +91,9 @@ export class AuthService {
     @Inject(MODELNARU_CONFIG) private readonly loadedConfig: LoadedConfig,
     private readonly repository: AuthRepository,
     private readonly rateLimiter: AuthRateLimiter,
+    private readonly attachmentLifecycle: AttachmentLifecycleService = {
+      flushQueuedFiles: () => Promise.resolve(),
+    } as AttachmentLifecycleService,
   ) {
     const admin = loadedConfig.config.admin;
     this.adminAccountKey = `admin:${admin.username.toLowerCase()}`;
@@ -356,6 +360,7 @@ export class AuthService {
     const session = await this.authenticateWithCsrf(input);
     if (session.row.principalType === 'guest' && session.row.guestId) {
       await this.repository.deleteGuest(session.row.guestId);
+      await this.attachmentLifecycle.flushQueuedFiles();
     } else {
       await this.repository.revokeSession(session.row.id, 'logout');
     }

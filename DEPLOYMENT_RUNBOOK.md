@@ -124,6 +124,26 @@ docker compose exec postgres \
 
 DB와 API log 출력에 API 키 원문이 없어야 한다. 지원 요청에는 `credential_ciphertext`, nonce, tag와 master key도 첨부하지 않는다. 실제 LLM Gateway 결과는 `PROVIDER_CONTRACT_TESTS.md`에 성공 여부만 기록한다.
 
+### 6.5 첨부파일 보관·정리 점검
+
+관리자 `서버` 메뉴에서 보관 일수를 확인하고 `지금 정리`를 실행한다. 보관 기간을 바꾸면 기존 attachment의 `expires_at`도 생성 시각 기준으로 갱신되며 `file.retention_updated`, 수동 실행 시 `file.cleanup_requested` 감사 이벤트가 남아야 한다.
+
+```bash
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT retention_days, last_cleanup_at, last_cleanup_expired_count, last_cleanup_deleted_count, last_cleanup_failed_count, last_cleanup_guest_count FROM attachment_settings;"
+
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT status, count(*) FROM attachments GROUP BY status ORDER BY status;"
+
+docker compose exec postgres \
+  psql -U modelnaru -d modelnaru \
+  -c "SELECT reason, attempt_count, last_attempt_at, last_error FROM attachment_cleanup_queue ORDER BY queued_at LIMIT 20;"
+```
+
+대화·사용자 또는 게스트 session을 삭제한 뒤 cleanup queue가 비워지고 해당 UUID 원본이 `data/uploads`에서 제거되는지 확인한다. 만료 시험은 시험 attachment의 `expires_at`만 과거로 변경한 뒤 관리자 `지금 정리`를 실행하고, attachment 행은 `expired`로 남되 `extracted_text`가 `NULL`이며 Web에 `원본 만료`가 표시되는지 확인한다.
+
 ## 7. Update와 rollback
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.

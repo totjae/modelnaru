@@ -142,6 +142,9 @@
 - 같은 공유 코드를 사용한 게스트 사이의 session·대화·첨부 소유권 격리 시험이 통과한다.
 - 게스트 코드·session 생성 속도 제한과 일일 호출 제한이 동시 요청에서도 우회되지 않는다.
 - 채팅 mutation과 취소는 session·CSRF·대화 소유권을 검증하며 응답 event에 API 키와 upstream 오류 본문이 없다.
+- cascade 삭제할 원본 경로는 DB cleanup queue에 먼저 기록하고 파일 삭제 성공 후에만 queue에서 제거해 장애 중에도 재시도한다.
+- 고아 파일 정리는 UUID object key 패턴의 일반 파일만 대상으로 하며 symlink·알 수 없는 디렉터리·24시간 이내 파일을 건드리지 않는다.
+- 보관 기간 조회·변경과 수동 cleanup은 관리자 guard를 적용하고 mutation에는 CSRF를 요구한다.
 
 ## 9. 미결정·보류 항목
 

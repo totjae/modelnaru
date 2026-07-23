@@ -3,6 +3,7 @@ import { hash, type Algorithm } from '@node-rs/argon2';
 
 import type { LoadedConfig } from '@modelnaru/config';
 
+import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import { MODELNARU_CONFIG } from './tokens.js';
 import {
   UserNotFoundError,
@@ -51,6 +52,9 @@ export class UsersService {
   constructor(
     @Inject(MODELNARU_CONFIG) loadedConfig: LoadedConfig,
     private readonly repository: UsersRepository,
+    private readonly attachmentLifecycle: AttachmentLifecycleService = {
+      flushQueuedFiles: () => Promise.resolve(),
+    } as AttachmentLifecycleService,
   ) {
     this.adminUsername = loadedConfig.config.admin.username.toLowerCase();
   }
@@ -111,6 +115,7 @@ export class UsersService {
   async delete(id: string, audit: UserAuditContext): Promise<void> {
     try {
       await this.repository.delete(id, audit);
+      await this.attachmentLifecycle.flushQueuedFiles();
     } catch (error) {
       this.mapRepositoryError(error);
     }

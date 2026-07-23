@@ -4,11 +4,12 @@ import { useState } from 'react';
 
 import { AccessManager } from './access-manager';
 import { ProviderManager } from './provider-manager';
+import { ServerSettings } from './server-settings';
 import { SummarizationManager } from './summarization-manager';
 import { UsageDashboard } from './usage-dashboard';
 import { UserManager } from './user-manager';
 
-type AdminTab = 'guest' | 'memory' | 'providers' | 'usage' | 'users';
+type AdminTab = 'guest' | 'memory' | 'providers' | 'server' | 'usage' | 'users';
 
 const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'usage', label: 'Usage' },
@@ -16,6 +17,7 @@ const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'guest', label: '게스트' },
   { id: 'providers', label: '프로바이더' },
   { id: 'memory', label: '장기기억' },
+  { id: 'server', label: '서버' },
 ];
 
 export function AdminWorkspace() {
@@ -56,6 +58,7 @@ export function AdminWorkspace() {
         {tab === 'guest' && <AccessManager scope="guest" />}
         {tab === 'providers' && <ProviderManager />}
         {tab === 'memory' && <SummarizationManager />}
+        {tab === 'server' && <ServerSettings />}
       </div>
     </div>
   );

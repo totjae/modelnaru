@@ -74,6 +74,7 @@
 - `(branch_id, sequence_number)`는 유일하며 분기 내 순서를 결정한다.
 - 요청 parameter는 서버 검증을 통과한 값만 JSON으로 저장한다.
 - user 메시지는 같은 대화에 속한 텍스트·PDF·이미지 attachment metadata를 가질 수 있다. 원본 본문은 그대로 저장하며 AI context를 만들 때만 현재 첨부와 후속 포함 첨부를 합성한다. PDF 추출문은 페이지 구분자를 유지하고 이미지는 활성 경로의 가장 최근 user 요청에 멀티모달 block으로 연결한다.
+- attachment가 만료되면 메시지 연결과 표시 metadata는 유지하되 상태를 `expired`로 바꾸고 이후 context·재생성 입력에서는 제외한다.
 
 ### 3.5 컨텍스트 자동 요약
 

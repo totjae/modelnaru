@@ -72,6 +72,7 @@ interface MessageAttachment {
   mediaType: string;
   originalName: string;
   pageCount: number | null;
+  status: 'expired' | 'ready';
 }
 
 interface PendingAttachment extends MessageAttachment {
@@ -1130,6 +1131,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                                 : ''}
                               {attachment.includeInFutureMessages
                                 ? ' · 후속 포함'
+                                : ''}
+                              {attachment.status === 'expired'
+                                ? ' · 원본 만료'
                                 : ''}
                             </small>
                           </li>

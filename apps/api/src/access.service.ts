@@ -5,6 +5,7 @@ import { providerParameterPolicy } from './provider-parameter-policy.js';
 import { hash, type Algorithm } from '@node-rs/argon2';
 
 import type { AuthenticatedPrincipal } from './auth.service.js';
+import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import {
   AccessDailyLimitError,
   AccessGuestCodeRequiredError,
@@ -46,7 +47,12 @@ async function hashAccessCode(accessCode: string): Promise<string> {
 
 @Injectable()
 export class AccessService {
-  constructor(private readonly repository: AccessRepository) {}
+  constructor(
+    private readonly repository: AccessRepository,
+    private readonly attachmentLifecycle: AttachmentLifecycleService = {
+      flushQueuedFiles: () => Promise.resolve(),
+    } as AttachmentLifecycleService,
+  ) {}
 
   state(): Promise<AdminAccessState> {
     return this.repository.adminState();
@@ -88,6 +94,7 @@ export class AccessService {
         },
         audit,
       );
+      await this.attachmentLifecycle.flushQueuedFiles();
       return await this.repository.adminState();
     } catch (error) {
       this.mapError(error);

@@ -228,4 +228,20 @@ describe('migration plan', () => {
     expect(sql).toContain('ADD COLUMN supports_image_input boolean');
     expect(sql).toContain('DEFAULT false');
   });
+
+  it('adds attachment retention settings and durable file cleanup queue', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0014_attachment_lifecycle.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain(
+      "status IN ('processing', 'ready', 'failed', 'expired')",
+    );
+    expect(sql).toContain('CREATE TABLE attachment_settings');
+    expect(sql).toContain('retention_days BETWEEN 1 AND 3650');
+    expect(sql).toContain('CREATE TABLE attachment_cleanup_queue');
+    expect(sql).toContain('CREATE TRIGGER attachments_queue_file_delete');
+    expect(sql).toContain('modelnaru_queue_attachment_file_delete');
+  });
 });

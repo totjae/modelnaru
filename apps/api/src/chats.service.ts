@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
 import {
   ChatsRepository,
@@ -22,7 +23,12 @@ export class ChatError extends Error {
 
 @Injectable()
 export class ChatsService {
-  constructor(private readonly repository: ChatsRepository) {}
+  constructor(
+    private readonly repository: ChatsRepository,
+    private readonly attachmentLifecycle: AttachmentLifecycleService = {
+      flushQueuedFiles: () => Promise.resolve(),
+    } as AttachmentLifecycleService,
+  ) {}
 
   list(principal: AuthenticatedPrincipal) {
     return this.repository.list(this.chatPrincipal(principal));
@@ -75,6 +81,7 @@ export class ChatsService {
   async delete(principal: AuthenticatedPrincipal, id: string): Promise<void> {
     try {
       await this.repository.delete(this.chatPrincipal(principal), id);
+      await this.attachmentLifecycle.flushQueuedFiles();
     } catch (error) {
       this.mapError(error);
     }

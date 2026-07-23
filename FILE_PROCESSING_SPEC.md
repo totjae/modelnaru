@@ -70,8 +70,13 @@
 - 원본 파일명은 DB metadata로만 보존하고 경로 구성에 사용하지 않는다.
 - 임시 파일을 `storage.temp`에 exclusive 생성한 뒤 검증 완료 시 원본 경로로 원자적 rename한다.
 - DB에는 소유 대화, 연결 메시지, 원본명, MIME, 파일 종류, PDF 페이지 수, byte 크기, object key, 추출문, 후속 포함 여부, 생성·만료 시각을 저장한다.
-- 대화 또는 소유 주체 삭제 시 DB 행은 cascade 삭제한다. 원본 파일의 즉시 제거와 만료 정리 worker는 보관 정책 단계에서 완성한다.
-- 기본 만료 시각은 업로드 시각부터 `storage.attachmentRetentionDays`이며 기본 30일이다.
+- 대화 또는 소유 주체 삭제 시 DB 행은 cascade 삭제하고 DB trigger가 원본의 `storage_key`를 `attachment_cleanup_queue`에 남긴다. 삭제 요청 직후 API가 queue를 비우며 실패한 항목은 다음 worker 실행에서 재시도한다.
+- 기본 만료 시각은 업로드 시각부터 DB `attachment_settings.retention_days`이며 기본 30일이다. 최초 구동에는 `storage.attachmentRetentionDays`를 초기값으로 반영하고 이후 관리자 설정이 DB 기준값이 된다.
+- 관리자가 보관 기간을 바꾸면 기존 `ready`·`failed` attachment의 만료 시각도 생성 시각 기준으로 다시 계산한다.
+- 만료 worker는 서버 시작 1분 후와 이후 1시간마다 실행한다. 만료된 행은 `expired` 상태로 전환하고 추출문·인코딩·후속 포함 설정을 제거한 뒤 원본 삭제를 queue에 넣는다.
+- 만료된 메시지 attachment는 원본명, MIME, 종류, byte 크기, PDF 페이지 수와 이미지 해상도 metadata를 유지하며 Web에는 `원본 만료`로 표시한다.
+- DB에 없는 UUID 원본 파일은 24시간 유예 뒤 고아 파일로 삭제해 업로드·DB 저장 사이의 짧은 정상 처리 구간과 충돌하지 않게 한다.
+- 관리자는 서버 메뉴에서 1~3,650일 보관 기간, 보관 파일 수·크기, 삭제 대기 수와 최근 정리 결과를 보고 `지금 정리`를 실행할 수 있다.
 
 ### 3.7 AI 컨텍스트
 
@@ -113,6 +118,5 @@
 
 ## 6. 미결정·보류 항목
 
-- 만료·고아 파일 정리 worker의 실행 주기와 관리자 보관 기간 UI
 - 악성 파일 검사
 - 스캔 PDF OCR

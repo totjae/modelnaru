@@ -43,6 +43,9 @@ import { UsageService } from './usage.service.js';
 import { AttachmentsController } from './attachments.controller.js';
 import { AttachmentsRepository } from './attachments.repository.js';
 import { AttachmentsService } from './attachments.service.js';
+import { AttachmentLifecycleController } from './attachment-lifecycle.controller.js';
+import { AttachmentLifecycleRepository } from './attachment-lifecycle.repository.js';
+import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 
 @Module({
   controllers: [
@@ -56,6 +59,7 @@ import { AttachmentsService } from './attachments.service.js';
     SummarizationController,
     UsageController,
     AttachmentsController,
+    AttachmentLifecycleController,
   ],
   providers: [
     modelNaruConfigProvider,
@@ -84,6 +88,8 @@ import { AttachmentsService } from './attachments.service.js';
     SummarizationService,
     UsageRepository,
     UsageService,
+    AttachmentLifecycleRepository,
+    AttachmentLifecycleService,
     AttachmentsRepository,
     AttachmentsService,
     { provide: DATABASE_HEALTH, useExisting: DatabaseService },

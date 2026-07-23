@@ -16,7 +16,7 @@ export interface AttachmentRecord {
   mediaType: string;
   originalName: string;
   pageCount: number | null;
-  status: 'failed' | 'processing' | 'ready';
+  status: 'expired' | 'failed' | 'processing' | 'ready';
 }
 
 interface RawAttachmentRow {
@@ -31,7 +31,7 @@ interface RawAttachmentRow {
   media_type: string;
   original_name: string;
   page_count: number | null;
-  status: 'failed' | 'processing' | 'ready';
+  status: 'expired' | 'failed' | 'processing' | 'ready';
   storage_key: string;
 }
 

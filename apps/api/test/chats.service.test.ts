@@ -6,6 +6,7 @@ import {
   ConversationNotFoundError,
 } from '../src/chats.repository.js';
 import { ChatError, ChatsService } from '../src/chats.service.js';
+import type { AttachmentLifecycleService } from '../src/attachment-lifecycle.service.js';
 
 const user: AuthenticatedPrincipal = {
   displayName: null,
@@ -71,5 +72,22 @@ describe('ChatsService', () => {
     expect(() =>
       service.list({ type: 'admin', username: 'admin' }),
     ).toThrowError(ChatError);
+  });
+
+  it('flushes queued originals after deleting a conversation', async () => {
+    const repository = { delete: vi.fn(() => Promise.resolve()) };
+    const lifecycle = {
+      flushQueuedFiles: vi.fn(() => Promise.resolve()),
+    };
+    const service = new ChatsService(
+      repository as unknown as ChatsRepository,
+      lifecycle as unknown as AttachmentLifecycleService,
+    );
+
+    await expect(
+      service.delete(user, 'conversation-id'),
+    ).resolves.toBeUndefined();
+    expect(repository.delete).toHaveBeenCalledWith(user, 'conversation-id');
+    expect(lifecycle.flushQueuedFiles).toHaveBeenCalledOnce();
   });
 });

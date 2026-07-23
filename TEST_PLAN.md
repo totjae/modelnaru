@@ -145,6 +145,10 @@
 | FILE-IMAGE-002      | 단위 | 멀티모달 변환       | OpenAI image_url·Anthropic image block·Gemini inline_data       | 통과 |
 | FILE-IMAGE-003      | 단위 | 모델 capability     | 기본 비활성·관리자 변경·동기화 보존·미지원 모델 quota 전 차단   | 통과 |
 | FILE-IMAGE-E2E-001  | E2E  | HTTPS 이미지 첨부   | 실제 모델 JPEG·PNG·WebP 인식·후속 포함·미지원 모델 차단         | 계획 |
+| FILE-LIFE-001       | 단위 | 만료·삭제 queue     | 만료 metadata 전환·원본 삭제 성공·실패 재시도                   | 통과 |
+| FILE-LIFE-002       | 정적 | 14차 migration      | DB 보관 설정·expired 상태·cascade cleanup trigger               | 통과 |
+| FILE-LIFE-003       | 단위 | 관리자 보관 API     | 1~3,650일 입력·감사 context·잘못된 범위 거부                    | 통과 |
+| FILE-LIFE-E2E-001   | E2E  | Ubuntu 파일 수명    | 기간 변경·수동 정리·metadata 유지·대화/사용자/guest 즉시 삭제   | 계획 |
 | UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결              | 통과 |
 | UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용         | 통과 |
 | SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index   | 통과 |
@@ -181,7 +185,7 @@ pnpm build
 - `pnpm format:check`: 통과
 - `pnpm lint`: 통과, warning 0개
 - `pnpm typecheck`: 5개 workspace package 통과
-- `pnpm test`: 154개 통과, Windows에서 symbolic-link 시험 1개 제외
+- `pnpm test`: 160개 통과, Windows에서 symbolic-link 시험 1개 제외
 - `pnpm build`: config·database·CLI·API TypeScript build와 Next.js production build 통과
 - `pnpm audit --prod`: 알려진 production dependency 취약점 0건
 - `apichat-admin show`: 예제 설정을 읽고 password hash·TOTP secret 마스킹 확인

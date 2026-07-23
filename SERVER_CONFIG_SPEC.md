@@ -259,7 +259,7 @@ server {
 2. 서버 배포 root의 `./config.yaml`
 3. 배포 시 명시한 소수의 비밀값 파일 참조
 
-관리자 UI는 시작 설정의 관리자 ID·password hash, bind address, port, DB URL과 master key를 수정하지 못한다. 첨부 보관 기간, 요약 모델·prompt와 provider 설정처럼 운영 중 변경 가능한 값은 DB의 관리자 설정으로 관리한다.
+관리자 UI는 시작 설정의 관리자 ID·password hash, bind address, port, DB URL과 master key를 수정하지 못한다. `storage.attachmentRetentionDays`는 DB 설정이 아직 관리자에 의해 저장되지 않은 최초 구동의 초기값으로만 사용한다. 이후 첨부 보관 기간, 요약 모델·prompt와 provider 설정처럼 운영 중 변경 가능한 값은 DB의 관리자 설정으로 관리한다.
 
 ## 10. 설정 변경 감사
 
