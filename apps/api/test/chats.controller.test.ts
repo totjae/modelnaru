@@ -36,9 +36,43 @@ describe('ChatsController', () => {
     );
     expect(chats.create).toHaveBeenCalledWith(principal, {
       contextTokenLimit: 100_000,
+      defaultProviderModelId: null,
+      generationParameters: { temperature: 1 },
       historyMessageLimit: 0,
       systemPrompt: '',
       title: '새 대화',
+    });
+  });
+
+  it('accepts conversation-specific model and generation parameters', async () => {
+    const chats = { update: vi.fn(() => Promise.resolve({ id: 'updated' })) };
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
+    const id = '10000000-0000-4000-8000-000000000001';
+    const modelId = '20000000-0000-4000-8000-000000000001';
+
+    await expect(
+      controller.update(
+        id,
+        {
+          defaultProviderModelId: modelId,
+          generationParameters: {
+            temperature: 0.4,
+            topP: 0.8,
+          },
+        },
+        request(),
+        response(),
+      ),
+    ).resolves.toEqual({ id: 'updated' });
+    expect(chats.update).toHaveBeenCalledWith(principal, id, {
+      defaultProviderModelId: modelId,
+      generationParameters: {
+        temperature: 0.4,
+        topP: 0.8,
+      },
     });
   });
 

@@ -10,9 +10,12 @@ interface MessageModelReference {
 export function selectConversationModel(
   messages: MessageModelReference[],
   allowedModels: AllowedModelReference[],
-  currentModelId: string,
+  preferredModelId: string | null,
 ): string {
   const allowedModelIds = new Set(allowedModels.map((model) => model.id));
+  if (preferredModelId && allowedModelIds.has(preferredModelId)) {
+    return preferredModelId;
+  }
   const lastModelId = [...messages]
     .reverse()
     .find(
@@ -23,6 +26,5 @@ export function selectConversationModel(
     )?.providerModelId;
 
   if (lastModelId) return lastModelId;
-  if (allowedModelIds.has(currentModelId)) return currentModelId;
   return allowedModels[0]?.id ?? '';
 }

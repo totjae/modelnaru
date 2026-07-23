@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
+import type { JSONValue } from '@modelnaru/database';
 
 import type { AuthenticatedPrincipal } from './auth.service.js';
 import { composeBranchMessages } from './chat-branches.js';
+import type { ChatParameters } from './chat-streaming.js';
 import { DatabaseService } from './database.service.js';
 
 export type ChatPrincipal = Extract<
@@ -15,6 +17,8 @@ export interface ConversationRecord {
   activeBranchId: string;
   contextTokenLimit: number;
   createdAt: Date;
+  defaultProviderModelId: string | null;
+  generationParameters: ChatParameters;
   historyMessageLimit: number;
   id: string;
   messageCount: number;
@@ -58,6 +62,8 @@ export interface ConversationDetail extends ConversationRecord {
 
 export interface CreateConversationInput {
   contextTokenLimit: number;
+  defaultProviderModelId: string | null;
+  generationParameters: ChatParameters;
   historyMessageLimit: number;
   systemPrompt: string;
   title: string;
@@ -65,6 +71,8 @@ export interface CreateConversationInput {
 
 export interface UpdateConversationInput {
   contextTokenLimit?: number;
+  defaultProviderModelId?: string | null;
+  generationParameters?: ChatParameters;
   historyMessageLimit?: number;
   systemPrompt?: string;
   title?: string;
@@ -74,6 +82,8 @@ interface RawConversationRow {
   active_branch_id: string;
   context_token_limit: number;
   created_at: Date;
+  default_provider_model_id: string | null;
+  generation_parameters: ChatParameters;
   history_message_limit: number;
   id: string;
   message_count: number;
@@ -116,6 +126,8 @@ function mapConversation(row: RawConversationRow): ConversationRecord {
     activeBranchId: row.active_branch_id,
     contextTokenLimit: row.context_token_limit,
     createdAt: row.created_at,
+    defaultProviderModelId: row.default_provider_model_id,
+    generationParameters: row.generation_parameters,
     historyMessageLimit: row.history_message_limit,
     id: row.id,
     messageCount: row.message_count,
@@ -149,7 +161,8 @@ function mapMessage(row: RawMessageRow): MessageRecord {
 
 const conversationColumns = `
   c.id, c.title, c.system_prompt, c.history_message_limit,
-  c.context_token_limit, c.active_branch_id, c.created_at, c.updated_at,
+  c.context_token_limit, c.default_provider_model_id,
+  c.generation_parameters, c.active_branch_id, c.created_at, c.updated_at,
   (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id)
     AS message_count
 `;
@@ -187,16 +200,20 @@ export class ChatsRepository {
       const rows = await transaction<RawConversationRow[]>`
         INSERT INTO conversations (
           id, user_id, guest_id, title, system_prompt,
-          history_message_limit, context_token_limit, active_branch_id
+          history_message_limit, context_token_limit, default_provider_model_id,
+          generation_parameters, active_branch_id
         ) VALUES (
           ${conversationId},
           ${principal.type === 'user' ? principal.id : null},
           ${principal.type === 'guest' ? principal.id : null},
           ${input.title}, ${input.systemPrompt}, ${input.historyMessageLimit},
-          ${input.contextTokenLimit}, ${branchId}
+          ${input.contextTokenLimit}, ${input.defaultProviderModelId},
+          ${transaction.json(input.generationParameters as unknown as JSONValue)},
+          ${branchId}
         )
         RETURNING id, title, system_prompt, history_message_limit,
-          context_token_limit, active_branch_id, created_at, updated_at,
+          context_token_limit, default_provider_model_id,
+          generation_parameters, active_branch_id, created_at, updated_at,
           0::int AS message_count
       `;
       await transaction`
@@ -302,6 +319,7 @@ export class ChatsRepository {
               )
             RETURNING c.id, c.title, c.system_prompt,
               c.history_message_limit, c.context_token_limit,
+              c.default_provider_model_id, c.generation_parameters,
               c.active_branch_id, c.created_at, c.updated_at,
               (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS message_count
           `
@@ -324,6 +342,7 @@ export class ChatsRepository {
               )
             RETURNING c.id, c.title, c.system_prompt,
               c.history_message_limit, c.context_token_limit,
+              c.default_provider_model_id, c.generation_parameters,
               c.active_branch_id, c.created_at, c.updated_at,
               (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS message_count
           `;
@@ -345,10 +364,13 @@ export class ChatsRepository {
             SET title = CASE WHEN ${input.title !== undefined} THEN ${input.title ?? ''} ELSE c.title END,
               system_prompt = CASE WHEN ${input.systemPrompt !== undefined} THEN ${input.systemPrompt ?? ''} ELSE c.system_prompt END,
               history_message_limit = CASE WHEN ${input.historyMessageLimit !== undefined} THEN ${input.historyMessageLimit ?? 0} ELSE c.history_message_limit END,
-              context_token_limit = CASE WHEN ${input.contextTokenLimit !== undefined} THEN ${input.contextTokenLimit ?? 100000} ELSE c.context_token_limit END
+              context_token_limit = CASE WHEN ${input.contextTokenLimit !== undefined} THEN ${input.contextTokenLimit ?? 100000} ELSE c.context_token_limit END,
+              default_provider_model_id = CASE WHEN ${input.defaultProviderModelId !== undefined} THEN ${input.defaultProviderModelId ?? null} ELSE c.default_provider_model_id END,
+              generation_parameters = CASE WHEN ${input.generationParameters !== undefined} THEN ${sql.json((input.generationParameters ?? {}) as unknown as JSONValue)} ELSE c.generation_parameters END
             WHERE c.id = ${id} AND c.user_id = ${principal.id}
             RETURNING c.id, c.title, c.system_prompt, c.history_message_limit,
-              c.context_token_limit, c.active_branch_id, c.created_at,
+              c.context_token_limit, c.default_provider_model_id,
+              c.generation_parameters, c.active_branch_id, c.created_at,
               c.updated_at, (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS message_count
           `
         : await sql<RawConversationRow[]>`
@@ -356,10 +378,13 @@ export class ChatsRepository {
             SET title = CASE WHEN ${input.title !== undefined} THEN ${input.title ?? ''} ELSE c.title END,
               system_prompt = CASE WHEN ${input.systemPrompt !== undefined} THEN ${input.systemPrompt ?? ''} ELSE c.system_prompt END,
               history_message_limit = CASE WHEN ${input.historyMessageLimit !== undefined} THEN ${input.historyMessageLimit ?? 0} ELSE c.history_message_limit END,
-              context_token_limit = CASE WHEN ${input.contextTokenLimit !== undefined} THEN ${input.contextTokenLimit ?? 100000} ELSE c.context_token_limit END
+              context_token_limit = CASE WHEN ${input.contextTokenLimit !== undefined} THEN ${input.contextTokenLimit ?? 100000} ELSE c.context_token_limit END,
+              default_provider_model_id = CASE WHEN ${input.defaultProviderModelId !== undefined} THEN ${input.defaultProviderModelId ?? null} ELSE c.default_provider_model_id END,
+              generation_parameters = CASE WHEN ${input.generationParameters !== undefined} THEN ${sql.json((input.generationParameters ?? {}) as unknown as JSONValue)} ELSE c.generation_parameters END
             WHERE c.id = ${id} AND c.guest_id = ${principal.id}
             RETURNING c.id, c.title, c.system_prompt, c.history_message_limit,
-              c.context_token_limit, c.active_branch_id, c.created_at,
+              c.context_token_limit, c.default_provider_model_id,
+              c.generation_parameters, c.active_branch_id, c.created_at,
               c.updated_at, (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS message_count
           `;
     const row = rows[0];

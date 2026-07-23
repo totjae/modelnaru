@@ -2,10 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import {
   defaultChatParameterValues,
+  parameterValuesFromRequest,
   providerParameterRequest,
 } from '../app/provider-parameter-fields';
 
 describe('provider parameter request', () => {
+  it('restores persisted numbers and string lists into form values', () => {
+    expect(
+      parameterValuesFromRequest({
+        stopSequences: ['END', 'STOP'],
+        temperature: 0.4,
+        verbosity: 'high',
+      }),
+    ).toEqual({
+      stopSequences: 'END\nSTOP',
+      temperature: '0.4',
+      verbosity: 'high',
+    });
+  });
+
   it('uses Temperature 1.0 as the normal chat default', () => {
     expect(defaultChatParameterValues).toEqual({ temperature: '1' });
     expect(providerParameterRequest(defaultChatParameterValues)).toEqual({

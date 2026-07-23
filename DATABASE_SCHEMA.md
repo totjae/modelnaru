@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가한다. 첨부와 나머지 log table은 각 기능 구현 전에 후속 migration으로 추가한다.
 
 ## 3. Migration 규칙
 
@@ -153,11 +153,14 @@ Index:
 
 ## 11. `conversations`
 
-`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다.
+`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다. `0010_conversation_generation_defaults.sql`은 대화별 `default_provider_model_id`와 검증된 `generation_parameters` JSON object를 추가한다.
 
 - `user_id`와 `guest_id`는 각각 소유 주체 삭제 시 cascade한다.
 - 소유 주체별 `(owner_id, updated_at DESC)` partial index로 목록을 조회한다.
 - `(active_branch_id, id)` 복합 FK는 활성 branch가 같은 대화에 속함을 강제하고, 생성 transaction의 순환 참조를 위해 commit까지 지연한다.
+- `default_provider_model_id`는 대화 설정에서 선택한 기본 모델이며 모델 삭제 시 `NULL`이 된다. 실제 호출 시에는 현재 주체의 모델 권한과 활성 상태를 다시 검증한다.
+- `generation_parameters`는 대화별 생성 기본값 JSON object이며 DB 기본값은 `{ "temperature": 1 }`이다. 메시지 호출 시 선택 모델의 parameter policy로 다시 정규화한다.
+- 열 번째 migration은 기존 대화의 활성 분기에서 가장 최근 assistant 메시지가 사용한 모델과 `request_parameters`를 한 번 backfill한다. 해당 메시지가 없으면 모델은 `NULL`, 파라미터는 DB 기본값을 유지한다.
 
 ## 12. `conversation_branches`
 
@@ -240,6 +243,7 @@ Index:
 - 대화의 사용자·게스트 상호 배타 소유권과 주체 삭제 cascade가 존재
 - 대화마다 root branch가 하나이며 활성 branch가 같은 대화에 속함
 - 메시지 역할·상태·분기 순서·모델 snapshot 제약이 존재
+- 대화별 기본 모델 FK와 생성 파라미터 JSON object 제약이 존재하며 기존 대화 backfill이 활성 분기의 최신 assistant를 기준으로 한다.
 - 요약 설정 singleton, prompt 범위와 요약 범위 message FK·중복 방지 index가 존재
 - 사용량 원장은 본문 없이 주체·모델 snapshot, 상태, token과 처리 시간만 저장하고 원본 삭제 후에도 유지됨
 

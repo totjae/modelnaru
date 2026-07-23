@@ -23,6 +23,8 @@ describe('ChatsService', () => {
     const service = new ChatsService(repository as unknown as ChatsRepository);
     const input = {
       contextTokenLimit: 100_000,
+      defaultProviderModelId: null,
+      generationParameters: { temperature: 1 },
       historyMessageLimit: 0,
       systemPrompt: '',
       title: '새 대화',

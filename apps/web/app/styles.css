@@ -1524,6 +1524,7 @@ h1 {
   background: var(--surface);
   box-shadow: 0 24px 70px var(--shadow);
   grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .chat-workspace.sidebar-collapsed {
@@ -1531,10 +1532,14 @@ h1 {
 }
 
 .chat-sidebar {
+  display: flex;
   min-width: 0;
+  min-height: 0;
   padding: 18px;
+  overflow: hidden;
   background: var(--surface-strong);
   border-right: 1px solid var(--line);
+  flex-direction: column;
 }
 
 .settings-modal-backdrop {
@@ -1629,8 +1634,11 @@ h1 {
 
 .chat-sidebar nav {
   display: grid;
+  min-height: 0;
   gap: 7px;
   margin-top: 16px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .chat-sidebar nav > button {
@@ -1666,8 +1674,10 @@ h1 {
 
 .chat-main {
   display: flex;
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   flex-direction: column;
 }
 
@@ -2343,13 +2353,16 @@ h1 {
   }
 
   .chat-sidebar {
+    min-height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .chat-sidebar nav {
     display: flex;
+    overflow-y: hidden;
     overflow-x: auto;
+    flex: none;
   }
 
   .chat-sidebar nav > button {
@@ -2357,6 +2370,7 @@ h1 {
   }
 
   .chat-main {
+    height: auto;
     min-height: 620px;
   }
 

@@ -16,6 +16,7 @@ import { responseAlternatives } from './chat-response-navigation';
 import { isNearScrollEnd } from './chat-scroll';
 import {
   defaultChatParameterValues,
+  parameterValuesFromRequest,
   ProviderParameterFields,
   providerParameterRequest,
   type ParameterPolicy,
@@ -35,6 +36,8 @@ interface ConversationSummary {
   activeBranchId: string;
   contextTokenLimit: number;
   createdAt: string;
+  defaultProviderModelId: string | null;
+  generationParameters: Record<string, unknown>;
   historyMessageLimit: number;
   id: string;
   messageCount: number;
@@ -257,9 +260,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     );
     setDetail(value);
     setMessages(activeMessages);
-    setSelectedModel((current) =>
-      selectConversationModel(activeMessages, modelsRef.current, current),
+    setSelectedModel(
+      selectConversationModel(
+        activeMessages,
+        modelsRef.current,
+        value.defaultProviderModelId,
+      ),
     );
+    setParameterValues(parameterValuesFromRequest(value.generationParameters));
   }, []);
 
   const refreshConversations = useCallback(async () => {
@@ -338,7 +346,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
     setBusy(true);
     setError('');
     try {
-      const response = await mutation('/api/conversations', 'POST', {});
+      const defaultModel = modelsRef.current[0];
+      const response = await mutation('/api/conversations', 'POST', {
+        defaultProviderModelId: defaultModel?.id ?? null,
+        generationParameters: providerParameterRequest(
+          { ...defaultChatParameterValues },
+          defaultModel?.parameterPolicy,
+        ),
+      });
       if (!response.ok) throw new Error(await responseMessage(response));
       const created = (await response.json()) as ConversationSummary;
       setConversations((current) => [created, ...current]);
@@ -403,6 +418,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         'PATCH',
         {
           contextTokenLimit: Number(data.get('contextTokenLimit')),
+          defaultProviderModelId: selectedModel || null,
+          generationParameters: parameters,
           historyMessageLimit: Number(data.get('historyMessageLimit')),
           systemPrompt: data.get('systemPrompt'),
           title: data.get('title'),

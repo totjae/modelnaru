@@ -271,6 +271,11 @@ Request:
       "systemPrompt": "",
       "historyMessageLimit": 0,
       "contextTokenLimit": 100000,
+      "defaultProviderModelId": "30000000-0000-4000-8000-000000000001",
+      "generationParameters": {
+        "temperature": 1,
+        "topP": 0.9
+      },
       "activeBranchId": "20000000-0000-4000-8000-000000000001",
       "messageCount": 0,
       "createdAt": "2026-07-22T00:00:00.000Z",
@@ -289,7 +294,11 @@ Request:
   "title": "새 대화",
   "systemPrompt": "",
   "historyMessageLimit": 0,
-  "contextTokenLimit": 100000
+  "contextTokenLimit": 100000,
+  "defaultProviderModelId": "30000000-0000-4000-8000-000000000001",
+  "generationParameters": {
+    "temperature": 1
+  }
 }
 ```
 
@@ -297,17 +306,21 @@ Request:
 - `systemPrompt`: 최대 100,000자, 기본 빈 문자열
 - `historyMessageLimit`: 0~10,000, `0`은 무제한
 - `contextTokenLimit`: 1,000~2,000,000, 기본 100,000
+- `defaultProviderModelId`: nullable Provider 모델 UUID, 기본 `null`
+- `generationParameters`: Provider parameter policy로 검증할 JSON object, 기본 `{ "temperature": 1 }`
 - 성공: `201 Created`, 생성한 대화 객체
 
 ### `GET /api/conversations/:id`
 
 대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `isSelectable`, `messages`를 포함한다. 자식 branch의 `messages`는 부모 경로에서 분기 대상 assistant 직전까지의 메시지와 자식 branch에 저장된 메시지를 합성한 결과다.
 
-각 message는 저장된 분기를 식별하는 `branchId`, 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 허용 모델을 다시 선택하기 위한 `providerModelId`를 포함한다. Web은 활성 분기의 마지막 assistant message가 참조하는 모델이 현재도 허용된 경우 해당 모델을 복원한다.
+각 message는 저장된 분기를 식별하는 `branchId`, 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 호출 모델인 `providerModelId`를 포함한다. 대화 객체의 `defaultProviderModelId`와 `generationParameters`는 설정 모달의 대화방별 기본값이다.
 
 ### `PATCH /api/conversations/:id`
 
-생성 API의 네 설정 중 하나 이상을 같은 범위로 수정한다. 성공은 수정된 대화 객체다.
+생성 API의 여섯 설정 중 하나 이상을 같은 범위로 수정한다. `defaultProviderModelId`는 `null`로 초기화할 수 있다. `generationParameters`는 빈 object도 허용하며 선언된 key·자료형·공통 범위를 검증한다. 성공은 수정된 대화 객체다.
+
+저장된 모델이 삭제·비활성화되거나 현재 주체의 권한에서 제외되면 Web은 활성 분기의 마지막 허용 모델, 그 다음 첫 허용 모델 순서로 대체한다. 저장된 설정 자체가 호출 권한을 부여하지 않으며 메시지 전송 시 서버가 모델 권한과 Provider별 parameter policy를 다시 검증한다.
 
 ### `DELETE /api/conversations/:id`
 

@@ -21,6 +21,26 @@ export const defaultChatParameterValues: ParameterValues = Object.freeze({
   temperature: '1',
 });
 
+export function parameterValuesFromRequest(
+  parameters: Record<string, unknown>,
+): ParameterValues {
+  return Object.fromEntries(
+    Object.entries(parameters).flatMap(([key, value]) => {
+      if (typeof value === 'string') return [[key, value]];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return [[key, String(value)]];
+      }
+      if (
+        Array.isArray(value) &&
+        value.every((item): item is string => typeof item === 'string')
+      ) {
+        return [[key, value.join('\n')]];
+      }
+      return [];
+    }),
+  );
+}
+
 const labels: Record<string, string> = {
   frequencyPenalty: 'Frequency penalty',
   maxOutputTokens: '최대 출력 토큰',

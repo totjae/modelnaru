@@ -168,4 +168,23 @@ describe('migration plan', () => {
     expect(sql).toContain('FROM context_summaries s');
     expect(sql).not.toContain('content text');
   });
+
+  it('stores model and generation defaults per conversation', async () => {
+    const sql = await readFile(
+      join(
+        packageRoot,
+        'migrations',
+        '0010_conversation_generation_defaults.sql',
+      ),
+      'utf8',
+    );
+
+    expect(sql).toContain('ADD COLUMN default_provider_model_id uuid');
+    expect(sql).toContain('REFERENCES provider_models(id) ON DELETE SET NULL');
+    expect(sql).toContain('ADD COLUMN generation_parameters jsonb NOT NULL');
+    expect(sql).toContain(`DEFAULT '{"temperature": 1}'::jsonb`);
+    expect(sql).toContain("jsonb_typeof(generation_parameters) = 'object'");
+    expect(sql).toContain('UPDATE conversations c');
+    expect(sql).toContain('m.branch_id = c.active_branch_id');
+  });
 });

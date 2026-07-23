@@ -82,16 +82,30 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     input.systemPrompt === undefined ? '' : systemPrompt(input.systemPrompt);
   const historyMessageLimit = input.historyMessageLimit ?? 0;
   const contextTokenLimit = input.contextTokenLimit ?? 100_000;
+  const defaultProviderModelId =
+    input.defaultProviderModelId === undefined
+      ? null
+      : input.defaultProviderModelId;
+  const generationParameters =
+    input.generationParameters === undefined
+      ? ({ temperature: 1 } satisfies ChatParameters)
+      : parseParameters(input.generationParameters);
   if (
     parsedTitle === undefined ||
     parsedSystemPrompt === undefined ||
     !validInteger(historyMessageLimit, 0, 10_000) ||
-    !validInteger(contextTokenLimit, 1_000, 2_000_000)
+    !validInteger(contextTokenLimit, 1_000, 2_000_000) ||
+    (defaultProviderModelId !== null &&
+      (typeof defaultProviderModelId !== 'string' ||
+        !UUID.test(defaultProviderModelId))) ||
+    !generationParameters
   ) {
     return undefined;
   }
   return {
     contextTokenLimit,
+    defaultProviderModelId,
+    generationParameters,
     historyMessageLimit,
     systemPrompt: parsedSystemPrompt,
     title: parsedTitle,
@@ -121,6 +135,21 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
       return undefined;
     }
     output.contextTokenLimit = input.contextTokenLimit;
+  }
+  if (input.defaultProviderModelId !== undefined) {
+    if (
+      input.defaultProviderModelId !== null &&
+      (typeof input.defaultProviderModelId !== 'string' ||
+        !UUID.test(input.defaultProviderModelId))
+    ) {
+      return undefined;
+    }
+    output.defaultProviderModelId = input.defaultProviderModelId;
+  }
+  if (input.generationParameters !== undefined) {
+    const parameters = parseParameters(input.generationParameters);
+    if (!parameters) return undefined;
+    output.generationParameters = parameters;
   }
   return Object.keys(output).length > 0 ? output : undefined;
 }
