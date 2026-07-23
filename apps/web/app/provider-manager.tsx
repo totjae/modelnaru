@@ -468,6 +468,11 @@ export function ProviderManager() {
                           이미지 입력
                         </label>
                         <button
+                          className={
+                            model.isEnabled
+                              ? 'provider-model-enabled'
+                              : undefined
+                          }
                           type="button"
                           onClick={() =>
                             updateModel(connection.id, model, {

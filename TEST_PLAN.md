@@ -77,6 +77,7 @@
 | PROVIDER-INT-001    | 통합 | PostgreSQL transaction  | 연결·모델·감사 기록 commit과 재동기화 보존        | 통과 |
 | PROVIDER-E2E-001    | E2E  | LLM Gateway 실제 키     | 등록·모델 조회·암호화 재사용·모델 활성화·비활성화 | 통과 |
 | PROVIDER-E2E-002    | E2E  | OpenAI 실제 키          | 등록·모델 조회·동기화·모델 활성 상태 변경         | 통과 |
+| PROVIDER-UI-001     | 정적 | 모델 활성 상태 버튼     | `사용 중`은 초록 포인트, `사용 안 함`은 중립색    | 통과 |
 
 ## 8. 게스트·모델 권한 시험 항목
 

@@ -23,7 +23,7 @@
 | 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인                                                                                  |
 | 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                                                                                                 |
 | provider registry    | 구현 완료 | 전체 catalog parameter profile, 핵심 4개 등록·암호화·동기화 UI와 실제 key 확인                                                                                      |
-| Web UI 기반          | 구현 중   | 관리자 탭·Usage, 보라 MN·슬림 헤더·고정 높이 대화 목록·행별 삭제·설정 모달·낮은 화면 입력창 보존, 시각 E2E 대기                                                     |
+| Web UI 기반          | 구현 중   | 관리자 탭·Usage, Provider 활성 모델 초록 상태 버튼, 보라 MN·슬림 헤더·고정 높이 대화 목록·행별 삭제·설정 모달·낮은 화면 입력창 보존, 시각 E2E 대기                  |
 | 모델 권한·호출 제한  | 구현 완료 | 사용자·게스트 allowlist·일일 제한 관리자 UI와 DB 원자적 예약 구현, AI 호출 연결 대기                                                                                |
 | 게스트 체험          | 구현 중   | 공유 코드·독립 session·권한·할당량·대화 소유권 구현, 만료 파일 정리는 후속                                                                                          |
 | AI streaming         | 구현 중   | Provider별 동적 parameter policy·3종 SSE·upstream 취소 구현, 전체 adapter는 후속                                                                                    |
