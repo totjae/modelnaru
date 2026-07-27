@@ -330,20 +330,26 @@ export default function HomePage() {
       >
         <div className="section-heading">
           <p className="eyebrow">HOW IT WORKS · INFRASTRUCTURE</p>
-          <h2 id="architecture-title">한 대의 서버 안에서, 경계는 분명하게</h2>
+          <h2 id="architecture-title" className="architecture-title">
+            <span>한 대의 서버 안에서,</span>
+            <span>경계는 분명하게</span>
+          </h2>
           <p>
             브라우저에서 시작된 요청은 웹 진입, 애플리케이션, 데이터 계층을
-            차례로 거칩니다. 서비스는 컨테이너 단위로 역할을 나누되 하나의 대화
-            흐름으로 연결됩니다.
+            차례로 거칩니다.
+            <br />
+            서비스는 컨테이너 단위로 역할을 나누되 하나의 대화 흐름으로
+            연결됩니다.
           </p>
         </div>
         <ol className="architecture-flow">
           <li className="architecture-node node-blue">
             <span>01 · WEB SERVICE</span>
-            <strong>사용자 · 관리자 · 게스트</strong>
+            <strong>사용자와 관리자의 구분</strong>
             <p>
-              채팅, 운영 관리와 체험 기능을 역할별 화면으로 제공하고 모든 요청을
-              하나의 암호화된 웹 서비스에서 시작합니다.
+              사용자는 허용된 모델과 자신의 대화에만 접근하고, 관리자는
+              계정·Provider·권한과 운영 기록을 관리합니다. 일상적인 사용 권한과
+              시스템 변경 권한이 섞이지 않도록 역할을 분리했습니다.
             </p>
           </li>
           <li className="architecture-node node-violet">

@@ -417,6 +417,10 @@ h1 {
   text-wrap: balance;
 }
 
+.architecture-title span {
+  display: block;
+}
+
 .section-heading > p:last-child,
 .guest-story > p {
   max-width: 720px;
