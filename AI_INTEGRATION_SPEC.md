@@ -360,7 +360,7 @@ API 기본 URL은 `https`만 허용하고 허용 도메인 또는 관리자의 �
 5. 대화방별 사용자 설정
 6. 모델 기본값
 
-사용자 설정은 대화 UUID별 `defaultProviderModelId`와 `generationParameters`로 저장하여 같은 대화를 다시 열었을 때 복원한다. 동일한 제목의 대화도 설정을 공유하지 않는다. 모델을 변경하면 지원되지 않는 기존 파라미터는 제거하고 변경 사실을 화면에 알린다. 각 assistant 메시지에는 대화 기본값과 별개로 실제 호출 모델과 정규화된 요청 파라미터 snapshot을 저장한다.
+사용자 설정은 대화 UUID별 `defaultProviderModelId`, `generationParameters`, `responseTimeoutSeconds`로 저장하여 같은 대화를 다시 열었을 때 복원한다. 동일한 제목의 대화도 설정을 공유하지 않는다. 모델을 변경하면 지원되지 않는 기존 파라미터는 제거하고 변경 사실을 화면에 알린다. 각 assistant 메시지에는 대화 기본값과 별개로 실제 호출 모델과 정규화된 요청 파라미터 snapshot을 저장한다. 응답 타임아웃은 Provider 생성 파라미터가 아니라 서버 실행 설정이므로 upstream body에는 포함하지 않는다.
 
 ### 8.4 system prompt와 컨텍스트 설정
 
@@ -618,8 +618,8 @@ builder와 parser는 공급자 인증이나 데이터베이스에 직접 접근�
 
 ## 21. AI 스트림 런타임 안전 기준
 
-- Provider 연결은 호출자의 취소 신호와 별도로 120초 idle timeout을 적용한다.
-- 정상 chunk를 받을 때마다 idle timeout을 다시 시작한다.
+- Provider 연결은 호출자의 취소 신호와 별도로 대화별 30~1,800초 idle timeout을 적용하며 기본값은 120초다.
+- 정상 chunk를 받을 때마다 idle timeout을 다시 시작하고 초과 시 `CHAT_PROVIDER_TIMEOUT`으로 종료한다.
 - 구분자가 완성되지 않은 단일 SSE 이벤트는 최대 1MiB까지만 버퍼링한다.
 - 한도를 넘은 응답은 `CHAT_PROVIDER_RESPONSE_INVALID`, timeout은 재시도 가능한 Provider network 오류로 정규화한다.
 - 브라우저 SSE parser도 미완성 이벤트를 최대 1MiB까지만 유지한다.

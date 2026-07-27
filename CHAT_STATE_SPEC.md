@@ -38,10 +38,13 @@
 | 컨텍스트 토큰 한도 | `100000`         | 1,000~2,000,000  | 초과 시 관리자 설정에 따라 자동 요약               |
 | 기본 모델          | `null`           | 허용 모델 UUID   | 대화 설정에서 선택한 다음 호출 모델                |
 | 생성 파라미터      | temperature `1`  | 모델별 policy    | 대화방별로 독립 저장되는 생성 기본값               |
+| 응답 타임아웃      | `120초`          | 30~1,800초       | 첫 응답·다음 streaming chunk의 최대 유휴 대기 시간 |
 | 전송 기록 보관 수  | `3`              | 0~3              | 현재 session에서 확인할 최근 요청·응답 수          |
 | 활성 분기          | 생성된 root 분기 | 같은 대화의 분기 | 다음 요청에서 사용할 메시지 경로                   |
 
-대화는 UUID로 식별하며 제목이 같아도 설정을 공유하지 않는다. 설정 모달에서 저장한 기본 모델과 생성 파라미터는 해당 대화 행에만 저장한다. 대화를 다시 열면 저장한 기본 모델과 파라미터를 복원하고, 저장 모델이 삭제·비활성화·권한 회수된 경우에는 활성 분기의 마지막 허용 모델, 그 다음 첫 허용 모델 순서로 대체한다.
+대화는 UUID로 식별하며 제목이 같아도 설정을 공유하지 않는다. 설정 모달에서 저장한 기본 모델, 생성 파라미터와 응답 타임아웃은 해당 대화 행에만 저장한다. 대화를 다시 열면 저장한 기본 모델·파라미터·타임아웃을 복원하고, 저장 모델이 삭제·비활성화·권한 회수된 경우에는 활성 분기의 마지막 허용 모델, 그 다음 첫 허용 모델 순서로 대체한다.
+
+응답 타임아웃은 Provider 요청 body에 포함하지 않는다. 서버는 요청을 시작한 시점과 정상 chunk를 받은 시점마다 이 타이머를 다시 시작한다. 제한 시간 동안 새 데이터가 없으면 upstream 요청을 취소하고 `CHAT_PROVIDER_TIMEOUT`으로 실패 처리한다. 따라서 정상 streaming 데이터가 계속 도착하는 장문 응답의 전체 생성 시간을 직접 제한하지 않는다.
 
 기본 모델은 다음 요청의 선택값이며 과거 메시지의 실행 기록을 바꾸지 않는다. 각 assistant 메시지에는 실제 Provider model UUID, Provider template·model ID snapshot과 요청 당시 검증된 파라미터를 계속 저장한다.
 
@@ -94,7 +97,7 @@
 - `GET /api/conversations`: 현재 주체의 대화 목록
 - `POST /api/conversations`: 대화와 root 분기 생성
 - `GET /api/conversations/:id`: 활성 분기와 저장된 메시지를 포함한 상세 조회
-- `PATCH /api/conversations/:id`: 제목·시스템 프롬프트·컨텍스트·기본 모델·생성 파라미터 설정 변경
+- `PATCH /api/conversations/:id`: 제목·시스템 프롬프트·컨텍스트·기본 모델·생성 파라미터·응답 타임아웃 설정 변경
 - `DELETE /api/conversations/:id`: 대화 hard delete
 - `POST /api/conversations/:id/messages`: attachment를 user 메시지에 연결하고 user·assistant 메시지를 저장한 뒤 SSE로 AI 응답 전송
 - `POST /api/conversations/:id/messages/:messageId/cancel`: 진행 중인 upstream 요청 취소
@@ -136,6 +139,7 @@
 - 사용자와 게스트 삭제 시 대화·분기·메시지가 cascade 삭제된다.
 - 기본값은 이전 메시지 무제한(`0`)과 컨텍스트 100,000 token이다.
 - 제목이 같은 여러 대화에서도 기본 모델과 생성 파라미터가 대화 UUID별로 독립 저장·복원된다.
+- 대화별 응답 타임아웃을 저장·복원하며 첫 응답 또는 streaming chunk가 제한 시간 안에 없으면 timeout 오류로 종료한다.
 - 대화 중 서로 다른 Provider 모델 snapshot을 가진 assistant 메시지를 저장할 수 있다.
 - OpenAI 호환·Anthropic·Gemini SSE를 공통 이벤트로 변환하고 완료·실패·취소 상태를 저장한다.
 - 허용되지 않은 모델은 메시지를 만들기 전에 거부하고 컨텍스트 초과는 quota 예약 전에 중단한다.

@@ -7,7 +7,11 @@ import type { ChatExecutionService } from '../src/chat-execution.service.js';
 import { ChatsController } from '../src/chats.controller.js';
 import type { ChatsService } from '../src/chats.service.js';
 import { providerTemplateById } from '../src/provider-catalog.js';
-import { streamProvider } from '../src/chat-streaming.js';
+import {
+  buildProviderStreamRequest,
+  streamProvider,
+  streamProviderRequest,
+} from '../src/chat-streaming.js';
 
 const principal = {
   displayName: null,
@@ -97,13 +101,60 @@ describe('chat runtime safety', () => {
       );
       const pending = stream.next();
       const rejection = expect(pending).rejects.toMatchObject({
-        code: 'CHAT_PROVIDER_NETWORK_ERROR',
+        code: 'CHAT_PROVIDER_TIMEOUT',
       });
 
       await vi.advanceTimersByTimeAsync(120_000);
 
       await rejection;
       expect(upstreamSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses a conversation-specific provider idle timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const template = providerTemplateById('openai')!;
+      let upstreamSignal: AbortSignal | undefined;
+      const fetchImplementation = vi.fn(
+        (_input: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            upstreamSignal = init?.signal as AbortSignal;
+            upstreamSignal.addEventListener(
+              'abort',
+              () => reject(new Error('Provider request aborted')),
+              { once: true },
+            );
+          }),
+      );
+      const request = buildProviderStreamRequest({
+        apiKey: 'test-key',
+        baseUrl: template.baseUrl!,
+        messages: [{ content: 'hello', role: 'user' }],
+        modelId: 'gpt-test',
+        parameters: {},
+        systemPrompt: '',
+        template,
+      });
+      const stream = streamProviderRequest(
+        {
+          idleTimeoutMs: 30_000,
+          request,
+          signal: new AbortController().signal,
+        },
+        fetchImplementation,
+      );
+      const pending = stream.next();
+      const rejection = expect(pending).rejects.toMatchObject({
+        code: 'CHAT_PROVIDER_TIMEOUT',
+      });
+
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(upstreamSignal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await rejection;
     } finally {
       vi.useRealTimers();
     }

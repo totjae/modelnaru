@@ -26,6 +26,7 @@ export interface ChatTurnRecord {
   }>;
   previousActiveBranchId: string;
   requestTraceLimit: number;
+  responseTimeoutSeconds: number;
   systemPrompt: string;
   userMessageId: string | null;
 }
@@ -35,6 +36,7 @@ interface RawConversationState {
   context_token_limit: number;
   history_message_limit: number;
   request_trace_limit: number;
+  response_timeout_seconds: number;
   system_prompt: string;
 }
 
@@ -197,14 +199,16 @@ export class ChatMessagesRepository {
         principal.type === 'user'
           ? await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, request_trace_limit, system_prompt
+                context_token_limit, request_trace_limit,
+                response_timeout_seconds, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND user_id = ${principal.id}
               FOR UPDATE
             `
           : await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, request_trace_limit, system_prompt
+                context_token_limit, request_trace_limit,
+                response_timeout_seconds, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND guest_id = ${principal.id}
               FOR UPDATE
@@ -360,6 +364,7 @@ export class ChatMessagesRepository {
           })),
         previousActiveBranchId: conversation.active_branch_id,
         requestTraceLimit: conversation.request_trace_limit,
+        responseTimeoutSeconds: conversation.response_timeout_seconds,
         systemPrompt: conversation.system_prompt,
         userMessageId,
       };
@@ -383,14 +388,16 @@ export class ChatMessagesRepository {
         principal.type === 'user'
           ? await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, request_trace_limit, system_prompt
+                context_token_limit, request_trace_limit,
+                response_timeout_seconds, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND user_id = ${principal.id}
               FOR UPDATE
             `
           : await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
-                context_token_limit, request_trace_limit, system_prompt
+                context_token_limit, request_trace_limit,
+                response_timeout_seconds, system_prompt
               FROM conversations
               WHERE id = ${input.conversationId} AND guest_id = ${principal.id}
               FOR UPDATE
@@ -513,6 +520,7 @@ export class ChatMessagesRepository {
           })),
         previousActiveBranchId: conversation.active_branch_id,
         requestTraceLimit: conversation.request_trace_limit,
+        responseTimeoutSeconds: conversation.response_timeout_seconds,
         systemPrompt: conversation.system_prompt,
         userMessageId: null,
       };

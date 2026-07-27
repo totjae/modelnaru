@@ -6,7 +6,7 @@ import {
 } from './provider-parameter-policy.js';
 
 const MAXIMUM_SSE_BUFFER_BYTES = 1024 * 1024;
-const PROVIDER_IDLE_TIMEOUT_MS = 120_000;
+export const DEFAULT_PROVIDER_IDLE_TIMEOUT_MS = 120_000;
 
 export interface ChatContextMessage {
   content: string;
@@ -52,6 +52,7 @@ export class ChatUpstreamError extends Error {
       | 'CHAT_PROVIDER_NETWORK_ERROR'
       | 'CHAT_PROVIDER_RATE_LIMITED'
       | 'CHAT_PROVIDER_RESPONSE_INVALID'
+      | 'CHAT_PROVIDER_TIMEOUT'
       | 'CHAT_PROVIDER_UPSTREAM_ERROR',
     readonly retryable: boolean,
   ) {
@@ -471,6 +472,7 @@ function upstreamError(status: number): ChatUpstreamError {
 
 export async function* streamProviderRequest(
   input: {
+    idleTimeoutMs?: number;
     onRawEvent?: (document: unknown) => void;
     request: UpstreamRequest;
     signal: AbortSignal;
@@ -478,15 +480,18 @@ export async function* streamProviderRequest(
   fetchImplementation: typeof fetch = fetch,
 ): AsyncGenerator<ChatEvent> {
   const request = input.request;
+  const idleTimeoutMs = input.idleTimeoutMs ?? DEFAULT_PROVIDER_IDLE_TIMEOUT_MS;
   const upstreamController = new AbortController();
   const abortFromCaller = () => upstreamController.abort(input.signal.reason);
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let idleTimedOut = false;
   const resetIdleTimeout = () => {
     if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(
-      () => upstreamController.abort(new Error('Provider response timed out.')),
-      PROVIDER_IDLE_TIMEOUT_MS,
-    );
+    idleTimedOut = false;
+    idleTimer = setTimeout(() => {
+      idleTimedOut = true;
+      upstreamController.abort(new Error('Provider response timed out.'));
+    }, idleTimeoutMs);
     idleTimer.unref();
   };
   if (input.signal.aborted) abortFromCaller();
@@ -505,6 +510,9 @@ export async function* streamProviderRequest(
   } catch (error) {
     cleanup();
     if (input.signal.aborted) throw error;
+    if (idleTimedOut) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_TIMEOUT', true);
+    }
     throw new ChatUpstreamError('CHAT_PROVIDER_NETWORK_ERROR', true);
   }
   if (!response.ok) {
@@ -539,6 +547,9 @@ export async function* streamProviderRequest(
     }
   } catch (error) {
     if (error instanceof ChatUpstreamError || input.signal.aborted) throw error;
+    if (idleTimedOut) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_TIMEOUT', true);
+    }
     throw new ChatUpstreamError('CHAT_PROVIDER_NETWORK_ERROR', true);
   } finally {
     cleanup();

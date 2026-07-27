@@ -120,6 +120,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
   const historyMessageLimit = input.historyMessageLimit ?? 0;
   const contextTokenLimit = input.contextTokenLimit ?? 100_000;
   const requestTraceLimit = input.requestTraceLimit ?? 3;
+  const responseTimeoutSeconds = input.responseTimeoutSeconds ?? 120;
   const defaultProviderModelId =
     input.defaultProviderModelId === undefined
       ? null
@@ -134,6 +135,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     !validInteger(historyMessageLimit, 0, 10_000) ||
     !validInteger(contextTokenLimit, 1_000, 2_000_000) ||
     !validInteger(requestTraceLimit, 0, 3) ||
+    !validInteger(responseTimeoutSeconds, 30, 1_800) ||
     (defaultProviderModelId !== null &&
       (typeof defaultProviderModelId !== 'string' ||
         !UUID.test(defaultProviderModelId))) ||
@@ -147,6 +149,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     generationParameters,
     historyMessageLimit,
     requestTraceLimit,
+    responseTimeoutSeconds,
     systemPrompt: parsedSystemPrompt,
     title: parsedTitle,
   };
@@ -179,6 +182,12 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
   if (input.requestTraceLimit !== undefined) {
     if (!validInteger(input.requestTraceLimit, 0, 3)) return undefined;
     output.requestTraceLimit = input.requestTraceLimit;
+  }
+  if (input.responseTimeoutSeconds !== undefined) {
+    if (!validInteger(input.responseTimeoutSeconds, 30, 1_800)) {
+      return undefined;
+    }
+    output.responseTimeoutSeconds = input.responseTimeoutSeconds;
   }
   if (input.defaultProviderModelId !== undefined) {
     if (

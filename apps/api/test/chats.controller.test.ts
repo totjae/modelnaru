@@ -46,6 +46,7 @@ describe('ChatsController', () => {
       generationParameters: { temperature: 1 },
       historyMessageLimit: 0,
       requestTraceLimit: 3,
+      responseTimeoutSeconds: 120,
       systemPrompt: '',
       title: '새 대화',
     });
@@ -69,6 +70,7 @@ describe('ChatsController', () => {
             temperature: 0.4,
             topP: 0.8,
           },
+          responseTimeoutSeconds: 300,
         },
         request(),
         response(),
@@ -80,7 +82,26 @@ describe('ChatsController', () => {
         temperature: 0.4,
         topP: 0.8,
       },
+      responseTimeoutSeconds: 300,
     });
+  });
+
+  it('rejects a response timeout outside the conversation range', async () => {
+    const chats = { update: vi.fn() };
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
+
+    await expect(
+      controller.update(
+        '10000000-0000-4000-8000-000000000001',
+        { responseTimeoutSeconds: 29 },
+        request(),
+        response(),
+      ),
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(chats.update).not.toHaveBeenCalled();
   });
 
   it('accepts zero as unlimited history and rejects an undersized context', async () => {

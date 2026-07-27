@@ -269,4 +269,16 @@ describe('migration plan', () => {
     expect(sql).toContain('ocr_page_count <= COALESCE(page_count, 0)');
     expect(sql).toContain("file_kind <> 'pdf' AND ocr_page_count = 0");
   });
+
+  it('adds a bounded per-conversation response timeout', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0017_conversation_response_timeout.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain(
+      'response_timeout_seconds integer NOT NULL DEFAULT 120',
+    );
+    expect(sql).toContain('response_timeout_seconds BETWEEN 30 AND 1800');
+  });
 });

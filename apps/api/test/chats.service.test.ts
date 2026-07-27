@@ -28,6 +28,7 @@ describe('ChatsService', () => {
       generationParameters: { temperature: 1 },
       historyMessageLimit: 0,
       requestTraceLimit: 3,
+      responseTimeoutSeconds: 120,
       systemPrompt: '',
       title: '새 대화',
     };

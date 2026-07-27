@@ -44,6 +44,7 @@ interface ConversationSummary {
   id: string;
   messageCount: number;
   requestTraceLimit: number;
+  responseTimeoutSeconds: number;
   systemPrompt: string;
   title: string;
   updatedAt: string;
@@ -266,6 +267,9 @@ function streamError(code: string): string {
   }
   if (code === 'CHAT_PROVIDER_RATE_LIMITED') {
     return 'Provider 요청이 많습니다. 잠시 후 다시 시도하세요.';
+  }
+  if (code === 'CHAT_PROVIDER_TIMEOUT') {
+    return '설정한 응답 대기 시간을 초과해 답변 생성을 중단했습니다.';
   }
   return 'AI 답변을 완료하지 못했습니다.';
 }
@@ -637,6 +641,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           generationParameters: parameters,
           historyMessageLimit: Number(data.get('historyMessageLimit')),
           requestTraceLimit: Number(data.get('requestTraceLimit')),
+          responseTimeoutSeconds: Number(data.get('responseTimeoutSeconds')),
           systemPrompt: data.get('systemPrompt'),
           title: data.get('title'),
         },
@@ -1505,6 +1510,23 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                       values={parameterValues}
                       onChange={setParameterValues}
                     />
+                    <label className="parameter-item">
+                      <span className="parameter-title">응답 타임아웃</span>
+                      <p>
+                        Provider의 첫 응답 또는 다음 스트리밍 데이터를 기다릴
+                        최대 시간입니다.
+                      </p>
+                      <small>기본값: 120초 · 허용 범위: 30~1800초</small>
+                      <input
+                        name="responseTimeoutSeconds"
+                        type="number"
+                        min="30"
+                        max="1800"
+                        step="1"
+                        defaultValue={detail.responseTimeoutSeconds}
+                        required
+                      />
+                    </label>
                   </fieldset>
                   <label>
                     이전 메시지 수

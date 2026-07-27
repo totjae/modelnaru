@@ -216,6 +216,7 @@ export class ChatExecutionService {
       try {
         await this.messages.markStreaming(turn.assistantMessageId);
         for await (const event of streamProviderRequest({
+          idleTimeoutMs: turn.responseTimeoutSeconds * 1_000,
           onRawEvent: (document) => this.traces.appendRaw(traceId, document),
           request: providerRequest,
           signal: controller.signal,

@@ -272,6 +272,7 @@ Request:
       "historyMessageLimit": 0,
       "contextTokenLimit": 100000,
       "requestTraceLimit": 3,
+      "responseTimeoutSeconds": 120,
       "defaultProviderModelId": "30000000-0000-4000-8000-000000000001",
       "generationParameters": {
         "temperature": 1,
@@ -297,6 +298,7 @@ Request:
   "historyMessageLimit": 0,
   "contextTokenLimit": 100000,
   "requestTraceLimit": 3,
+  "responseTimeoutSeconds": 120,
   "defaultProviderModelId": "30000000-0000-4000-8000-000000000001",
   "generationParameters": {
     "temperature": 1
@@ -309,6 +311,7 @@ Request:
 - `historyMessageLimit`: 0~10,000, `0`은 무제한
 - `contextTokenLimit`: 1,000~2,000,000, 기본 100,000
 - `requestTraceLimit`: 0~3, 현재 session의 최근 Provider 전송 기록 수, 기본 3
+- `responseTimeoutSeconds`: 30~1,800초, Provider의 첫 응답 또는 다음 streaming chunk를 기다리는 최대 유휴 시간, 기본 120초
 - `defaultProviderModelId`: nullable Provider 모델 UUID, 기본 `null`
 - `generationParameters`: Provider parameter policy로 검증할 JSON object, 기본 `{ "temperature": 1 }`
 - 성공: `201 Created`, 생성한 대화 객체
@@ -317,11 +320,11 @@ Request:
 
 대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `isSelectable`, `messages`를 포함한다. 자식 branch의 `messages`는 부모 경로에서 분기 대상 assistant 직전까지의 메시지와 자식 branch에 저장된 메시지를 합성한 결과다.
 
-각 message는 저장된 분기를 식별하는 `branchId`, 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 호출 모델인 `providerModelId`를 포함한다. user message의 `attachments`에는 `id`, `originalName`, `mediaType`, `fileKind`, `pageCount`, `imageWidth`, `imageHeight`, `byteSize`, `includeInFutureMessages`, `expiresAt` metadata가 포함되며 추출 본문·원본 base64와 storage key는 반환하지 않는다. `pageCount`는 PDF에서만 숫자이고 이미지 크기는 이미지에서만 숫자다. 대화 객체의 `defaultProviderModelId`와 `generationParameters`는 설정 모달의 대화방별 기본값이다.
+각 message는 저장된 분기를 식별하는 `branchId`, 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 호출 모델인 `providerModelId`를 포함한다. user message의 `attachments`에는 `id`, `originalName`, `mediaType`, `fileKind`, `pageCount`, `imageWidth`, `imageHeight`, `byteSize`, `includeInFutureMessages`, `expiresAt` metadata가 포함되며 추출 본문·원본 base64와 storage key는 반환하지 않는다. `pageCount`는 PDF에서만 숫자이고 이미지 크기는 이미지에서만 숫자다. 대화 객체의 `defaultProviderModelId`, `generationParameters`, `responseTimeoutSeconds`는 설정 모달의 대화방별 기본값이다.
 
 ### `PATCH /api/conversations/:id`
 
-생성 API의 여섯 설정 중 하나 이상을 같은 범위로 수정한다. `defaultProviderModelId`는 `null`로 초기화할 수 있다. `generationParameters`는 빈 object도 허용하며 선언된 key·자료형·공통 범위를 검증한다. 성공은 수정된 대화 객체다.
+생성 API의 설정 중 하나 이상을 같은 범위로 수정한다. `defaultProviderModelId`는 `null`로 초기화할 수 있다. `generationParameters`는 빈 object도 허용하며 선언된 key·자료형·공통 범위를 검증한다. `responseTimeoutSeconds`는 Provider 요청 body에 포함하지 않고 서버의 응답 유휴 타이머에 적용한다. 성공은 수정된 대화 객체다.
 
 저장된 모델이 삭제·비활성화되거나 현재 주체의 권한에서 제외되면 Web은 활성 분기의 마지막 허용 모델, 그 다음 첫 허용 모델 순서로 대체한다. 저장된 설정 자체가 호출 권한을 부여하지 않으며 메시지 전송 시 서버가 모델 권한과 Provider별 parameter policy를 다시 검증한다.
 
