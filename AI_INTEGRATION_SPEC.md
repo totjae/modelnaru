@@ -613,3 +613,12 @@ builder와 parser는 공급자 인증이나 데이터베이스에 직접 접근�
 - 일반 채팅의 초기 Temperature 직접 설정값은 `1.0`이며, 선택 모델의 parameter policy가 허용할 때만 요청에 포함한다.
 - 자동 요약은 관리자 전역 설정을 별도로 사용하므로 일반 채팅의 Temperature와 값을 공유하지 않는다.
 - GPT-5·o 계열 추론 모델처럼 sampling 값을 거부하는 모델은 Temperature·Top P 입력을 화면에 비활성 상태로 남기고 요청에서는 제거한다.
+
+## 21. AI 스트림 런타임 안전 기준
+
+- Provider 연결은 호출자의 취소 신호와 별도로 120초 idle timeout을 적용한다.
+- 정상 chunk를 받을 때마다 idle timeout을 다시 시작한다.
+- 구분자가 완성되지 않은 단일 SSE 이벤트는 최대 1MiB까지만 버퍼링한다.
+- 한도를 넘은 응답은 `CHAT_PROVIDER_RESPONSE_INVALID`, timeout은 재시도 가능한 Provider network 오류로 정규화한다.
+- 브라우저 SSE parser도 미완성 이벤트를 최대 1MiB까지만 유지한다.
+- Provider 오류 후 DB 상태 저장이나 요청 추적 종료가 실패해도 나머지 종료 절차와 브라우저 오류 전달을 계속 시도한다.

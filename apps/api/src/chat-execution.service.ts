@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { AccessError, AccessService } from './access.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
@@ -62,6 +62,7 @@ export type RegenerateChatInput = Omit<
 
 @Injectable()
 export class ChatExecutionService {
+  private readonly logger = new Logger(ChatExecutionService.name);
   private readonly active = new Map<string, ActiveRequest>();
 
   constructor(
@@ -264,17 +265,34 @@ export class ChatExecutionService {
           }
         : this.normalizeError(error);
       if (assistantMessageId) {
-        await this.messages.finishIncomplete(assistantMessageId, {
+        try {
+          await this.messages.finishIncomplete(assistantMessageId, {
+            content,
+            errorCode: normalized.code,
+            status: cancelled ? 'cancelled' : 'failed',
+          });
+        } catch (persistenceError) {
+          this.logger.error(
+            `Failed to persist incomplete message ${assistantMessageId}`,
+            persistenceError instanceof Error
+              ? persistenceError.stack
+              : String(persistenceError),
+          );
+        }
+      }
+      try {
+        this.traces.fail(traceId, {
+          cancelled,
           content,
           errorCode: normalized.code,
-          status: cancelled ? 'cancelled' : 'failed',
         });
+      } catch (traceError) {
+        this.logger.warn(
+          `Failed to finalize request trace: ${
+            traceError instanceof Error ? traceError.message : 'unknown error'
+          }`,
+        );
       }
-      this.traces.fail(traceId, {
-        cancelled,
-        content,
-        errorCode: normalized.code,
-      });
       try {
         emit({ ...normalized, type: 'error' });
       } catch {

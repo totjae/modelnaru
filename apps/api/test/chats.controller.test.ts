@@ -152,6 +152,7 @@ describe('ChatsController', () => {
       expect.any(Function),
       expect.any(AbortSignal),
     );
+    expect(streamResponse.end).toHaveBeenCalledOnce();
   });
 
   it('rejects an invalid branch activation identifier', async () => {

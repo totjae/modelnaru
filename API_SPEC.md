@@ -510,3 +510,10 @@ Provider API 키, endpoint 내부 정보와 upstream 오류 본문은 이벤트�
 `GET /api/admin/provider-templates`는 등록 UI가 인증과 추가 필드를 구성할 수 있도록 `authType`, `configurationFields`, 모델 조회·고정 모델 metadata를 포함한다.
 
 `POST /api/admin/provider-connections`는 `templateId`, `name`, `apiKey`, `configuration`을 받는다. `configuration`은 template에 선언된 필드만 사용하며, Cloudflare AI Gateway는 `accountId`를 요구한다. 필수 API 키는 8자 이상이고 선택형 API 키는 빈 문자열 또는 8자 이상이다. static model template은 등록 직후 snapshot 모델을 생성한다.
+
+## 15. 채팅 SSE 런타임 경계
+
+- `POST /api/conversations/:id/messages`와 재생성 endpoint는 Provider가 120초 동안 chunk를 보내지 않으면 응답을 중단한다.
+- Provider의 미완성 SSE 이벤트가 1MiB를 넘으면 `CHAT_PROVIDER_RESPONSE_INVALID` 오류 이벤트를 반환한다.
+- 실행 도중 내부 상태 저장이 실패하더라도 HTTP SSE 응답은 `finally`에서 종료한다.
+- 사용자가 연결을 닫거나 취소 endpoint를 호출하면 기존과 같이 upstream AbortSignal을 즉시 중단한다.

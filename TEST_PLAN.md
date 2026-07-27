@@ -257,3 +257,20 @@ pnpm build
 - 일반 채팅 기본 parameter가 Temperature `1.0`으로 변환되는지 Web 단위 시험으로 검증한다.
 - GPT-5·o 계열 추론 모델에서는 기본 Temperature가 upstream 요청에서 제거되는지 검증한다.
 - 실제 Provider별 credential smoke test는 Ubuntu 배포에서 관리자가 해당 키를 보유한 항목만 별도로 수행한다.
+
+## 16. 런타임 안정성 개선 시험
+
+| ID              | 종류 | 범위                 | 검증 내용                                         | 상태 |
+| --------------- | ---- | -------------------- | ------------------------------------------------- | ---- |
+| RUNTIME-SSE-001 | 단위 | Provider SSE parser  | 미완성 이벤트가 1MiB를 넘으면 즉시 거부           | 통과 |
+| RUNTIME-SSE-002 | 단위 | 채팅 controller      | 실행 계층이 예외를 던져도 SSE response `end` 호출 | 통과 |
+| RUNTIME-SSE-003 | 단위 | Provider timeout     | 120초 동안 chunk가 없으면 upstream abort          | 통과 |
+| RUNTIME-SSE-004 | 회귀 | 정상 Provider stream | 분할 chunk·사용량·완료 event 동작 유지            | 통과 |
+| RUNTIME-WEB-001 | 빌드 | Browser SSE parser   | 1MiB client buffer 상한의 typecheck               | 통과 |
+
+실행 결과:
+
+- API 관련 3개 시험 파일, 15개 시험 통과
+- API TypeScript typecheck 통과
+- Web TypeScript typecheck 통과
+- 변경 파일 Prettier 검사 통과

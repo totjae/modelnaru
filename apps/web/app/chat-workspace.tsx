@@ -274,6 +274,7 @@ async function consumeSse(
   response: Response,
   onEvent: (event: StreamEvent) => void,
 ) {
+  const maximumBufferCharacters = 1024 * 1024;
   if (!response.body) throw new Error('stream body missing');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -284,6 +285,12 @@ async function consumeSse(
     let boundary = buffer.indexOf('\n\n');
     while (boundary >= 0) {
       const block = buffer.slice(0, boundary);
+      if (block.length > maximumBufferCharacters) {
+        await reader
+          .cancel('SSE event exceeded the client buffer limit')
+          .catch(() => undefined);
+        throw new Error('AI 응답 스트림이 허용 크기를 초과했습니다.');
+      }
       buffer = buffer.slice(boundary + 2);
       const data = block
         .split('\n')
@@ -292,6 +299,12 @@ async function consumeSse(
         .join('\n');
       if (data) onEvent(JSON.parse(data) as StreamEvent);
       boundary = buffer.indexOf('\n\n');
+    }
+    if (buffer.length > maximumBufferCharacters) {
+      await reader
+        .cancel('SSE event exceeded the client buffer limit')
+        .catch(() => undefined);
+      throw new Error('AI 응답 스트림이 허용 크기를 초과했습니다.');
     }
     if (done) break;
   }

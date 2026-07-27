@@ -5,6 +5,9 @@ import {
   type ProviderGenerationParameters,
 } from './provider-parameter-policy.js';
 
+const MAXIMUM_SSE_BUFFER_BYTES = 1024 * 1024;
+const PROVIDER_IDLE_TIMEOUT_MS = 120_000;
+
 export interface ChatContextMessage {
   content: string;
   images?: Array<{
@@ -388,14 +391,19 @@ export function normalizeProviderStreamEvent(
 
 async function* sseData(
   stream: ReadableStream<Uint8Array>,
+  onChunk?: () => void,
 ): AsyncGenerator<string> {
   const decoder = new TextDecoder();
   let buffer = '';
   for await (const chunk of stream) {
+    onChunk?.();
     buffer += decoder.decode(chunk, { stream: true }).replace(/\r\n/gu, '\n');
     let boundary = buffer.indexOf('\n\n');
     while (boundary >= 0) {
       const block = buffer.slice(0, boundary);
+      if (Buffer.byteLength(block, 'utf8') > MAXIMUM_SSE_BUFFER_BYTES) {
+        throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+      }
       buffer = buffer.slice(boundary + 2);
       const data = block
         .split('\n')
@@ -404,6 +412,9 @@ async function* sseData(
         .join('\n');
       if (data) yield data;
       boundary = buffer.indexOf('\n\n');
+    }
+    if (Buffer.byteLength(buffer, 'utf8') > MAXIMUM_SSE_BUFFER_BYTES) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
     }
   }
   buffer += decoder.decode();
@@ -435,23 +446,46 @@ export async function* streamProvider(
   fetchImplementation: typeof fetch = fetch,
 ): AsyncGenerator<ChatEvent> {
   const request = buildProviderStreamRequest(input);
+  const upstreamController = new AbortController();
+  const abortFromCaller = () => upstreamController.abort(input.signal.reason);
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const resetIdleTimeout = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => upstreamController.abort(new Error('Provider response timed out.')),
+      PROVIDER_IDLE_TIMEOUT_MS,
+    );
+    idleTimer.unref();
+  };
+  if (input.signal.aborted) abortFromCaller();
+  else input.signal.addEventListener('abort', abortFromCaller, { once: true });
+  resetIdleTimeout();
+  const cleanup = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    input.signal.removeEventListener('abort', abortFromCaller);
+  };
   let response: Response;
   try {
     response = await fetchImplementation(request.url, {
       ...request.init,
-      signal: input.signal,
+      signal: upstreamController.signal,
     });
   } catch (error) {
+    cleanup();
     if (input.signal.aborted) throw error;
     throw new ChatUpstreamError('CHAT_PROVIDER_NETWORK_ERROR', true);
   }
-  if (!response.ok) throw upstreamError(response.status);
+  if (!response.ok) {
+    cleanup();
+    throw upstreamError(response.status);
+  }
   if (!response.body) {
+    cleanup();
     throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
   }
   let done = false;
   try {
-    for await (const data of sseData(response.body)) {
+    for await (const data of sseData(response.body, resetIdleTimeout)) {
       if (data === '[DONE]') {
         done = true;
         break;
@@ -474,6 +508,8 @@ export async function* streamProvider(
   } catch (error) {
     if (error instanceof ChatUpstreamError || input.signal.aborted) throw error;
     throw new ChatUpstreamError('CHAT_PROVIDER_NETWORK_ERROR', true);
+  } finally {
+    cleanup();
   }
   if (!done) yield { durationMs: 0, type: 'done' };
 }

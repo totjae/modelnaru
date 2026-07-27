@@ -477,19 +477,22 @@ export class ChatsController {
     const emit = (event: ChatEvent) => {
       response.write?.(`data: ${JSON.stringify(event)}\n\n`);
     };
-    await this.execution.execute(
-      {
-        ...input,
-        absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
-        conversationId: id,
-        principal: request.authenticatedSession!.principal,
-        sessionId: request.authenticatedSession!.row.id,
-      },
-      emit,
-      disconnected.signal,
-    );
-    completed = true;
-    response.end?.();
+    try {
+      await this.execution.execute(
+        {
+          ...input,
+          absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
+          conversationId: id,
+          principal: request.authenticatedSession!.principal,
+          sessionId: request.authenticatedSession!.row.id,
+        },
+        emit,
+        disconnected.signal,
+      );
+    } finally {
+      completed = true;
+      response.end?.();
+    }
   }
 
   @Post(':id/messages/:messageId/cancel')
@@ -584,20 +587,23 @@ export class ChatsController {
     const emit = (event: ChatEvent) => {
       response.write?.(`data: ${JSON.stringify(event)}\n\n`);
     };
-    await this.execution.regenerate(
-      {
-        ...input,
-        absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
-        assistantMessageId: messageId,
-        conversationId: id,
-        principal: request.authenticatedSession!.principal,
-        sessionId: request.authenticatedSession!.row.id,
-      },
-      emit,
-      disconnected.signal,
-    );
-    completed = true;
-    response.end?.();
+    try {
+      await this.execution.regenerate(
+        {
+          ...input,
+          absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
+          assistantMessageId: messageId,
+          conversationId: id,
+          principal: request.authenticatedSession!.principal,
+          sessionId: request.authenticatedSession!.row.id,
+        },
+        emit,
+        disconnected.signal,
+      );
+    } finally {
+      completed = true;
+      response.end?.();
+    }
   }
 
   private invalidInput(): never {
