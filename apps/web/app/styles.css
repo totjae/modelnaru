@@ -419,6 +419,20 @@ h1 {
 
 .architecture-title span {
   display: block;
+  white-space: nowrap;
+}
+
+.architecture-section .section-heading {
+  display: grid;
+  max-width: none;
+  align-items: center;
+  gap: 40px;
+  grid-template-columns: 190px minmax(360px, 0.9fr) minmax(0, 1.1fr);
+}
+
+.architecture-section .section-heading .eyebrow,
+.architecture-section .section-heading > p:last-child {
+  margin: 0;
 }
 
 .section-heading > p:last-child,
@@ -3241,6 +3255,16 @@ h1 {
     width: min(100% - 28px, 680px);
   }
 
+  .architecture-section .section-heading {
+    align-items: start;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-section .section-heading > p:last-child {
+    margin-top: 4px;
+  }
+
   .architecture-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3354,6 +3378,10 @@ h1 {
 
   .section-heading {
     margin-bottom: 32px;
+  }
+
+  .architecture-section .section-heading h2 {
+    font-size: clamp(28px, 8vw, 34px);
   }
 
   .architecture-flow,
