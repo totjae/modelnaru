@@ -50,10 +50,13 @@
 - 지원 확장자는 `.jpg`, `.jpeg`, `.png`, `.webp`이고 MIME은 각각 `image/jpeg`, `image/png`, `image/webp`여야 한다.
 - 확장자와 MIME만 신뢰하지 않고 원본 byte signature를 해석해 실제 형식과 가로·세로 크기를 확인한다.
 - decoded pixel 수는 `limits.maximumImagePixels` 이하이며 기본값은 40,000,000픽셀이다.
+- 한 Provider 요청에 포함되는 현재·후속 이미지 원본의 합계는 `limits.maximumImageBytesPerRequest` 이하이며 기본값은 20MiB다. 파일별 10MB 제한과 별개로 적용한다.
 - DB에는 `image_width`, `image_height`를 저장하고 추출문·텍스트 인코딩·PDF 페이지 수는 저장하지 않는다.
 - 이미지 생성, GIF·HEIC, 이미지 OCR과 자동 리사이즈는 제공하지 않는다.
 - 현재 메시지 이미지와 사용자가 `후속 메시지에도 포함`으로 지정한 활성 경로의 이전 이미지를 원본 base64로 Provider adapter에 전달한다.
+- 총 byte 상한은 DB metadata로 원본을 읽기 전에 검사하고 실제 읽은 byte도 다시 누적 검사한다. 이미지는 한 번에 `Promise.all`로 읽지 않고 순차적으로 base64 변환해 동시에 유지되는 원본 Buffer를 한 개로 제한한다.
 - 선택 모델의 `supports_image_input`이 꺼져 있으면 Provider 호출과 호출량 차감 전에 `CHAT_IMAGE_MODEL_UNSUPPORTED`로 실패한다.
+- 이미지 합계가 상한을 넘으면 원본 읽기와 Provider 호출량 차감 전에 `CHAT_IMAGE_PAYLOAD_TOO_LARGE`로 실패한다.
 
 ### 3.5 업로드 API
 
@@ -110,6 +113,7 @@
 - `FILE_PDF_OCR_UNAVAILABLE`(`503`): 서버에 Poppler 또는 Tesseract 실행 환경이 없음
 - `FILE_PDF_INVALID`(`422`): 손상되었거나 PDF로 해석할 수 없는 본문
 - `FILE_IMAGE_DIMENSIONS_EXCEEDED`(`413`): 설정한 decoded pixel 제한 초과
+- `CHAT_IMAGE_PAYLOAD_TOO_LARGE`: 현재 Provider 요청에 포함되는 이미지 원본 합계 초과
 - `FILE_STORAGE_LOW`(`507`): 최소 여유 공간 미만
 - `FILE_NOT_FOUND`(`404`): 존재하지 않거나 다른 주체·대화의 attachment
 - `FILE_ATTACHMENT_LIMIT`(`400`): 메시지당 첨부 개수 초과
@@ -122,6 +126,7 @@
 - 텍스트 PDF는 페이지 수와 페이지별 추출문이 보존되고, 스캔 PDF는 한국어·영어 OCR 결과와 처리 페이지 수가 보존된다. 100페이지 초과·암호·손상·OCR 무결과·OCR 실행 실패는 서로 구분되는 오류로 거부된다.
 - JPEG·PNG·WebP는 확장자·MIME·실제 본문 형식과 decoded pixel 수가 검증되고 가로·세로 metadata가 저장된다.
 - 이미지 입력이 꺼진 모델에는 이미지 원본을 전송하거나 호출량을 차감하지 않는다.
+- 이미지 원본 합계가 기본 20MiB를 넘으면 storage read와 호출량 차감 전에 거부된다.
 - 같은 제목의 파일도 UUID object key로 충돌하지 않는다.
 - 경로 traversal 파일명이 저장 경로에 영향을 주지 않는다.
 - 사용자·게스트·대화 소유권과 CSRF가 업로드·삭제·메시지 연결에서 강제된다.

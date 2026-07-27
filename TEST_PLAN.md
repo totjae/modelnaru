@@ -152,11 +152,43 @@
 3단계 런타임 안정성 검증에서는 파일 처리 관련 API 시험 5개 파일의 16개
 테스트, config 시험 10개가 통과했으며 config 시험 1개는 조건부 항목으로
 건너뛰었다. API·config·관리자 CLI typecheck와 전체 lint도 통과했다.
+
+4단계 검증에서는 전체 API 시험 38개 파일의 139개 테스트와 config 시험
+10개가 통과했으며 config 시험 1개는 조건부 항목으로 건너뛰었다.
+API·config·관리자 CLI typecheck도 통과했다.
+
+### 7.1 런타임 안정성 수동 시험 묶음
+
+`scripts/generate-runtime-test-fixtures.py`를 실행하면
+`output/pdf/runtime-stability`에 아래 수동 시험 파일을 생성한다. 생성물은
+대용량 fixture의 실수 커밋을 막기 위해 Git에서 제외한다.
+
+| ID                 | 시험 파일·절차                                                                                  | 기대 결과                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| RUNTIME-MANUAL-001 | `01-text-utf8.txt`, `02-structured.md`, `03-data.json`을 각각 첨부하고 고유 표식·계산 결과 질문 | 고유 표식과 JSON 합계 46을 정확히 응답                                           |
+| RUNTIME-MANUAL-002 | `04-text-layer.pdf`를 첨부하고 2페이지 표식과 계산 결과 질문                                    | `MN-PDF-PAGE2-774`, 500 응답, OCR 표시 없음                                      |
+| RUNTIME-MANUAL-003 | `05-scanned-ocr.pdf`를 첨부하고 6페이지 표식·숫자 질문                                          | OCR 처리 표시, `MN-OCR-PAGE-06-64`, 822 응답                                     |
+| RUNTIME-MANUAL-004 | 스캔 PDF 처리 중 새로고침·탭 종료 후 다른 파일 업로드                                           | 취소 요청이 queue를 점유하지 않고 다음 파일 정상 처리                            |
+| RUNTIME-MANUAL-005 | 별도 탭에서 스캔 PDF 6개를 거의 동시에 업로드                                                   | 기본 worker 1·queue 4가 유지되며 포화 시 `FILE_PROCESSING_BUSY`, API health 유지 |
+| RUNTIME-MANUAL-006 | `06-page-limit-101.pdf` 업로드                                                                  | `FILE_PDF_PAGE_LIMIT`으로 거부                                                   |
+| RUNTIME-MANUAL-007 | `07-invalid-signature.pdf` 업로드                                                               | `FILE_PDF_INVALID`로 거부                                                        |
+| RUNTIME-MANUAL-008 | `08-empty.txt`와 `09-over-10mb.txt`를 각각 업로드                                               | 각각 `FILE_INPUT_INVALID`, `FILE_TOO_LARGE`로 거부                               |
+| RUNTIME-MANUAL-009 | `10-unsupported.docx` 업로드                                                                    | `FILE_TYPE_UNSUPPORTED`로 거부                                                   |
+| RUNTIME-MANUAL-010 | 이미지 입력 허용 모델에 `11-image-vision.png` 첨부                                              | 표식 `MN-VISION-742`와 도형·색상 순서를 인식                                     |
+| RUNTIME-MANUAL-011 | 이미지 입력 미허용 모델에 같은 PNG 첨부 후 전송                                                 | Provider 호출 전 `CHAT_IMAGE_MODEL_UNSUPPORTED`로 거부                           |
+| RUNTIME-MANUAL-012 | `12-attachment-count`의 10개를 전송한 뒤 11개 전송 시도                                         | 10개는 허용되고 11개는 UI 또는 API에서 거부                                      |
+| RUNTIME-MANUAL-013 | `13-image-request-limit`의 PNG 3개를 이미지 허용 모델에서 한 메시지로 전송                      | 개별 업로드는 성공하고 Provider 호출 전 `CHAT_IMAGE_PAYLOAD_TOO_LARGE`로 거부    |
+
+동시 처리와 취소 시험 전후에는 `docker stats --no-stream`,
+`docker compose ps`와 API log를 확인한다. API가 재시작·unhealthy 상태가 되거나
+작업 종료 뒤 메모리가 지속적으로 증가하면 실패로 기록한다.
 | FILE-OCR-E2E-001 | E2E | Ubuntu 스캔 PDF | 실제 한국어·영어 OCR·AI 컨텍스트·임시 파일 정리·N100 처리 시간 | 계획 |
 | FILE-PDF-E2E-001 | E2E | HTTPS PDF 첨부 | 텍스트 PDF AI 활용·페이지 표시·암호·스캔·100페이지 거부 | 계획 |
 | FILE-IMAGE-001 | 단위 | 이미지 본문 검증 | JPEG·PNG·WebP 확장자/MIME·signature·해상도·픽셀 상한 | 통과 |
 | FILE-IMAGE-002 | 단위 | 멀티모달 변환 | OpenAI image_url·Anthropic image block·Gemini inline_data | 통과 |
 | FILE-IMAGE-003 | 단위 | 모델 capability | 기본 비활성·관리자 변경·동기화 보존·미지원 모델 quota 전 차단 | 통과 |
+| FILE-IMAGE-004 | 단위 | 요청 이미지 합계 | DB metadata 사전 상한·실제 byte 재검사·quota 전 거부 | 통과 |
+| CHAT-REQUEST-001 | 단위 | Provider 요청 lifecycle | 요청 단일 직렬화·trace/fetch 재사용·trace image 제거 사본 | 통과 |
 | FILE-IMAGE-E2E-001 | E2E | HTTPS 이미지 첨부 | 실제 모델 JPEG·PNG·WebP 인식·후속 포함·미지원 모델 차단 | 계획 |
 | FILE-LIFE-001 | 단위 | 만료·삭제 queue | 만료 metadata 전환·원본 삭제 성공·실패 재시도 | 통과 |
 | FILE-LIFE-002 | 정적 | 14차 migration | DB 보관 설정·expired 상태·cascade cleanup trigger | 통과 |

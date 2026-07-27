@@ -388,7 +388,7 @@ Provider API 키, endpoint 내부 정보와 upstream 오류 본문은 이벤트�
 
 PDF·OCR 처리는 설정된 worker 수와 bounded queue를 사용한다. queue 대기 중에는 전체 원본을 Node heap에 읽지 않는다. queue 포화는 `FILE_PROCESSING_BUSY`(`503`), 대기 중 연결·서버 종료는 `FILE_PROCESSING_CANCELLED`로 처리하며 실패한 임시 파일은 삭제한다.
 
-이미지가 연결된 메시지는 선택 모델의 관리자 설정 `supportsImageInput`을 검사한다. 꺼져 있으면 SSE `CHAT_IMAGE_MODEL_UNSUPPORTED` 오류를 반환하고 Provider 호출과 일일 호출량 예약을 수행하지 않는다.
+이미지가 연결된 메시지는 선택 모델의 관리자 설정 `supportsImageInput`을 검사한다. 꺼져 있으면 SSE `CHAT_IMAGE_MODEL_UNSUPPORTED` 오류를 반환하고 Provider 호출과 일일 호출량 예약을 수행하지 않는다. 현재 메시지와 후속 포함 이미지의 원본 합계가 `limits.maximumImageBytesPerRequest`를 넘으면 storage 원본을 읽거나 호출량을 예약하기 전에 `CHAT_IMAGE_PAYLOAD_TOO_LARGE`로 실패한다.
 
 만료된 메시지 attachment는 상세 응답에 `status: "expired"`와 안전한 metadata를 유지하되 Provider context에는 포함하지 않는다.
 
@@ -427,7 +427,7 @@ PDF·OCR 처리는 설정된 worker 수와 bounded queue를 사용한다. queue 
 - `404 CHAT_NOT_FOUND`: 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
 - `409 CHAT_NOT_CANCELLABLE`: 완료됐거나 진행 중이 아닌 메시지
 
-스트림 내부 오류 code에는 `CHAT_CONTEXT_LIMIT_EXCEEDED`, `CHAT_MODEL_UNAVAILABLE`, `CHAT_REGENERATION_INVALID`, `CHAT_PROVIDER_AUTH_FAILED`, `CHAT_PROVIDER_RATE_LIMITED`, `CHAT_PROVIDER_NETWORK_ERROR`, `CHAT_PROVIDER_RESPONSE_INVALID`, `CHAT_PROVIDER_UPSTREAM_ERROR`, `CHAT_CANCELLED`이 있다.
+스트림 내부 오류 code에는 `CHAT_CONTEXT_LIMIT_EXCEEDED`, `CHAT_MODEL_UNAVAILABLE`, `CHAT_REGENERATION_INVALID`, `CHAT_IMAGE_MODEL_UNSUPPORTED`, `CHAT_IMAGE_PAYLOAD_TOO_LARGE`, `CHAT_PROVIDER_AUTH_FAILED`, `CHAT_PROVIDER_RATE_LIMITED`, `CHAT_PROVIDER_NETWORK_ERROR`, `CHAT_PROVIDER_RESPONSE_INVALID`, `CHAT_PROVIDER_UPSTREAM_ERROR`, `CHAT_CANCELLED`이 있다.
 
 ### `GET /api/admin/summarization`
 

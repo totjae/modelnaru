@@ -162,6 +162,10 @@ Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인�
 기본값 `4`가 적용되므로 기존 설치는 그대로 업데이트할 수 있다. 값을 명시적으로
 조정한 경우에는 애플리케이션을 다시 시작해야 반영된다.
 
+이미지 요청 합계 설정 `maximumImageBytesPerRequest`가 없는 기존 설정에는
+기본값 `20971520`(20MiB)이 적용된다. 이 값은 파일 하나의 업로드 상한과 별개이며
+후속 포함 이미지를 합친 Provider 요청 전체에 적용된다.
+
 ```bash
 cd /home/totquf4171/modelnaru
 git pull --ff-only

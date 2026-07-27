@@ -35,6 +35,7 @@ tmp/
 temp/
 *.tmp
 *.bak
+output/pdf/runtime-stability/
 
 # Editors and operating systems
 .idea/

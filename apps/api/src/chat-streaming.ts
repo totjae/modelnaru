@@ -62,6 +62,7 @@ export class ChatUpstreamError extends Error {
 export interface UpstreamRequest {
   init: RequestInit;
   protocol: ProviderProtocol;
+  traceBody: unknown;
   url: string;
 }
 
@@ -71,6 +72,44 @@ function endpoint(baseUrl: string, path: string): string {
 
 function usesCompletionTokenParameter(modelId: string): boolean {
   return /^(?:gpt-5|o[134](?:-|$))/iu.test(modelId);
+}
+
+function traceSafeProviderBody(value: unknown, key = ''): unknown {
+  if (typeof value === 'string') {
+    if (key === 'data' || (key === 'url' && value.startsWith('data:image/'))) {
+      return `[binary image omitted: ${value.length} characters]`;
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => traceSafeProviderBody(item));
+  }
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(
+      ([childKey, child]) => [childKey, traceSafeProviderBody(child, childKey)],
+    ),
+  );
+}
+
+function providerRequest(
+  body: unknown,
+  headers: NonNullable<RequestInit['headers']>,
+  includeTraceBody: boolean,
+  protocol: ProviderProtocol,
+  url: string,
+): UpstreamRequest {
+  return {
+    init: {
+      body: JSON.stringify(body),
+      headers,
+      method: 'POST',
+      redirect: 'error',
+    },
+    protocol,
+    traceBody: includeTraceBody ? traceSafeProviderBody(body) : null,
+    url,
+  };
 }
 
 function anthropicContent(message: ChatContextMessage) {
@@ -116,6 +155,7 @@ function openAiContent(message: ChatContextMessage) {
 
 export function buildProviderStreamRequest(
   input: Omit<ProviderStreamInput, 'signal'>,
+  includeTraceBody = false,
 ): UpstreamRequest {
   const headers = {
     ...providerDiscoveryHeaders(input.template, input.apiKey),
@@ -127,50 +167,44 @@ export function buildProviderStreamRequest(
     input.parameters,
   );
   if (input.template.defaultFormat === 'anthropic') {
-    return {
-      init: {
-        body: JSON.stringify({
-          max_tokens: parameters.maxOutputTokens ?? 4_096,
-          messages: input.messages.map((message) => ({
-            content: anthropicContent(message),
-            role: message.role,
-          })),
-          model: input.modelId,
-          stream: true,
-          ...(input.systemPrompt ? { system: input.systemPrompt } : {}),
-          ...(parameters.temperature !== undefined
-            ? { temperature: parameters.temperature }
-            : {}),
-          ...(parameters.topP !== undefined ? { top_p: parameters.topP } : {}),
-          ...(parameters.topK !== undefined ? { top_k: parameters.topK } : {}),
-          ...(parameters.stopSequences?.length
-            ? { stop_sequences: parameters.stopSequences }
-            : {}),
-          ...((parameters.thinkingBudget ?? 0) > 0
-            ? {
-                thinking: {
-                  budget_tokens: parameters.thinkingBudget,
-                  ...(parameters.thinkingDisplay
-                    ? { display: parameters.thinkingDisplay }
-                    : {}),
-                  type: 'enabled',
-                },
-              }
-            : {}),
-          ...(parameters.outputEffort
-            ? { output_config: { effort: parameters.outputEffort } }
-            : {}),
-        }),
-        headers,
-        method: 'POST',
-        redirect: 'error',
+    return providerRequest(
+      {
+        max_tokens: parameters.maxOutputTokens ?? 4_096,
+        messages: input.messages.map((message) => ({
+          content: anthropicContent(message),
+          role: message.role,
+        })),
+        model: input.modelId,
+        stream: true,
+        ...(input.systemPrompt ? { system: input.systemPrompt } : {}),
+        ...(parameters.temperature !== undefined
+          ? { temperature: parameters.temperature }
+          : {}),
+        ...(parameters.topP !== undefined ? { top_p: parameters.topP } : {}),
+        ...(parameters.topK !== undefined ? { top_k: parameters.topK } : {}),
+        ...(parameters.stopSequences?.length
+          ? { stop_sequences: parameters.stopSequences }
+          : {}),
+        ...((parameters.thinkingBudget ?? 0) > 0
+          ? {
+              thinking: {
+                budget_tokens: parameters.thinkingBudget,
+                ...(parameters.thinkingDisplay
+                  ? { display: parameters.thinkingDisplay }
+                  : {}),
+                type: 'enabled',
+              },
+            }
+          : {}),
+        ...(parameters.outputEffort
+          ? { output_config: { effort: parameters.outputEffort } }
+          : {}),
       },
-      protocol: 'anthropic',
-      url: endpoint(
-        input.baseUrl,
-        input.template.formats?.anthropic ?? '/messages',
-      ),
-    };
+      headers,
+      includeTraceBody,
+      'anthropic',
+      endpoint(input.baseUrl, input.template.formats?.anthropic ?? '/messages'),
+    );
   }
   if (input.template.defaultFormat === 'gemini') {
     const configuredPath =
@@ -179,114 +213,108 @@ export function buildProviderStreamRequest(
     const streamPath = configuredPath
       .replace('{model}', encodeURIComponent(input.modelId))
       .replace(':generateContent', ':streamGenerateContent');
-    return {
-      init: {
-        body: JSON.stringify({
-          contents: input.messages.map((message) => ({
-            parts: geminiParts(message),
-            role: message.role === 'assistant' ? 'model' : 'user',
-          })),
-          generationConfig: {
-            ...(parameters.maxOutputTokens !== undefined
-              ? { maxOutputTokens: parameters.maxOutputTokens }
-              : {}),
-            ...(parameters.temperature !== undefined
-              ? { temperature: parameters.temperature }
-              : {}),
-            ...(parameters.topP !== undefined ? { topP: parameters.topP } : {}),
-            ...(parameters.topK !== undefined ? { topK: parameters.topK } : {}),
-            ...(parameters.frequencyPenalty !== undefined
-              ? { frequencyPenalty: parameters.frequencyPenalty }
-              : {}),
-            ...(parameters.presencePenalty !== undefined
-              ? { presencePenalty: parameters.presencePenalty }
-              : {}),
-            ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
-            ...(parameters.stopSequences?.length
-              ? { stopSequences: parameters.stopSequences }
-              : {}),
-            ...(parameters.thinkingBudget !== undefined ||
-            parameters.thinkingLevel
-              ? {
-                  thinkingConfig: {
-                    ...(parameters.thinkingBudget !== undefined
-                      ? { thinkingBudget: parameters.thinkingBudget }
-                      : {}),
-                    ...(parameters.thinkingLevel
-                      ? { thinkingLevel: parameters.thinkingLevel }
-                      : {}),
-                  },
-                }
-              : {}),
-          },
-          ...(input.systemPrompt
-            ? { systemInstruction: { parts: [{ text: input.systemPrompt }] } }
+    return providerRequest(
+      {
+        contents: input.messages.map((message) => ({
+          parts: geminiParts(message),
+          role: message.role === 'assistant' ? 'model' : 'user',
+        })),
+        generationConfig: {
+          ...(parameters.maxOutputTokens !== undefined
+            ? { maxOutputTokens: parameters.maxOutputTokens }
             : {}),
-        }),
-        headers,
-        method: 'POST',
-        redirect: 'error',
+          ...(parameters.temperature !== undefined
+            ? { temperature: parameters.temperature }
+            : {}),
+          ...(parameters.topP !== undefined ? { topP: parameters.topP } : {}),
+          ...(parameters.topK !== undefined ? { topK: parameters.topK } : {}),
+          ...(parameters.frequencyPenalty !== undefined
+            ? { frequencyPenalty: parameters.frequencyPenalty }
+            : {}),
+          ...(parameters.presencePenalty !== undefined
+            ? { presencePenalty: parameters.presencePenalty }
+            : {}),
+          ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
+          ...(parameters.stopSequences?.length
+            ? { stopSequences: parameters.stopSequences }
+            : {}),
+          ...(parameters.thinkingBudget !== undefined ||
+          parameters.thinkingLevel
+            ? {
+                thinkingConfig: {
+                  ...(parameters.thinkingBudget !== undefined
+                    ? { thinkingBudget: parameters.thinkingBudget }
+                    : {}),
+                  ...(parameters.thinkingLevel
+                    ? { thinkingLevel: parameters.thinkingLevel }
+                    : {}),
+                },
+              }
+            : {}),
+        },
+        ...(input.systemPrompt
+          ? { systemInstruction: { parts: [{ text: input.systemPrompt }] } }
+          : {}),
       },
-      protocol: 'gemini',
-      url: `${endpoint(input.baseUrl, streamPath)}?alt=sse`,
-    };
-  }
-  return {
-    init: {
-      body: JSON.stringify({
-        messages: [
-          ...(input.systemPrompt
-            ? [{ content: input.systemPrompt, role: 'system' }]
-            : []),
-          ...input.messages.map((message) => ({
-            content: openAiContent(message),
-            role: message.role,
-          })),
-        ],
-        model: input.modelId,
-        stream: true,
-        stream_options: { include_usage: true },
-        ...(parameters.maxOutputTokens !== undefined
-          ? usesCompletionTokenParameter(input.modelId)
-            ? { max_completion_tokens: parameters.maxOutputTokens }
-            : { max_tokens: parameters.maxOutputTokens }
-          : {}),
-        ...(parameters.temperature !== undefined
-          ? { temperature: parameters.temperature }
-          : {}),
-        ...(parameters.topP !== undefined ? { top_p: parameters.topP } : {}),
-        ...(input.template.parameterProfile === 'novelai' &&
-        parameters.topK !== undefined
-          ? { top_k: parameters.topK }
-          : {}),
-        ...(parameters.frequencyPenalty !== undefined
-          ? { frequency_penalty: parameters.frequencyPenalty }
-          : {}),
-        ...(parameters.presencePenalty !== undefined
-          ? { presence_penalty: parameters.presencePenalty }
-          : {}),
-        ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
-        ...(parameters.stopSequences?.length
-          ? { stop: parameters.stopSequences }
-          : {}),
-        ...(parameters.reasoningEffort
-          ? { reasoning_effort: parameters.reasoningEffort }
-          : {}),
-        ...(parameters.verbosity ? { verbosity: parameters.verbosity } : {}),
-        ...(input.template.parameterProfile === 'novelai'
-          ? { enable_thinking: (parameters.thinkingBudget ?? 0) > 0 }
-          : {}),
-      }),
       headers,
-      method: 'POST',
-      redirect: 'error',
+      includeTraceBody,
+      'gemini',
+      `${endpoint(input.baseUrl, streamPath)}?alt=sse`,
+    );
+  }
+  return providerRequest(
+    {
+      messages: [
+        ...(input.systemPrompt
+          ? [{ content: input.systemPrompt, role: 'system' }]
+          : []),
+        ...input.messages.map((message) => ({
+          content: openAiContent(message),
+          role: message.role,
+        })),
+      ],
+      model: input.modelId,
+      stream: true,
+      stream_options: { include_usage: true },
+      ...(parameters.maxOutputTokens !== undefined
+        ? usesCompletionTokenParameter(input.modelId)
+          ? { max_completion_tokens: parameters.maxOutputTokens }
+          : { max_tokens: parameters.maxOutputTokens }
+        : {}),
+      ...(parameters.temperature !== undefined
+        ? { temperature: parameters.temperature }
+        : {}),
+      ...(parameters.topP !== undefined ? { top_p: parameters.topP } : {}),
+      ...(input.template.parameterProfile === 'novelai' &&
+      parameters.topK !== undefined
+        ? { top_k: parameters.topK }
+        : {}),
+      ...(parameters.frequencyPenalty !== undefined
+        ? { frequency_penalty: parameters.frequencyPenalty }
+        : {}),
+      ...(parameters.presencePenalty !== undefined
+        ? { presence_penalty: parameters.presencePenalty }
+        : {}),
+      ...(parameters.seed !== undefined ? { seed: parameters.seed } : {}),
+      ...(parameters.stopSequences?.length
+        ? { stop: parameters.stopSequences }
+        : {}),
+      ...(parameters.reasoningEffort
+        ? { reasoning_effort: parameters.reasoningEffort }
+        : {}),
+      ...(parameters.verbosity ? { verbosity: parameters.verbosity } : {}),
+      ...(input.template.parameterProfile === 'novelai'
+        ? { enable_thinking: (parameters.thinkingBudget ?? 0) > 0 }
+        : {}),
     },
-    protocol: 'openai',
-    url: endpoint(
+    headers,
+    includeTraceBody,
+    'openai',
+    endpoint(
       input.baseUrl,
       input.template.formats?.openai ?? '/chat/completions',
     ),
-  };
+  );
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -441,11 +469,15 @@ function upstreamError(status: number): ChatUpstreamError {
   );
 }
 
-export async function* streamProvider(
-  input: ProviderStreamInput,
+export async function* streamProviderRequest(
+  input: {
+    onRawEvent?: (document: unknown) => void;
+    request: UpstreamRequest;
+    signal: AbortSignal;
+  },
   fetchImplementation: typeof fetch = fetch,
 ): AsyncGenerator<ChatEvent> {
-  const request = buildProviderStreamRequest(input);
+  const request = input.request;
   const upstreamController = new AbortController();
   const abortFromCaller = () => upstreamController.abort(input.signal.reason);
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -512,4 +544,18 @@ export async function* streamProvider(
     cleanup();
   }
   if (!done) yield { durationMs: 0, type: 'done' };
+}
+
+export async function* streamProvider(
+  input: ProviderStreamInput,
+  fetchImplementation: typeof fetch = fetch,
+): AsyncGenerator<ChatEvent> {
+  yield* streamProviderRequest(
+    {
+      ...(input.onRawEvent ? { onRawEvent: input.onRawEvent } : {}),
+      request: buildProviderStreamRequest(input),
+      signal: input.signal,
+    },
+    fetchImplementation,
+  );
 }

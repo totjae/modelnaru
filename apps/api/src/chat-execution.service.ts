@@ -16,7 +16,7 @@ import {
   type ChatParameters,
   buildProviderStreamRequest,
   ChatUpstreamError,
-  streamProvider,
+  streamProviderRequest,
 } from './chat-streaming.js';
 import {
   normalizeProviderParameters,
@@ -31,7 +31,10 @@ import {
   estimateContextSize,
   SummarizationService,
 } from './summarization.service.js';
-import { AttachmentsService } from './attachments.service.js';
+import {
+  AttachmentsService,
+  ImageRequestTooLargeError,
+} from './attachments.service.js';
 import { RequestTraceService } from './request-trace.service.js';
 
 interface ActiveRequest {
@@ -144,11 +147,9 @@ export class ChatExecutionService {
         });
       }
       if (turn.imageAttachments.length > 0) {
-        const images = await Promise.all(
-          turn.imageAttachments.map(async (image) => ({
-            data: await this.attachments.readImage(image.storageKey),
-            mediaType: image.mediaType,
-          })),
+        const images = await this.attachments.readImages(
+          turn.imageAttachments,
+          externalSignal,
         );
         const targetIndex = context.findLastIndex(
           (message) => message.role === 'user',
@@ -168,6 +169,14 @@ export class ChatExecutionService {
         systemPrompt: turn.systemPrompt,
         template: runtime.template,
       };
+      const providerRequest = buildProviderStreamRequest(
+        providerInput,
+        Boolean(
+          input.sessionId &&
+          input.absoluteExpiresAt &&
+          turn.requestTraceLimit > 0,
+        ),
+      );
       if (input.sessionId && input.absoluteExpiresAt) {
         traceId = await this.traces.begin({
           absoluteExpiresAt: input.absoluteExpiresAt,
@@ -176,7 +185,7 @@ export class ChatExecutionService {
           modelId: runtime.modelId,
           principal,
           providerTemplateId: runtime.template.id,
-          request: buildProviderStreamRequest(providerInput),
+          request: providerRequest,
           sessionId: input.sessionId,
         });
       }
@@ -206,9 +215,9 @@ export class ChatExecutionService {
       let stopReason: string | undefined;
       try {
         await this.messages.markStreaming(turn.assistantMessageId);
-        for await (const event of streamProvider({
-          ...providerInput,
+        for await (const event of streamProviderRequest({
           onRawEvent: (document) => this.traces.appendRaw(traceId, document),
+          request: providerRequest,
           signal: controller.signal,
         })) {
           if (event.type === 'text_delta') {
@@ -416,6 +425,13 @@ export class ChatExecutionService {
       return {
         code: 'CHAT_IMAGE_MODEL_UNSUPPORTED',
         message: 'The selected model does not support image input.',
+        retryable: false,
+      };
+    }
+    if (error instanceof ImageRequestTooLargeError) {
+      return {
+        code: 'CHAT_IMAGE_PAYLOAD_TOO_LARGE',
+        message: 'The images exceed the request size limit.',
         retryable: false,
       };
     }

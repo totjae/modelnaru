@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AccessService } from '../src/access.service.js';
-import type { AttachmentsService } from '../src/attachments.service.js';
+import {
+  type AttachmentsService,
+  ImageRequestTooLargeError,
+} from '../src/attachments.service.js';
 import type { AuthenticatedPrincipal } from '../src/auth.service.js';
 import { ChatExecutionService } from '../src/chat-execution.service.js';
 import type { ChatMessagesRepository } from '../src/chat-messages.repository.js';
@@ -39,7 +42,11 @@ describe('ChatExecutionService', () => {
           ],
           contextTokenLimit: 100_000,
           imageAttachments: [
-            { mediaType: 'image/png', storageKey: 'aa/image-id' },
+            {
+              byteSize: 1_024,
+              mediaType: 'image/png',
+              storageKey: 'aa/image-id',
+            },
           ],
           previousActiveBranchId: '60000000-0000-4000-8000-000000000001',
           systemPrompt: '',
@@ -95,6 +102,97 @@ describe('ChatExecutionService', () => {
     expect(events).toContainEqual(
       expect.objectContaining({
         code: 'CHAT_IMAGE_MODEL_UNSUPPORTED',
+        type: 'error',
+      }),
+    );
+  });
+
+  it('rejects an oversized image set before reading provider quota', async () => {
+    const access = {
+      assertModelAllowed: vi.fn(() => Promise.resolve()),
+      reserveDailyRequest: vi.fn(),
+    };
+    const attachments = {
+      readImages: vi.fn(() => Promise.reject(new ImageRequestTooLargeError())),
+    };
+    const messages = {
+      assertConversation: vi.fn(() => Promise.resolve()),
+      beginTurn: vi.fn(() =>
+        Promise.resolve({
+          activateBranchOnComplete: false,
+          assistantMessageId: '30000000-0000-4000-8000-000000000001',
+          branchId: '60000000-0000-4000-8000-000000000001',
+          context: [
+            {
+              content: 'describe the images',
+              id: '40000000-0000-4000-8000-000000000001',
+              role: 'user',
+            },
+          ],
+          contextTokenLimit: 100_000,
+          imageAttachments: [
+            {
+              byteSize: 20_971_521,
+              mediaType: 'image/png',
+              storageKey: 'aa/image-id',
+            },
+          ],
+          previousActiveBranchId: '60000000-0000-4000-8000-000000000001',
+          requestTraceLimit: 0,
+          systemPrompt: '',
+          userMessageId: '40000000-0000-4000-8000-000000000001',
+        }),
+      ),
+      finishIncomplete: vi.fn(() => Promise.resolve()),
+    };
+    const service = new ChatExecutionService(
+      access as unknown as AccessService,
+      attachments as unknown as AttachmentsService,
+      {
+        resolve: vi.fn(() =>
+          Promise.resolve({
+            apiKey: 'secret',
+            baseUrl: 'https://api.openai.com/v1',
+            contextWindow: null,
+            maxOutputTokens: null,
+            modelId: 'gpt-test',
+            providerModelId: '20000000-0000-4000-8000-000000000001',
+            supportsImageInput: true,
+            template: providerTemplateById('openai')!,
+          }),
+        ),
+      } as unknown as ChatProviderService,
+      messages as unknown as ChatMessagesRepository,
+      { fitContext: vi.fn() } as unknown as SummarizationService,
+    );
+    const events: Array<{ code?: string; type: string }> = [];
+
+    await service.execute(
+      {
+        attachmentIds: ['70000000-0000-4000-8000-000000000001'],
+        content: 'describe the images',
+        conversationId: '50000000-0000-4000-8000-000000000001',
+        parameters: {},
+        principal,
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    expect(attachments.readImages).toHaveBeenCalled();
+    expect(access.reserveDailyRequest).not.toHaveBeenCalled();
+    expect(messages.finishIncomplete).toHaveBeenCalledWith(
+      '30000000-0000-4000-8000-000000000001',
+      expect.objectContaining({
+        errorCode: 'CHAT_IMAGE_PAYLOAD_TOO_LARGE',
+        status: 'failed',
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        code: 'CHAT_IMAGE_PAYLOAD_TOO_LARGE',
         type: 'error',
       }),
     );

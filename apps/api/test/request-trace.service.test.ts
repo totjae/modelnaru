@@ -27,10 +27,7 @@ function beginInput(index: number, limit = 3) {
     providerTemplateId: 'openai',
     request: {
       init: {
-        body: JSON.stringify({
-          image: { data: 'a'.repeat(300) },
-          messages: [{ content: `message-${index}`, role: 'user' }],
-        }),
+        body: '{the trace must not parse this request body again',
         headers: {
           Authorization: 'Bearer secret',
           'Content-Type': 'application/json',
@@ -38,6 +35,10 @@ function beginInput(index: number, limit = 3) {
         method: 'POST',
       },
       protocol: 'openai' as const,
+      traceBody: {
+        image: { data: 'a'.repeat(300) },
+        messages: [{ content: `message-${index}`, role: 'user' }],
+      },
       url: 'https://provider.example/chat?api_key=secret',
     },
     sessionId: '30000000-0000-4000-8000-000000000001',

@@ -210,6 +210,15 @@
 - 대안: PaddleOCR Python worker, 외부 Cloud Vision, OCR 미지원 유지.
 - 영향: OCR은 PDF·OCR worker를 각각 기본 1개로 제한하며 페이지별 명령 제한을 적용한다. 임시 이미지는 즉시 삭제하고 `ocr_page_count`만 metadata로 보존한다. 표·필기·복잡한 다단 편집은 인식 정확도가 낮을 수 있다.
 
+### ADR-024: 이미지 요청 전체 byte 상한과 Provider 요청 단일 직렬화
+
+- 상태: 확정
+- 결정일: 2026-07-27
+- 결정: 파일별 10MB 제한과 별도로 한 Provider 요청에 포함되는 이미지 원본 합계를 기본 20MiB로 제한한다. DB metadata로 storage read 전에 검사하고 실제 byte를 다시 확인한다. Provider 요청 JSON은 한 번만 직렬화해 trace와 fetch가 재사용하며 trace에는 builder가 만든 image 제거 사본만 전달한다.
+- 이유: 후속 포함 이미지까지 최대 10개가 모이면 원본 Buffer, base64, JSON 문자열과 trace용 재파싱 객체가 동시에 유지돼 작은 서버에서 순간 heap 사용량이 크게 증가할 수 있다.
+- 대안: 파일별 제한만 유지, 이미지를 모두 병렬로 읽기, trace 단계에서 직렬화 JSON을 다시 parse, multipart 또는 Provider별 파일 API 사용.
+- 영향: 큰 이미지 묶음은 호출량 차감 전에 `CHAT_IMAGE_PAYLOAD_TOO_LARGE`로 실패한다. 이미지는 순차적으로 읽어 원본 Buffer 동시 보유를 줄이며 Provider별 wire format과 사용자 메시지 내용은 바뀌지 않는다.
+
 ## 3. 변경 규칙
 
 기존 결정을 바꾸면 원문을 삭제하지 않고 상태를 `대체`로 바꾼 뒤 새 ADR에서 대체 관계를 밝힌다.

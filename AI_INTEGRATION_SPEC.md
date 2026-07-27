@@ -415,6 +415,7 @@ API 기본 URL은 `https`만 허용하고 허용 도메인 또는 관리자의 �
 - 엔드포인트: `/chat/completions`
 - 대화는 `messages` 배열로 변환한다.
 - 이미지는 user 메시지의 `image_url` content로 변환한다.
+- Provider 요청 JSON은 호출당 한 번만 직렬화하며, 전송 기록과 실제 fetch가 같은 준비된 요청을 사용한다.
 - GPT-5·o 계열처럼 필요한 모델에는 `max_completion_tokens`, 그 외에는 `max_tokens`를 사용하되 모델 설정에서 명시적으로 선택할 수 있게 한다.
 - 스트리밍 시 사용량을 받을 수 있으면 `stream_options.include_usage`를 활성화한다.
 
@@ -459,6 +460,7 @@ API 기본 URL은 `https`만 허용하고 허용 도메인 또는 관리자의 �
 - 이미지 이해는 모델의 `capabilities.vision`이 참일 때만 허용한다.
 - 공급자별 이미지 표현은 어댑터가 OpenAI `image_url`, Responses `input_image`, Anthropic image block 또는 Gemini inline data part로 변환한다.
 - 추출 텍스트와 이미지를 포함한 전체 예상 입력량이 모델의 최대 입력 토큰을 넘으면 요청 전에 사용자에게 알린다.
+- 현재 요청에 포함할 이미지 원본 합계는 설정 상한을 먼저 검사한다. 전송 기록용 요청은 직렬화된 JSON을 다시 parse하지 않고 요청 builder가 만든 이미지 제거 사본을 사용한다.
 - 이미지 생성 엔드포인트와 관련 파라미터는 등록하거나 호출하지 않는다.
 
 ## 12. 스트리밍 및 취소

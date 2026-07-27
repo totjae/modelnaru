@@ -125,6 +125,9 @@ export const modelNaruConfigSchema = z
         maximumOcrQueueSize: integer(0, 100).default(4),
         maximumFileBytes: integer(1, 104_857_600).default(10_485_760),
         maximumImagePixels: integer(1, 100_000_000).default(40_000_000),
+        maximumImageBytesPerRequest: integer(1, 104_857_600).default(
+          20_971_520,
+        ),
         maximumAttachmentsPerMessage: integer(1, 20).default(10),
         maximumPdfPages: integer(1, 500).default(100),
       })

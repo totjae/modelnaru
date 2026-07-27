@@ -91,6 +91,7 @@ limits:
   maximumOcrQueueSize: 4
   maximumFileBytes: 10485760
   maximumImagePixels: 40000000
+  maximumImageBytesPerRequest: 20971520
   maximumAttachmentsPerMessage: 10
   maximumPdfPages: 100
 

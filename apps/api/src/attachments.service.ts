@@ -61,6 +61,7 @@ export class FilePdfOcrUnavailableError extends Error {}
 export class FilePdfPageLimitError extends Error {}
 export class FilePdfPasswordProtectedError extends Error {}
 export class FileImageDimensionsError extends Error {}
+export class ImageRequestTooLargeError extends Error {}
 export class FileProcessingBusyError extends Error {}
 export class FileProcessingCancelledError extends Error {}
 
@@ -362,8 +363,52 @@ export class AttachmentsService implements OnModuleDestroy {
     }
   }
 
-  async readImage(storageKey: string): Promise<string> {
-    return (await readFile(this.storagePath(storageKey))).toString('base64');
+  async readImages(
+    images: Array<{
+      byteSize: number;
+      mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+      storageKey: string;
+    }>,
+    signal?: AbortSignal,
+  ): Promise<
+    Array<{
+      data: string;
+      mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+    }>
+  > {
+    const maximumBytes = this.loaded.config.limits.maximumImageBytesPerRequest;
+    let declaredBytes = 0;
+    for (const image of images) {
+      if (!Number.isSafeInteger(image.byteSize) || image.byteSize < 0) {
+        throw new ImageRequestTooLargeError();
+      }
+      declaredBytes += image.byteSize;
+      if (
+        !Number.isSafeInteger(declaredBytes) ||
+        declaredBytes > maximumBytes
+      ) {
+        throw new ImageRequestTooLargeError();
+      }
+    }
+
+    const encoded: Array<{
+      data: string;
+      mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+    }> = [];
+    let actualBytes = 0;
+    for (const image of images) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const bytes = await readFile(this.storagePath(image.storageKey));
+      actualBytes += bytes.byteLength;
+      if (actualBytes > maximumBytes) {
+        throw new ImageRequestTooLargeError();
+      }
+      encoded.push({
+        data: bytes.toString('base64'),
+        mediaType: image.mediaType,
+      });
+    }
+    return encoded;
   }
 
   private async assertStorageCapacity(): Promise<void> {

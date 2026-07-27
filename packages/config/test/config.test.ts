@@ -62,6 +62,7 @@ const validConfig = {
     maximumOcrQueueSize: 4,
     maximumFileBytes: 10_485_760,
     maximumImagePixels: 40_000_000,
+    maximumImageBytesPerRequest: 20_971_520,
     maximumAttachmentsPerMessage: 10,
     maximumPdfPages: 100,
   },

@@ -156,12 +156,8 @@ export class RequestTraceService implements OnModuleDestroy {
       return null;
     }
     this.pruneExpired();
-    const rawBody =
-      typeof input.request.init.body === 'string'
-        ? this.parseBody(input.request.init.body)
-        : null;
     const requestValue = limited({
-      body: sanitize(rawBody),
+      body: sanitize(input.request.traceBody),
       headers: sanitizedHeaders(input.request.init.headers),
       method: input.request.init.method ?? 'POST',
       protocol: input.request.protocol,
@@ -388,14 +384,6 @@ export class RequestTraceService implements OnModuleDestroy {
       if (found) return found;
     }
     return undefined;
-  }
-
-  private parseBody(value: string): unknown {
-    try {
-      return JSON.parse(value) as unknown;
-    } catch {
-      return { warning: 'Provider request body was not valid JSON.' };
-    }
   }
 
   private pruneExpired(): void {

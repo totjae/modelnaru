@@ -4,6 +4,7 @@ import {
   buildProviderStreamRequest,
   normalizeProviderStreamEvent,
   streamProvider,
+  streamProviderRequest,
 } from '../src/chat-streaming.js';
 import { providerTemplateById } from '../src/provider-catalog.js';
 
@@ -107,6 +108,59 @@ describe('chat provider streaming', () => {
     expect(JSON.stringify(requestBody('google'))).toContain(
       '"mime_type":"image/png"',
     );
+    const openAiTemplate = providerTemplateById('openai')!;
+    const tracedRequest = buildProviderStreamRequest(
+      {
+        apiKey: 'key',
+        baseUrl: openAiTemplate.baseUrl!,
+        messages: imageMessages,
+        modelId: 'vision-model',
+        parameters: {},
+        systemPrompt: '',
+        template: openAiTemplate,
+      },
+      true,
+    );
+    expect(JSON.stringify(tracedRequest.traceBody)).not.toContain('aGVsbG8=');
+    expect(JSON.stringify(tracedRequest.traceBody)).toContain(
+      'binary image omitted',
+    );
+  });
+
+  it('streams an already serialized provider request without rebuilding it', async () => {
+    const request = {
+      init: {
+        body: '{"model":"prepared-request"}',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      },
+      protocol: 'openai' as const,
+      traceBody: { model: 'prepared-request' },
+      url: 'https://provider.example/prepared',
+    };
+    const fetchImplementation = (
+      url: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      expect(url).toBe(request.url);
+      expect(init?.body).toBe(request.init.body);
+      return Promise.resolve(
+        new Response('data: [DONE]\n\n', {
+          headers: { 'Content-Type': 'text/event-stream' },
+          status: 200,
+        }),
+      );
+    };
+    const events = [];
+
+    for await (const event of streamProviderRequest(
+      { request, signal: new AbortController().signal },
+      fetchImplementation,
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([]);
   });
 
   it('normalizes text, usage and completion events', () => {

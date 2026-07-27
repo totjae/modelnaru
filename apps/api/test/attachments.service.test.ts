@@ -10,6 +10,7 @@ import type { AttachmentsRepository } from '../src/attachments.repository.js';
 import {
   AttachmentsService,
   FileTooLargeError,
+  ImageRequestTooLargeError,
 } from '../src/attachments.service.js';
 
 const principal = {
@@ -21,7 +22,10 @@ const principal = {
 
 const createdRoots: string[] = [];
 
-async function fixture(maximumFileBytes = 1024) {
+async function fixture(
+  maximumFileBytes = 1024,
+  maximumImageBytesPerRequest = 20_971_520,
+) {
   const root = await mkdtemp(join(tmpdir(), 'modelnaru-attachments-'));
   createdRoots.push(root);
   const storageRoot = join(root, 'uploads');
@@ -48,6 +52,7 @@ async function fixture(maximumFileBytes = 1024) {
       limits: {
         maximumAttachmentsPerMessage: 10,
         maximumFileBytes,
+        maximumImageBytesPerRequest,
         maximumImagePixels: 40_000_000,
         maximumOcrQueueSize: 4,
         maximumOcrWorkers: 1,
@@ -129,5 +134,24 @@ describe('AttachmentsService', () => {
     expect(repository.createReady).not.toHaveBeenCalled();
     expect(await readdir(storageRoot)).toHaveLength(0);
     expect(await readdir(storageTemp)).toHaveLength(0);
+  });
+
+  it('rejects an oversized image set before reading storage files', async () => {
+    const { service } = await fixture(1024, 10);
+
+    await expect(
+      service.readImages([
+        {
+          byteSize: 6,
+          mediaType: 'image/png',
+          storageKey: 'missing/first',
+        },
+        {
+          byteSize: 5,
+          mediaType: 'image/png',
+          storageKey: 'missing/second',
+        },
+      ]),
+    ).rejects.toBeInstanceOf(ImageRequestTooLargeError);
   });
 });

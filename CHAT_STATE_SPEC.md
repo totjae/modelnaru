@@ -121,6 +121,7 @@
 - `AUTH_CSRF_INVALID`(`403`): mutation의 CSRF 검증 실패
 - `CHAT_NOT_FOUND`(`404`): 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
 - `CHAT_CONTEXT_LIMIT_EXCEEDED`: 요약을 사용할 수 없는 상태에서 설정한 컨텍스트 한도 초과
+- `CHAT_IMAGE_PAYLOAD_TOO_LARGE`: 현재 요청의 이미지 원본 합계가 서버 설정 상한 초과
 - `CHAT_NOT_CANCELLABLE`(`409`): 이미 완료됐거나 진행 중이 아닌 메시지 취소
 - `CHAT_REGENERATION_INVALID`: 활성 경로의 마지막 답변이 아니거나 생성 중인 assistant 메시지를 재생성 대상으로 지정
 - 활성 분기와 대화의 관계가 일치하지 않으면 DB 제약으로 거부한다.

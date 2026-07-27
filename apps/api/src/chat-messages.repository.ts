@@ -20,6 +20,7 @@ export interface ChatTurnRecord {
   context: Array<{ content: string; id: string; role: 'assistant' | 'user' }>;
   contextTokenLimit: number;
   imageAttachments: Array<{
+    byteSize: number;
     mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
     storageKey: string;
   }>;
@@ -47,6 +48,7 @@ interface RawContextMessage {
 }
 
 interface RawAttachment {
+  byte_size: string | number;
   extracted_text: string | null;
   file_kind: 'image' | 'pdf' | 'text';
   id: string;
@@ -236,7 +238,7 @@ export class ChatMessagesRepository {
       const selectedAttachments: RawAttachment[] = [];
       for (const attachmentId of attachmentIds) {
         const rows = await transaction<RawAttachment[]>`
-          SELECT id, message_id, original_name, extracted_text,
+          SELECT id, message_id, original_name, extracted_text, byte_size,
             include_in_future_messages, file_kind, media_type, storage_key
           FROM attachments
           WHERE id = ${attachmentId}
@@ -250,7 +252,7 @@ export class ChatMessagesRepository {
         selectedAttachments.push(rows[0]);
       }
       const priorAttachments = await transaction<RawAttachment[]>`
-        SELECT id, message_id, original_name, extracted_text,
+        SELECT id, message_id, original_name, extracted_text, byte_size,
           include_in_future_messages, file_kind, media_type, storage_key
         FROM attachments
         WHERE conversation_id = ${input.conversationId}
@@ -351,6 +353,7 @@ export class ChatMessagesRepository {
                   ))),
           )
           .map((attachment) => ({
+            byteSize: Number(attachment.byte_size),
             mediaType: attachment.media_type as
               'image/jpeg' | 'image/png' | 'image/webp',
             storageKey: attachment.storage_key,
@@ -413,7 +416,7 @@ export class ChatMessagesRepository {
         storedMessages,
       );
       const attachments = await transaction<RawAttachment[]>`
-        SELECT id, message_id, original_name, extracted_text,
+        SELECT id, message_id, original_name, extracted_text, byte_size,
           include_in_future_messages, file_kind, media_type, storage_key
         FROM attachments
         WHERE conversation_id = ${input.conversationId}
@@ -503,6 +506,7 @@ export class ChatMessagesRepository {
                     .some((message) => message.id === attachment.message_id))),
           )
           .map((attachment) => ({
+            byteSize: Number(attachment.byte_size),
             mediaType: attachment.media_type as
               'image/jpeg' | 'image/png' | 'image/webp',
             storageKey: attachment.storage_key,

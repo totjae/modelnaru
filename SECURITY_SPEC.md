@@ -126,13 +126,14 @@
 - PDF·OCR 대기열은 각각 `limits.maximumPdfQueueSize`, `limits.maximumOcrQueueSize`로 제한한다. 처리 permit을 얻기 전에는 전체 임시 파일을 heap Buffer로 읽지 않는다.
 - 대기 중 HTTP 연결 종료 시 AbortSignal로 waiter를 queue에서 제거하고, 서버 종료 시 모든 대기 waiter를 거부해 retained Promise를 남기지 않는다.
 - 이미지는 확장자·MIME·실제 signature와 가로·세로를 함께 검사하고 40,000,000 decoded pixel 기본 상한을 적용한다.
-- 원본 image base64는 API response·log·DB에 복제하지 않고 Provider 요청을 만드는 시점에 비공개 storage에서 읽는다.
+- 현재 Provider 요청의 이미지 원본 합계는 기본 20MiB로 제한하고 DB metadata와 실제 storage byte를 각각 검사한다.
+- 원본 image base64는 API response·log·DB에 복제하지 않고 Provider 요청을 만드는 시점에 비공개 storage에서 순차적으로 읽는다.
 
 ### 6.9 session 한정 요청·응답 기록
 
 - 일반 사용자와 게스트는 대화 설정에서 최근 0~3개의 실제 Provider 전송 기록을 볼 수 있다.
 - 기록은 현재 API process 메모리에만 있고 PostgreSQL·Valkey·파일·관리자 로그에 저장하지 않는다.
-- Authorization, API key 계열 header, URL query의 key·token·secret과 이미지 base64를 저장 전에 제거한다.
+- Authorization, API key 계열 header, URL query의 key·token·secret과 이미지 base64를 저장 전에 제거한다. 기록용 요청은 실제 JSON 문자열을 다시 parse하지 않고 요청 builder가 만든 binary 제거 사본을 사용한다.
 - 대화 소유권과 현재 session ID를 함께 검사하며 같은 계정의 다른 브라우저 session과도 공유하지 않는다.
 - 단일 기록 2MB, session 전체 30개를 넘지 못한다.
 - 로그아웃·만료·session 제한 폐기·credential 변경·계정 및 대화 삭제·게스트 종료 시 관련 기록을 즉시 삭제한다.
