@@ -459,7 +459,10 @@ export default function HomePage() {
       >
         <div className="guest-story">
           <p className="eyebrow">LIVE DEMO · ISOLATED GUEST SESSION</p>
-          <h2 id="guest-title">설명을 읽었다면, 이제 직접 건너가 보세요</h2>
+          <h2 id="guest-title" className="guest-title">
+            <span>설명을 읽었다면,</span>
+            <span>이제 직접 건너가 보세요</span>
+          </h2>
           <p>
             게스트 체험은 ModelNaru의 포트폴리오 데모입니다. 코드를 입력하면
             다른 방문자와 분리된 임시 대화 공간이 만들어지고, 관리자가 허용한

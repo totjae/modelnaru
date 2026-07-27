@@ -422,6 +422,11 @@ h1 {
   white-space: nowrap;
 }
 
+.guest-title span {
+  display: block;
+  white-space: nowrap;
+}
+
 .architecture-section .section-heading {
   display: grid;
   max-width: none;
@@ -3382,6 +3387,10 @@ h1 {
 
   .architecture-section .section-heading h2 {
     font-size: clamp(28px, 8vw, 34px);
+  }
+
+  .guest-story .guest-title {
+    font-size: clamp(25px, 7.5vw, 34px);
   }
 
   .architecture-flow,
