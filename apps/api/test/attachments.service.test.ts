@@ -49,7 +49,10 @@ async function fixture(maximumFileBytes = 1024) {
         maximumAttachmentsPerMessage: 10,
         maximumFileBytes,
         maximumImagePixels: 40_000_000,
+        maximumOcrQueueSize: 4,
+        maximumOcrWorkers: 1,
         maximumPdfPages: 100,
+        maximumPdfQueueSize: 4,
         maximumPdfWorkers: 1,
       },
       storage: {

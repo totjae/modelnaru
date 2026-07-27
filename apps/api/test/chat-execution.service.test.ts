@@ -79,7 +79,9 @@ describe('ChatExecutionService', () => {
         principal,
         providerModelId: '20000000-0000-4000-8000-000000000001',
       },
-      (event) => events.push(event),
+      (event) => {
+        events.push(event);
+      },
     );
 
     expect(access.reserveDailyRequest).not.toHaveBeenCalled();
@@ -161,7 +163,9 @@ describe('ChatExecutionService', () => {
         principal,
         providerModelId: '20000000-0000-4000-8000-000000000001',
       },
-      (event) => events.push(event),
+      (event) => {
+        events.push(event);
+      },
     );
 
     expect(access.reserveDailyRequest).not.toHaveBeenCalled();

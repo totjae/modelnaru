@@ -81,7 +81,7 @@ export class ChatExecutionService {
 
   async execute(
     input: ExecuteChatInput,
-    emit: (event: ChatEvent) => void,
+    emit: (event: ChatEvent) => void | Promise<void>,
     externalSignal?: AbortSignal,
   ): Promise<void> {
     const principal = this.chatPrincipal(input.principal);
@@ -180,7 +180,7 @@ export class ChatExecutionService {
           sessionId: input.sessionId,
         });
       }
-      emit({
+      await emit({
         branchId: turn.branchId,
         messageId: turn.assistantMessageId,
         modelId: runtime.modelId,
@@ -213,11 +213,11 @@ export class ChatExecutionService {
         })) {
           if (event.type === 'text_delta') {
             content += event.text;
-            emit(event);
+            await emit(event);
           } else if (event.type === 'usage') {
             inputTokens = event.inputTokens ?? inputTokens;
             outputTokens = event.outputTokens ?? outputTokens;
-            emit(event);
+            await emit(event);
           } else if (event.type === 'done') {
             stopReason = event.stopReason ?? stopReason;
           }
@@ -246,7 +246,7 @@ export class ChatExecutionService {
           outputTokens,
           stopReason: stopReason ?? null,
         });
-        emit({
+        await emit({
           durationMs,
           ...(stopReason ? { stopReason } : {}),
           type: 'done',
@@ -294,7 +294,7 @@ export class ChatExecutionService {
         );
       }
       try {
-        emit({ ...normalized, type: 'error' });
+        await emit({ ...normalized, type: 'error' });
       } catch {
         // The browser may already have closed the stream.
       }
@@ -303,7 +303,7 @@ export class ChatExecutionService {
 
   regenerate(
     input: RegenerateChatInput,
-    emit: (event: ChatEvent) => void,
+    emit: (event: ChatEvent) => void | Promise<void>,
     externalSignal?: AbortSignal,
   ): Promise<void> {
     return this.execute(

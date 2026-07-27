@@ -48,8 +48,8 @@
 ## 2026-07-27 런타임 안정성 감사 후속
 
 - 1단계 SSE 버퍼 상한·Provider idle timeout·오류 종료 보장: 구현 완료, 단위 시험·API/Web typecheck 통과
-- 2단계 SSE response backpressure: 계획
-- 3단계 파일 처리 bounded semaphore와 취소: 계획
+- 2단계 SSE response backpressure: 구현 완료, drain·연결 종료 단위 시험과 typecheck·lint 통과
+- 3단계 파일 처리 bounded semaphore와 취소: 구현 완료, queue 상한·대기 취소·종료 정리 단위 시험과 typecheck·lint 통과
 - 4단계 이미지 총용량·JSON 중복 생성 제거: 계획
 - 5단계 요청 추적 전역 byte budget·O(1) 조회: 계획
 - 6단계 활성 분기 중심 대화 조회·pagination: 계획

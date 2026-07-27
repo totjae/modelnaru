@@ -33,6 +33,8 @@ import {
   FilePdfOcrUnavailableError,
   FilePdfPageLimitError,
   FilePdfPasswordProtectedError,
+  FileProcessingBusyError,
+  FileProcessingCancelledError,
   FileStorageLowError,
   FileTextTooLargeError,
   FileTooLargeError,
@@ -47,6 +49,8 @@ const UUID =
 interface UploadRequest extends AuthenticatedRequest, UploadByteStream {}
 
 interface ResponseLike {
+  off?(event: 'close', listener: () => void): void;
+  once?(event: 'close', listener: () => void): void;
   setHeader(name: string, value: string): void;
 }
 
@@ -100,6 +104,9 @@ export class AttachmentsController {
     ) {
       this.error('FILE_INPUT_INVALID', 'File input is invalid.', 400);
     }
+    const disconnected = new AbortController();
+    const handleClose = () => disconnected.abort();
+    response.once?.('close', handleClose);
     try {
       return await this.attachments.upload(
         request.authenticatedSession!.principal,
@@ -108,11 +115,14 @@ export class AttachmentsController {
           fileName,
           includeInFutureMessages: includeHeader === 'true',
           mediaType,
+          signal: disconnected.signal,
           stream: request,
         },
       );
     } catch (error) {
       this.mapError(error);
+    } finally {
+      response.off?.('close', handleClose);
     }
   }
 
@@ -257,6 +267,20 @@ export class AttachmentsController {
         'FILE_STORAGE_LOW',
         'The server does not have enough storage.',
         507,
+      );
+    }
+    if (error instanceof FileProcessingBusyError) {
+      this.error(
+        'FILE_PROCESSING_BUSY',
+        'The file processor is busy. Try again later.',
+        503,
+      );
+    }
+    if (error instanceof FileProcessingCancelledError) {
+      this.error(
+        'FILE_PROCESSING_CANCELLED',
+        'File processing was cancelled.',
+        408,
       );
     }
     if (error instanceof FileInputError) {

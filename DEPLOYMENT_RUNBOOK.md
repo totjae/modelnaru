@@ -157,6 +157,11 @@ docker compose exec postgres \
 
 Update 전 현재 commit hash와 `config.yaml`의 별도 local 사본을 확인한다. 외부 backup은 현재 범위에 없으므로 data 손실 가능성을 사용자가 수용한 상태다.
 
+파일 처리 동시성 설정에는 `maximumPdfQueueSize`와
+`maximumOcrQueueSize`가 포함된다. 기존 `config.yaml`에 두 항목이 없으면 각각
+기본값 `4`가 적용되므로 기존 설치는 그대로 업데이트할 수 있다. 값을 명시적으로
+조정한 경우에는 애플리케이션을 다시 시작해야 반영된다.
+
 ```bash
 cd /home/totquf4171/modelnaru
 git pull --ff-only
@@ -175,6 +180,7 @@ Rollback은 이전에 기록한 commit으로 새 worktree나 별도 배포 direc
 - host에서 접속 불가: `.runtime.env`, gateway port binding과 host Nginx upstream 확인
 - TOTP login 실패: server 시간 동기화 상태와 인증 앱의 현재 code 확인. ID·비밀번호·TOTP 원문은 log에 남기지 않음
 - disk 부족: 신규 upload를 중지하고 `data/uploads`, log, Docker image 사용량 확인
+- `FILE_PROCESSING_BUSY` 반복: PDF·OCR worker와 queue 설정, CPU 및 메모리 사용량을 함께 확인. 기본값은 처리 worker 각각 `1`, 대기 queue 각각 `4`이며 자원 상태를 확인하지 않고 queue 크기만 늘리지 않음
 
 ## 9. 검증·인수 조건
 

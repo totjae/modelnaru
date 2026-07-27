@@ -58,6 +58,8 @@ const validConfig = {
     maximumAiGenerationsPerUser: 2,
     maximumPdfWorkers: 1,
     maximumOcrWorkers: 1,
+    maximumPdfQueueSize: 4,
+    maximumOcrQueueSize: 4,
     maximumFileBytes: 10_485_760,
     maximumImagePixels: 40_000_000,
     maximumAttachmentsPerMessage: 10,

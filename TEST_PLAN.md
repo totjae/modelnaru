@@ -146,23 +146,29 @@
 | FILE-OCR-001        | 단위 | 스캔 PDF OCR 전환   | 텍스트 레이어 없음·페이지 구분·무결과 오류                      | 통과 |
 | FILE-OCR-002        | 단위 | 로컬 OCR engine     | 페이지별 렌더링·kor+eng 인식·임시 파일 정리                     | 통과 |
 | FILE-OCR-003        | 정적 | 16차 migration      | OCR 페이지 수 범위·PDF 전체 페이지 수 이하 제약                 | 통과 |
-| FILE-OCR-E2E-001    | E2E  | Ubuntu 스캔 PDF     | 실제 한국어·영어 OCR·AI 컨텍스트·임시 파일 정리·N100 처리 시간  | 계획 |
-| FILE-PDF-E2E-001    | E2E  | HTTPS PDF 첨부      | 텍스트 PDF AI 활용·페이지 표시·암호·스캔·100페이지 거부         | 계획 |
-| FILE-IMAGE-001      | 단위 | 이미지 본문 검증    | JPEG·PNG·WebP 확장자/MIME·signature·해상도·픽셀 상한            | 통과 |
-| FILE-IMAGE-002      | 단위 | 멀티모달 변환       | OpenAI image_url·Anthropic image block·Gemini inline_data       | 통과 |
-| FILE-IMAGE-003      | 단위 | 모델 capability     | 기본 비활성·관리자 변경·동기화 보존·미지원 모델 quota 전 차단   | 통과 |
-| FILE-IMAGE-E2E-001  | E2E  | HTTPS 이미지 첨부   | 실제 모델 JPEG·PNG·WebP 인식·후속 포함·미지원 모델 차단         | 계획 |
-| FILE-LIFE-001       | 단위 | 만료·삭제 queue     | 만료 metadata 전환·원본 삭제 성공·실패 재시도                   | 통과 |
-| FILE-LIFE-002       | 정적 | 14차 migration      | DB 보관 설정·expired 상태·cascade cleanup trigger               | 통과 |
-| FILE-LIFE-003       | 단위 | 관리자 보관 API     | 1~3,650일 입력·감사 context·잘못된 범위 거부                    | 통과 |
-| FILE-LIFE-E2E-001   | E2E  | Ubuntu 파일 수명    | 기간 변경·수동 정리·metadata 유지·대화/사용자/guest 즉시 삭제   | 계획 |
-| UI-ICON-001         | 정적 | 브랜드 아이콘       | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결              | 통과 |
-| UI-MARK-001         | 정적 | 페이지 브랜드 마크  | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용         | 통과 |
-| SUMMARY-STATIC-001  | 정적 | 6차 migration       | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index   | 통과 |
-| SUMMARY-PARAM-001   | 단위 | 7차 migration·API   | sampling 범위·nullable 기본값·최대 출력 범위 검증               | 통과 |
-| PROVIDER-PARAM-001  | 단위 | parameter policy    | 전체 catalog profile·OpenAI reasoning·Anthropic thinking 규칙   | 통과 |
-| PROVIDER-PARAM-002  | 단위 | request mapping     | Gemini penalty·seed·stop·thinking과 Anthropic/OpenAI 필드 변환  | 통과 |
-| SUMMARY-PARAM-002   | 정적 | 8차 migration·Web   | 고급 JSON·설명·기본 동작·직접 설정 checkbox·충돌 사유 표시      | 통과 |
+| FILE-POOL-001       | 단위 | bounded task pool   | active 제한·queue 포화 거부·abort 제거·종료 시 waiter 거부      | 통과 |
+| FILE-POOL-002       | 단위 | 업로드 controller   | HTTP close를 upload AbortSignal로 전달                          | 통과 |
+
+3단계 런타임 안정성 검증에서는 파일 처리 관련 API 시험 5개 파일의 16개
+테스트, config 시험 10개가 통과했으며 config 시험 1개는 조건부 항목으로
+건너뛰었다. API·config·관리자 CLI typecheck와 전체 lint도 통과했다.
+| FILE-OCR-E2E-001 | E2E | Ubuntu 스캔 PDF | 실제 한국어·영어 OCR·AI 컨텍스트·임시 파일 정리·N100 처리 시간 | 계획 |
+| FILE-PDF-E2E-001 | E2E | HTTPS PDF 첨부 | 텍스트 PDF AI 활용·페이지 표시·암호·스캔·100페이지 거부 | 계획 |
+| FILE-IMAGE-001 | 단위 | 이미지 본문 검증 | JPEG·PNG·WebP 확장자/MIME·signature·해상도·픽셀 상한 | 통과 |
+| FILE-IMAGE-002 | 단위 | 멀티모달 변환 | OpenAI image_url·Anthropic image block·Gemini inline_data | 통과 |
+| FILE-IMAGE-003 | 단위 | 모델 capability | 기본 비활성·관리자 변경·동기화 보존·미지원 모델 quota 전 차단 | 통과 |
+| FILE-IMAGE-E2E-001 | E2E | HTTPS 이미지 첨부 | 실제 모델 JPEG·PNG·WebP 인식·후속 포함·미지원 모델 차단 | 계획 |
+| FILE-LIFE-001 | 단위 | 만료·삭제 queue | 만료 metadata 전환·원본 삭제 성공·실패 재시도 | 통과 |
+| FILE-LIFE-002 | 정적 | 14차 migration | DB 보관 설정·expired 상태·cascade cleanup trigger | 통과 |
+| FILE-LIFE-003 | 단위 | 관리자 보관 API | 1~3,650일 입력·감사 context·잘못된 범위 거부 | 통과 |
+| FILE-LIFE-E2E-001 | E2E | Ubuntu 파일 수명 | 기간 변경·수동 정리·metadata 유지·대화/사용자/guest 즉시 삭제 | 계획 |
+| UI-ICON-001 | 정적 | 브랜드 아이콘 | 보라 MN SVG·favicon·Apple·PWA 자산과 metadata 연결 | 통과 |
+| UI-MARK-001 | 정적 | 페이지 브랜드 마크 | 보라 테두리·반투명 표면·MN mask의 다크·라이트 공용 적용 | 통과 |
+| SUMMARY-STATIC-001 | 정적 | 6차 migration | 설정 singleton·버전·범위·message 경계·cascade·중복 방지 index | 통과 |
+| SUMMARY-PARAM-001 | 단위 | 7차 migration·API | sampling 범위·nullable 기본값·최대 출력 범위 검증 | 통과 |
+| PROVIDER-PARAM-001 | 단위 | parameter policy | 전체 catalog profile·OpenAI reasoning·Anthropic thinking 규칙 | 통과 |
+| PROVIDER-PARAM-002 | 단위 | request mapping | Gemini penalty·seed·stop·thinking과 Anthropic/OpenAI 필드 변환 | 통과 |
+| SUMMARY-PARAM-002 | 정적 | 8차 migration·Web | 고급 JSON·설명·기본 동작·직접 설정 checkbox·충돌 사유 표시 | 통과 |
 
 ## 9.1 관리자 통합 로그·session 전송 기록 시험
 
@@ -260,13 +266,14 @@ pnpm build
 
 ## 16. 런타임 안정성 개선 시험
 
-| ID              | 종류 | 범위                 | 검증 내용                                         | 상태 |
-| --------------- | ---- | -------------------- | ------------------------------------------------- | ---- |
-| RUNTIME-SSE-001 | 단위 | Provider SSE parser  | 미완성 이벤트가 1MiB를 넘으면 즉시 거부           | 통과 |
-| RUNTIME-SSE-002 | 단위 | 채팅 controller      | 실행 계층이 예외를 던져도 SSE response `end` 호출 | 통과 |
-| RUNTIME-SSE-003 | 단위 | Provider timeout     | 120초 동안 chunk가 없으면 upstream abort          | 통과 |
-| RUNTIME-SSE-004 | 회귀 | 정상 Provider stream | 분할 chunk·사용량·완료 event 동작 유지            | 통과 |
-| RUNTIME-WEB-001 | 빌드 | Browser SSE parser   | 1MiB client buffer 상한의 typecheck               | 통과 |
+| ID              | 종류 | 범위                 | 검증 내용                                            | 상태 |
+| --------------- | ---- | -------------------- | ---------------------------------------------------- | ---- |
+| RUNTIME-SSE-001 | 단위 | Provider SSE parser  | 미완성 이벤트가 1MiB를 넘으면 즉시 거부              | 통과 |
+| RUNTIME-SSE-002 | 단위 | 채팅 controller      | 실행 계층이 예외를 던져도 SSE response `end` 호출    | 통과 |
+| RUNTIME-SSE-003 | 단위 | Provider timeout     | 120초 동안 chunk가 없으면 upstream abort             | 통과 |
+| RUNTIME-SSE-004 | 회귀 | 정상 Provider stream | 분할 chunk·사용량·완료 event 동작 유지               | 통과 |
+| RUNTIME-WEB-001 | 빌드 | Browser SSE parser   | 1MiB client buffer 상한의 typecheck                  | 통과 |
+| RUNTIME-SSE-005 | 단위 | SSE response writer  | `write=false`이면 `drain` 전까지 event producer 대기 | 통과 |
 
 실행 결과:
 
@@ -274,3 +281,9 @@ pnpm build
 - API TypeScript typecheck 통과
 - Web TypeScript typecheck 통과
 - 변경 파일 Prettier 검사 통과
+
+2단계 추가 실행 결과:
+
+- API 관련 4개 시험 파일, 20개 시험 통과
+- `drain` 전 producer 정지와 연결 종료 시 waiter 해제를 모두 확인
+- API TypeScript typecheck와 전체 lint 통과

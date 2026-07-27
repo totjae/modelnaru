@@ -121,6 +121,8 @@ export const modelNaruConfigSchema = z
         maximumAiGenerationsPerUser: integer(1, 10).default(2),
         maximumPdfWorkers: integer(1, 4).default(1),
         maximumOcrWorkers: integer(1, 4).default(1),
+        maximumPdfQueueSize: integer(0, 100).default(4),
+        maximumOcrQueueSize: integer(0, 100).default(4),
         maximumFileBytes: integer(1, 104_857_600).default(10_485_760),
         maximumImagePixels: integer(1, 100_000_000).default(40_000_000),
         maximumAttachmentsPerMessage: integer(1, 20).default(10),

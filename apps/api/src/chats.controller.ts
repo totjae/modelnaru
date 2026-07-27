@@ -33,9 +33,45 @@ import { RequestTraceService } from './request-trace.service.js';
 interface ResponseLike {
   end?(): void;
   flushHeaders?(): void;
+  off?(event: 'close' | 'drain', listener: () => void): void;
   on?(event: 'close', listener: () => void): void;
+  once?(event: 'close' | 'drain', listener: () => void): void;
   setHeader(name: string, value: string): void;
   write?(chunk: string): boolean;
+}
+
+function writeSseEvent(
+  response: ResponseLike,
+  event: ChatEvent,
+): void | Promise<void> {
+  const accepted = response.write?.(`data: ${JSON.stringify(event)}\n\n`);
+  if (accepted !== false) return;
+  if (!response.once) {
+    return Promise.reject(
+      new Error('SSE response cannot wait for writable backpressure.'),
+    );
+  }
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      response.off?.('drain', handleDrain);
+      response.off?.('close', handleClose);
+    };
+    const handleDrain = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const handleClose = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('SSE response closed before the buffer drained.'));
+    };
+    response.once!('drain', handleDrain);
+    response.once!('close', handleClose);
+  });
 }
 
 const UUID =
@@ -474,9 +510,7 @@ export class ChatsController {
     response.on?.('close', () => {
       if (!completed) disconnected.abort();
     });
-    const emit = (event: ChatEvent) => {
-      response.write?.(`data: ${JSON.stringify(event)}\n\n`);
-    };
+    const emit = (event: ChatEvent) => writeSseEvent(response, event);
     try {
       await this.execution.execute(
         {
@@ -584,9 +618,7 @@ export class ChatsController {
     response.on?.('close', () => {
       if (!completed) disconnected.abort();
     });
-    const emit = (event: ChatEvent) => {
-      response.write?.(`data: ${JSON.stringify(event)}\n\n`);
-    };
+    const emit = (event: ChatEvent) => writeSseEvent(response, event);
     try {
       await this.execution.regenerate(
         {

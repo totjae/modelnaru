@@ -622,3 +622,5 @@ builder와 parser는 공급자 인증이나 데이터베이스에 직접 접근�
 - 한도를 넘은 응답은 `CHAT_PROVIDER_RESPONSE_INVALID`, timeout은 재시도 가능한 Provider network 오류로 정규화한다.
 - 브라우저 SSE parser도 미완성 이벤트를 최대 1MiB까지만 유지한다.
 - Provider 오류 후 DB 상태 저장이나 요청 추적 종료가 실패해도 나머지 종료 절차와 브라우저 오류 전달을 계속 시도한다.
+- 브라우저로 보내는 `response.write()`가 `false`를 반환하면 Provider event 소비를 중단하고 Node writable의 `drain`을 기다린다.
+- `drain` 대기 중 연결이 닫히면 대기 Promise를 즉시 거부하고 기존 연결 취소 절차를 실행한다.

@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AuthenticatedRequest } from '../src/auth.guard.js';
@@ -136,5 +138,114 @@ describe('chat runtime safety', () => {
       ),
     ).rejects.toThrow('database unavailable');
     expect(response.end).toHaveBeenCalledOnce();
+  });
+
+  it('waits for drain when the SSE response applies backpressure', async () => {
+    const responseEvents = new EventEmitter();
+    let continuedAfterWrite = false;
+    const execute = vi.fn(
+      async (
+        _input: unknown,
+        emit: (event: {
+          messageId: string;
+          modelId: string;
+          type: 'start';
+        }) => void | Promise<void>,
+      ) => {
+        await emit({
+          messageId: '30000000-0000-4000-8000-000000000001',
+          modelId: 'gpt-test',
+          type: 'start',
+        });
+        continuedAfterWrite = true;
+      },
+    );
+    const controller = new ChatsController(
+      {} as ChatsService,
+      { execute } as unknown as ChatExecutionService,
+    );
+    const response = {
+      end: vi.fn(),
+      flushHeaders: vi.fn(),
+      off: responseEvents.off.bind(responseEvents),
+      on: responseEvents.on.bind(responseEvents),
+      once: responseEvents.once.bind(responseEvents),
+      setHeader: vi.fn(),
+      write: vi.fn(() => false),
+    };
+
+    const pending = controller.message(
+      '10000000-0000-4000-8000-000000000001',
+      {
+        attachmentIds: [],
+        content: 'hello',
+        parameters: {},
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      request(),
+      response,
+    );
+
+    expect(response.write).toHaveBeenCalledOnce();
+    expect(continuedAfterWrite).toBe(false);
+
+    responseEvents.emit('drain');
+    await pending;
+
+    expect(continuedAfterWrite).toBe(true);
+    expect(response.end).toHaveBeenCalledOnce();
+    expect(responseEvents.listenerCount('drain')).toBe(0);
+  });
+
+  it('releases a backpressure waiter when the client closes', async () => {
+    const responseEvents = new EventEmitter();
+    const execute = vi.fn(
+      async (
+        _input: unknown,
+        emit: (event: {
+          messageId: string;
+          modelId: string;
+          type: 'start';
+        }) => void | Promise<void>,
+      ) =>
+        emit({
+          messageId: '30000000-0000-4000-8000-000000000001',
+          modelId: 'gpt-test',
+          type: 'start',
+        }),
+    );
+    const controller = new ChatsController(
+      {} as ChatsService,
+      { execute } as unknown as ChatExecutionService,
+    );
+    const response = {
+      end: vi.fn(),
+      flushHeaders: vi.fn(),
+      off: responseEvents.off.bind(responseEvents),
+      on: responseEvents.on.bind(responseEvents),
+      once: responseEvents.once.bind(responseEvents),
+      setHeader: vi.fn(),
+      write: vi.fn(() => false),
+    };
+    const pending = controller.message(
+      '10000000-0000-4000-8000-000000000001',
+      {
+        attachmentIds: [],
+        content: 'hello',
+        parameters: {},
+        providerModelId: '20000000-0000-4000-8000-000000000001',
+      },
+      request(),
+      response,
+    );
+    const rejection = expect(pending).rejects.toThrow(
+      'SSE response closed before the buffer drained.',
+    );
+
+    responseEvents.emit('close');
+    await rejection;
+
+    expect(response.end).toHaveBeenCalledOnce();
+    expect(responseEvents.listenerCount('drain')).toBe(0);
   });
 });

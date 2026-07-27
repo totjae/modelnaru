@@ -386,6 +386,8 @@ Provider API 키, endpoint 내부 정보와 upstream 오류 본문은 이벤트�
 
 텍스트 계열 파일, 텍스트 PDF, 스캔 PDF OCR과 JPEG·PNG·WebP를 지원한다. PDF는 기본 100페이지 제한을 적용한다. 텍스트 레이어가 전혀 없으면 로컬 한국어·영어 OCR을 실행하고 응답 attachment metadata에 `ocrPageCount`를 포함한다. 암호·손상·OCR 무결과·OCR 처리 실패·OCR 실행 환경 누락은 각각 `FILE_PDF_PASSWORD_PROTECTED`, `FILE_PDF_INVALID`, `FILE_PDF_OCR_NO_TEXT`, `FILE_PDF_OCR_FAILED`, `FILE_PDF_OCR_UNAVAILABLE`로 구분한다. 페이지 초과는 `FILE_PDF_PAGE_LIMIT`이다. 이미지 decoded pixel 제한 초과는 `FILE_IMAGE_DIMENSIONS_EXCEEDED`다.
 
+PDF·OCR 처리는 설정된 worker 수와 bounded queue를 사용한다. queue 대기 중에는 전체 원본을 Node heap에 읽지 않는다. queue 포화는 `FILE_PROCESSING_BUSY`(`503`), 대기 중 연결·서버 종료는 `FILE_PROCESSING_CANCELLED`로 처리하며 실패한 임시 파일은 삭제한다.
+
 이미지가 연결된 메시지는 선택 모델의 관리자 설정 `supportsImageInput`을 검사한다. 꺼져 있으면 SSE `CHAT_IMAGE_MODEL_UNSUPPORTED` 오류를 반환하고 Provider 호출과 일일 호출량 예약을 수행하지 않는다.
 
 만료된 메시지 attachment는 상세 응답에 `status: "expired"`와 안전한 metadata를 유지하되 Provider context에는 포함하지 않는다.
@@ -517,3 +519,5 @@ Provider API 키, endpoint 내부 정보와 upstream 오류 본문은 이벤트�
 - Provider의 미완성 SSE 이벤트가 1MiB를 넘으면 `CHAT_PROVIDER_RESPONSE_INVALID` 오류 이벤트를 반환한다.
 - 실행 도중 내부 상태 저장이 실패하더라도 HTTP SSE 응답은 `finally`에서 종료한다.
 - 사용자가 연결을 닫거나 취소 endpoint를 호출하면 기존과 같이 upstream AbortSignal을 즉시 중단한다.
+- SSE `response.write()`가 backpressure를 알리면 다음 Provider event를 읽기 전에 `drain`을 기다린다.
+- `drain` 전에 연결이 종료되면 해당 대기를 해제하고 생성 요청을 취소 상태로 마무리한다.

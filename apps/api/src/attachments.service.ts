@@ -2,9 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm, statfs } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
 import type { LoadedConfig } from '@modelnaru/config';
 
+import {
+  BoundedTaskPool,
+  TaskPoolClosedError,
+  TaskQueueCancelledError,
+  TaskQueueFullError,
+} from './bounded-task-pool.js';
 import {
   type AttachmentRecord,
   AttachmentsRepository,
@@ -55,15 +61,15 @@ export class FilePdfOcrUnavailableError extends Error {}
 export class FilePdfPageLimitError extends Error {}
 export class FilePdfPasswordProtectedError extends Error {}
 export class FileImageDimensionsError extends Error {}
+export class FileProcessingBusyError extends Error {}
+export class FileProcessingCancelledError extends Error {}
 
 export type UploadByteStream = AsyncIterable<Uint8Array>;
 
 @Injectable()
-export class AttachmentsService {
-  private activeOcrWorkers = 0;
-  private activePdfWorkers = 0;
-  private readonly ocrWaiters: Array<() => void> = [];
-  private readonly pdfWaiters: Array<() => void> = [];
+export class AttachmentsService implements OnModuleDestroy {
+  private readonly ocrPool: BoundedTaskPool;
+  private readonly pdfPool: BoundedTaskPool;
 
   constructor(
     private readonly repository: AttachmentsRepository,
@@ -76,7 +82,21 @@ export class AttachmentsService {
     private readonly logs: AdminLogsService = {
       record: () => Promise.resolve(),
     } as unknown as AdminLogsService,
-  ) {}
+  ) {
+    this.pdfPool = new BoundedTaskPool(
+      loaded.config.limits.maximumPdfWorkers,
+      loaded.config.limits.maximumPdfQueueSize,
+    );
+    this.ocrPool = new BoundedTaskPool(
+      loaded.config.limits.maximumOcrWorkers,
+      loaded.config.limits.maximumOcrQueueSize,
+    );
+  }
+
+  onModuleDestroy(): void {
+    this.pdfPool.close();
+    this.ocrPool.close();
+  }
 
   async upload(
     principalValue: AuthenticatedPrincipal,
@@ -85,6 +105,7 @@ export class AttachmentsService {
       fileName: string;
       includeInFutureMessages: boolean;
       mediaType: string;
+      signal?: AbortSignal;
       stream: UploadByteStream;
     },
   ): Promise<AttachmentRecord> {
@@ -114,31 +135,36 @@ export class AttachmentsService {
         temporaryPath,
         input.stream,
         this.loaded.config.limits.maximumFileBytes,
+        input.signal,
       );
-      const bytes = await readFile(temporaryPath);
       const extracted =
         parsedName.fileKind === 'pdf'
-          ? await this.withPdfWorker(() =>
-              extractPdfAttachment(
+          ? await this.pdfPool.run(async () => {
+              const bytes = await readFile(temporaryPath);
+              if (input.signal?.aborted) {
+                throw new TaskQueueCancelledError();
+              }
+              return extractPdfAttachment(
                 bytes,
                 this.loaded.config.limits.maximumPdfPages,
                 {
                   recognize: (pdfBytes, pageCount) =>
-                    this.withOcrWorker(() =>
-                      new LocalPdfOcrEngine(
-                        this.loaded.paths.storageTemp,
-                      ).recognize(pdfBytes, pageCount),
+                    this.ocrPool.run(
+                      () =>
+                        new LocalPdfOcrEngine(
+                          this.loaded.paths.storageTemp,
+                        ).recognize(pdfBytes, pageCount),
+                      input.signal,
                     ),
                 },
-              ),
-            )
-          : parsedName.fileKind === 'image'
-            ? extractImageAttachment(
-                bytes,
-                mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
-                this.loaded.config.limits.maximumImagePixels,
-              )
-            : extractTextAttachment(bytes);
+              );
+            }, input.signal)
+          : await this.extractNonPdf(
+              temporaryPath,
+              parsedName.fileKind,
+              mediaType,
+              input.signal,
+            );
       await mkdir(dirname(finalPath), { recursive: true });
       await rename(temporaryPath, finalPath);
       finalCreated = true;
@@ -232,6 +258,15 @@ export class AttachmentsService {
       }
       if (error instanceof ImageTypeError) {
         throw new FileTypeUnsupportedError();
+      }
+      if (error instanceof TaskQueueFullError) {
+        throw new FileProcessingBusyError();
+      }
+      if (
+        error instanceof TaskQueueCancelledError ||
+        error instanceof TaskPoolClosedError
+      ) {
+        throw new FileProcessingCancelledError();
       }
       throw error;
     }
@@ -354,11 +389,14 @@ export class AttachmentsService {
     path: string,
     stream: UploadByteStream,
     maximumBytes: number,
+    signal?: AbortSignal,
   ): Promise<number> {
+    if (signal?.aborted) throw new FileProcessingCancelledError();
     const handle = await open(path, 'wx', 0o600);
     let total = 0;
     try {
       for await (const value of stream) {
+        if (signal?.aborted) throw new FileProcessingCancelledError();
         const chunk = Buffer.from(value);
         total += chunk.byteLength;
         if (total > maximumBytes) throw new FileTooLargeError();
@@ -371,31 +409,21 @@ export class AttachmentsService {
     return total;
   }
 
-  private async withPdfWorker<T>(task: () => Promise<T>): Promise<T> {
-    const maximum = this.loaded.config.limits.maximumPdfWorkers;
-    if (this.activePdfWorkers >= maximum) {
-      await new Promise<void>((resolve) => this.pdfWaiters.push(resolve));
-    }
-    this.activePdfWorkers += 1;
-    try {
-      return await task();
-    } finally {
-      this.activePdfWorkers -= 1;
-      this.pdfWaiters.shift()?.();
-    }
-  }
-
-  private async withOcrWorker<T>(task: () => Promise<T>): Promise<T> {
-    const maximum = this.loaded.config.limits.maximumOcrWorkers;
-    if (this.activeOcrWorkers >= maximum) {
-      await new Promise<void>((resolve) => this.ocrWaiters.push(resolve));
-    }
-    this.activeOcrWorkers += 1;
-    try {
-      return await task();
-    } finally {
-      this.activeOcrWorkers -= 1;
-      this.ocrWaiters.shift()?.();
-    }
+  private async extractNonPdf(
+    temporaryPath: string,
+    fileKind: 'image' | 'text',
+    mediaType: string,
+    signal?: AbortSignal,
+  ) {
+    if (signal?.aborted) throw new FileProcessingCancelledError();
+    const bytes = await readFile(temporaryPath);
+    if (signal?.aborted) throw new FileProcessingCancelledError();
+    return fileKind === 'image'
+      ? extractImageAttachment(
+          bytes,
+          mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
+          this.loaded.config.limits.maximumImagePixels,
+        )
+      : extractTextAttachment(bytes);
   }
 }

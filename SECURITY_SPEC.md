@@ -123,6 +123,8 @@
 - OCR은 페이지별 90초 명령 제한, 16MB 출력 제한, worker·OpenMP thread 1개 기본값을 적용한다. 임시 PDF·PNG는 성공·실패와 관계없이 삭제하고 본문·절대 경로는 로그에 남기지 않는다.
 - 페이지 수와 추출문 상한을 원본 저장 확정 전에 검사해 과도한 처리와 컨텍스트 확대를 제한한다.
 - 동시 PDF 파싱 수는 `limits.maximumPdfWorkers`로 제한해 압축 해제와 텍스트 추출이 CPU·메모리를 동시에 점유하지 않게 한다.
+- PDF·OCR 대기열은 각각 `limits.maximumPdfQueueSize`, `limits.maximumOcrQueueSize`로 제한한다. 처리 permit을 얻기 전에는 전체 임시 파일을 heap Buffer로 읽지 않는다.
+- 대기 중 HTTP 연결 종료 시 AbortSignal로 waiter를 queue에서 제거하고, 서버 종료 시 모든 대기 waiter를 거부해 retained Promise를 남기지 않는다.
 - 이미지는 확장자·MIME·실제 signature와 가로·세로를 함께 검사하고 40,000,000 decoded pixel 기본 상한을 적용한다.
 - 원본 image base64는 API response·log·DB에 복제하지 않고 Provider 요청을 만드는 시점에 비공개 storage에서 읽는다.
 

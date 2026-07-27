@@ -37,10 +37,13 @@
 - OCR 결과도 `[PDF N페이지 · OCR]` 구분자를 포함하며 일반 PDF 추출문과 같은 2,000,000자 제한을 적용한다.
 - OCR 처리 페이지 수는 `ocr_page_count`에 저장하며 Web attachment metadata에서 표시한다.
 - 동시에 실행하는 OCR 작업은 `limits.maximumOcrWorkers`로 제한하며 N100 기본 설정은 1개다. Tesseract 내부 OpenMP thread도 1개로 제한한다.
+- OCR 대기열은 `limits.maximumOcrQueueSize`로 제한하며 기본 4개다.
 - OCR이 글자를 하나도 인식하지 못하거나 처리 도구 실행이 실패하면 원인을 구분해 업로드를 거부한다.
 - 빈 페이지나 이미지 페이지만 일부 포함돼도 문서 전체에 추출 가능한 텍스트가 하나 이상 있으면 처리한다.
 - PDF 추출문도 텍스트 파일과 같은 2,000,000자 상한을 적용한다.
-- 동시에 실행하는 PDF 추출 작업은 `limits.maximumPdfWorkers`로 제한하며 N100 기본 설정은 1개다. 추가 요청은 업로드 임시 파일을 유지한 채 순서대로 대기한다.
+- 동시에 실행하는 PDF 추출 작업은 `limits.maximumPdfWorkers`로 제한하며 N100 기본 설정은 1개다.
+- PDF 대기열은 `limits.maximumPdfQueueSize`로 제한하며 기본 4개다. 대기 중에는 업로드 임시 파일 경로만 유지하고 전체 파일 Buffer를 읽지 않는다.
+- 대기열이 가득 차면 `FILE_PROCESSING_BUSY`로 거부하고 임시 파일을 삭제한다. 대기 중 클라이언트 연결이 닫히면 queue에서 즉시 제거하고 `FILE_PROCESSING_CANCELLED`로 정리한다.
 
 ### 3.4 이미지 처리
 
@@ -62,6 +65,8 @@
 - `X-File-Name`: `encodeURIComponent`로 인코딩한 원본 파일명
 - `X-Include-In-Future`: `true` 또는 `false`
 - 성공: `201 Created`와 attachment metadata
+- 처리 대기열 포화: `FILE_PROCESSING_BUSY`와 `503 Service Unavailable`
+- 처리 대기 중 연결 종료·서버 종료: `FILE_PROCESSING_CANCELLED`
 
 업로드 직후 attachment는 특정 메시지에 연결되지 않은 pending 상태다. `POST /api/conversations/:id/messages`의 `attachmentIds`로 전송하면 같은 transaction에서 생성된 user 메시지에 연결한다. 다른 대화·사용자·게스트의 attachment, 이미 메시지에 연결된 attachment 또는 10개 초과 요청은 거부한다.
 
