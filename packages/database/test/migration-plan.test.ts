@@ -281,4 +281,20 @@ describe('migration plan', () => {
     );
     expect(sql).toContain('response_timeout_seconds BETWEEN 30 AND 1800');
   });
+
+  it('allows a one-second response timeout for diagnostics', async () => {
+    const sql = await readFile(
+      join(
+        packageRoot,
+        'migrations',
+        '0018_expand_conversation_response_timeout.sql',
+      ),
+      'utf8',
+    );
+
+    expect(sql).toContain(
+      'DROP CONSTRAINT conversations_response_timeout_seconds_check',
+    );
+    expect(sql).toContain('response_timeout_seconds BETWEEN 1 AND 1800');
+  });
 });

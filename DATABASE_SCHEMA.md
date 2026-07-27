@@ -6,7 +6,7 @@ PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실
 
 ## 2. 적용 범위
 
-첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가하고 열한 번째부터 열네 번째까지 attachment 종류와 수명 관리를 추가한다. `0015_admin_logs_and_request_traces.sql`은 대화별 session 전송 기록 수, 게스트 허용 설정, 운영 로그와 로그 보관 설정을 추가한다. `0016_pdf_ocr.sql`은 OCR page metadata를 추가하고 `0017_conversation_response_timeout.sql`은 대화별 Provider 응답 유휴 시간 제한을 추가한다.
+첫 migration은 관리자 로그인과 사용자 관리 기반인 `users`, `sessions`를 생성한다. 두 번째 migration은 사용자 관리 작업을 보존할 `audit_logs`를 추가한다. 세 번째 migration은 Provider 연결·모델·사용자 권한 기반을 추가한다. 네 번째 migration은 사용자·게스트 모델 권한, 게스트 주체·세션과 일일 사용량 counter를 추가한다. 다섯 번째 migration은 대화·branch·message 저장 기반을 추가하며 여섯 번째부터 여덟 번째까지는 자동 요약과 Provider 파라미터를 확장한다. 아홉 번째 migration은 본문과 분리된 관리자 사용량 원장을 추가한다. 열 번째 migration은 대화방별 기본 모델과 생성 파라미터를 추가하고 열한 번째부터 열네 번째까지 attachment 종류와 수명 관리를 추가한다. `0015_admin_logs_and_request_traces.sql`은 대화별 session 전송 기록 수, 게스트 허용 설정, 운영 로그와 로그 보관 설정을 추가한다. `0016_pdf_ocr.sql`은 OCR page metadata를 추가하고 `0017_conversation_response_timeout.sql`은 대화별 Provider 응답 유휴 시간 제한을 추가한다. `0018_expand_conversation_response_timeout.sql`은 진단 시험을 위해 최소값을 1초로 확장한다.
 
 ## 3. Migration 규칙
 
@@ -153,7 +153,7 @@ Index:
 
 ## 11. `conversations`
 
-`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다. `0010_conversation_generation_defaults.sql`은 대화별 `default_provider_model_id`와 검증된 `generation_parameters` JSON object를 추가한다. `0015`는 0~~3 범위의 `request_trace_limit`을 기본 3으로 추가한다. 이 column은 메모리 기록의 개수만 제어하며 요청·응답 본문 자체는 DB에 저장하지 않는다. `0017`은 30~~1,800초 범위의 `response_timeout_seconds`를 기본 120초로 추가한다. 이 값은 Provider에 전송하는 생성 파라미터가 아니라 서버가 첫 응답과 다음 streaming chunk의 유휴 시간을 제한하는 실행 설정이다.
+`0005_chat_foundation.sql`은 일반 사용자 또는 게스트 중 정확히 하나가 소유하는 대화를 저장한다. 제목, 시스템 프롬프트, 이전 메시지 수, 컨텍스트 token 한도와 활성 branch를 가진다. `history_message_limit = 0`은 무제한이고 `context_token_limit` 기본값은 100,000이다. `0010_conversation_generation_defaults.sql`은 대화별 `default_provider_model_id`와 검증된 `generation_parameters` JSON object를 추가한다. `0015`는 0~~3 범위의 `request_trace_limit`을 기본 3으로 추가한다. 이 column은 메모리 기록의 개수만 제어하며 요청·응답 본문 자체는 DB에 저장하지 않는다. `0017`은 `response_timeout_seconds`를 기본 120초로 추가하고 `0018`은 진단 시험을 위해 허용 범위를 1~~1,800초로 확장한다. 이 값은 Provider에 전송하는 생성 파라미터가 아니라 서버가 첫 응답과 다음 streaming chunk의 유휴 시간을 제한하는 실행 설정이다.
 
 - `user_id`와 `guest_id`는 각각 소유 주체 삭제 시 cascade한다.
 - 소유 주체별 `(owner_id, updated_at DESC)` partial index로 목록을 조회한다.
@@ -272,7 +272,7 @@ Index:
 - 대화마다 root branch가 하나이며 활성 branch가 같은 대화에 속함
 - 메시지 역할·상태·분기 순서·모델 snapshot 제약이 존재
 - 대화별 기본 모델 FK와 생성 파라미터 JSON object 제약이 존재하며 기존 대화 backfill이 활성 분기의 최신 assistant를 기준으로 한다.
-- 대화별 응답 유휴 타임아웃이 30~1,800초 범위로 제한되고 기본값은 120초다.
+- 대화별 응답 유휴 타임아웃이 1~1,800초 범위로 제한되고 기본값은 120초다.
 - 요약 설정 singleton, prompt 범위와 요약 범위 message FK·중복 방지 index가 존재
 - 사용량 원장은 본문 없이 주체·모델 snapshot, 상태, token과 처리 시간만 저장하고 원본 삭제 후에도 유지됨
 - attachment가 대화·message 복합 FK로 격리되고 이름·종류·크기·storage key·추출문·상태 제약과 만료 index를 가짐

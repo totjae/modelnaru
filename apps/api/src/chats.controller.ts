@@ -135,7 +135,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     !validInteger(historyMessageLimit, 0, 10_000) ||
     !validInteger(contextTokenLimit, 1_000, 2_000_000) ||
     !validInteger(requestTraceLimit, 0, 3) ||
-    !validInteger(responseTimeoutSeconds, 30, 1_800) ||
+    !validInteger(responseTimeoutSeconds, 1, 1_800) ||
     (defaultProviderModelId !== null &&
       (typeof defaultProviderModelId !== 'string' ||
         !UUID.test(defaultProviderModelId))) ||
@@ -184,7 +184,7 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
     output.requestTraceLimit = input.requestTraceLimit;
   }
   if (input.responseTimeoutSeconds !== undefined) {
-    if (!validInteger(input.responseTimeoutSeconds, 30, 1_800)) {
+    if (!validInteger(input.responseTimeoutSeconds, 1, 1_800)) {
       return undefined;
     }
     output.responseTimeoutSeconds = input.responseTimeoutSeconds;

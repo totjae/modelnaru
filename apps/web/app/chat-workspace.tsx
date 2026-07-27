@@ -1543,7 +1543,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                     <input
                       name="responseTimeoutSeconds"
                       type="number"
-                      min="30"
+                      min="1"
                       max="1800"
                       step="1"
                       defaultValue={detail.responseTimeoutSeconds}

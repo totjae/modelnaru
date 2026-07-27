@@ -618,7 +618,7 @@ builder와 parser는 공급자 인증이나 데이터베이스에 직접 접근�
 
 ## 21. AI 스트림 런타임 안전 기준
 
-- Provider 연결은 호출자의 취소 신호와 별도로 대화별 30~1,800초 idle timeout을 적용하며 기본값은 120초다.
+- Provider 연결은 호출자의 취소 신호와 별도로 대화별 1~1,800초 idle timeout을 적용하며 기본값은 120초다.
 - 정상 chunk를 받을 때마다 idle timeout을 다시 시작하고 초과 시 `CHAT_PROVIDER_TIMEOUT`으로 종료한다.
 - 구분자가 완성되지 않은 단일 SSE 이벤트는 최대 1MiB까지만 버퍼링한다.
 - 한도를 넘은 응답은 `CHAT_PROVIDER_RESPONSE_INVALID`, timeout은 재시도 가능한 Provider network 오류로 정규화한다.

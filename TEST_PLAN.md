@@ -306,7 +306,7 @@ pnpm build
 | RUNTIME-SSE-004 | 회귀 | 정상 Provider stream | 분할 chunk·사용량·완료 event 동작 유지               | 통과 |
 | RUNTIME-WEB-001 | 빌드 | Browser SSE parser   | 1MiB client buffer 상한의 typecheck                  | 통과 |
 | RUNTIME-SSE-005 | 단위 | SSE response writer  | `write=false`이면 `drain` 전까지 event producer 대기 | 통과 |
-| RUNTIME-SSE-006 | 단위 | 대화별 timeout       | 30초 override 적용·전용 timeout 오류 반환            | 통과 |
+| RUNTIME-SSE-006 | 단위 | 대화별 timeout       | 1초 override 적용·전용 timeout 오류 반환             | 통과 |
 
 실행 결과:
 
@@ -323,6 +323,6 @@ pnpm build
 
 대화별 응답 타임아웃 확장 결과:
 
-- `0017` migration의 기본 120초와 30~1,800초 DB 제약 확인
-- 대화 생성·수정 API 범위 검증과 30초 runtime override 확인
+- `0017` 기본 120초와 `0018`의 1~1,800초 DB 제약 확인
+- 대화 생성·수정 API 범위 검증과 1초 runtime override 확인
 - timeout을 일반 network 오류와 구분한 `CHAT_PROVIDER_TIMEOUT` 반환 확인

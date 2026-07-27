@@ -140,7 +140,7 @@ describe('chat runtime safety', () => {
       });
       const stream = streamProviderRequest(
         {
-          idleTimeoutMs: 30_000,
+          idleTimeoutMs: 1_000,
           request,
           signal: new AbortController().signal,
         },
@@ -151,7 +151,7 @@ describe('chat runtime safety', () => {
         code: 'CHAT_PROVIDER_TIMEOUT',
       });
 
-      await vi.advanceTimersByTimeAsync(29_999);
+      await vi.advanceTimersByTimeAsync(999);
       expect(upstreamSignal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
       await rejection;

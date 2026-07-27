@@ -311,7 +311,7 @@ Request:
 - `historyMessageLimit`: 0~10,000, `0`은 무제한
 - `contextTokenLimit`: 1,000~2,000,000, 기본 100,000
 - `requestTraceLimit`: 0~3, 현재 session의 최근 Provider 전송 기록 수, 기본 3
-- `responseTimeoutSeconds`: 30~1,800초, Provider의 첫 응답 또는 다음 streaming chunk를 기다리는 최대 유휴 시간, 기본 120초
+- `responseTimeoutSeconds`: 1~1,800초, Provider의 첫 응답 또는 다음 streaming chunk를 기다리는 최대 유휴 시간, 기본 120초
 - `defaultProviderModelId`: nullable Provider 모델 UUID, 기본 `null`
 - `generationParameters`: Provider parameter policy로 검증할 JSON object, 기본 `{ "temperature": 1 }`
 - 성공: `201 Created`, 생성한 대화 객체

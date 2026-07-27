@@ -19,7 +19,7 @@
 | 프로젝트 골격        | 구현 완료 | pnpm monorepo, Next.js Web, NestJS API, 단일 gateway 구성                                                                                                                                                                                               |
 | 시작 config loader   | 구현 완료 | YAML schema·경로·secret·권한 검증과 단위시험 완료                                                                                                                                                                                                       |
 | `apichat-admin` 도구 | 구현 완료 | init·Argon2id·TOTP·validate·show·render-env 구현                                                                                                                                                                                                        |
-| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~17차 권한·게스트·채팅·요약·사용량·attachment·로그·OCR·대화 timeout migration 로컬 검증, startup hook DB readiness 대기 적용                                                                                                      |
+| 데이터베이스         | 구현 중   | 1~~3차 Ubuntu 확인, 4~~18차 권한·게스트·채팅·요약·사용량·attachment·로그·OCR·대화 timeout migration 로컬 검증, startup hook DB readiness 대기 적용                                                                                                      |
 | 인증·session         | 구현 완료 | 관리자 TOTP·일반 사용자 login·공통 session·CSRF, Ubuntu 사용자 최대 3 session 확인                                                                                                                                                                      |
 | 사용자 관리          | 검증 완료 | 관리자 CRUD·비밀번호·session 폐기·감사 기록·Web UI Ubuntu 검증 완료                                                                                                                                                                                     |
 | provider registry    | 구현 완료 | 전체 catalog parameter profile, 핵심 4개 등록·암호화·동기화 UI와 실제 key 확인                                                                                                                                                                          |
@@ -51,7 +51,7 @@
 - 2단계 SSE response backpressure: 구현 완료, drain·연결 종료 단위 시험과 typecheck·lint 통과
 - 3단계 파일 처리 bounded semaphore와 취소: 구현 완료, queue 상한·대기 취소·종료 정리 단위 시험과 typecheck·lint 통과
 - 4단계 이미지 총용량·JSON 중복 생성 제거: 구현 완료, 20MiB 기본 요청 상한·순차 base64 변환·Provider 요청 단일 직렬화·binary 제거 trace 사본 적용 및 단위 시험·typecheck 통과
-- 대화별 응답 타임아웃: 구현 완료, 생성 파라미터 UI 안에서 기본 120초·30~1,800초 저장, 첫 응답·stream chunk idle timer와 전용 오류 적용, Ubuntu 검증 대기
+- 대화별 응답 타임아웃: 구현 완료, 일반 대화 설정에서 기본 120초·1~1,800초 저장, 첫 응답·stream chunk idle timer와 전용 오류 적용, Ubuntu 검증 대기
 - 5단계 요청 추적 전역 byte budget·O(1) 조회: 계획
 - 6단계 활성 분기 중심 대화 조회·pagination: 계획
 - 7단계 Web stale response·Provider 모델 조회 streaming 제한: 계획
