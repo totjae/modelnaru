@@ -1510,23 +1510,6 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                       values={parameterValues}
                       onChange={setParameterValues}
                     />
-                    <label className="parameter-item">
-                      <span className="parameter-title">응답 타임아웃</span>
-                      <p>
-                        Provider의 첫 응답 또는 다음 스트리밍 데이터를 기다릴
-                        최대 시간입니다.
-                      </p>
-                      <small>기본값: 120초 · 허용 범위: 30~1800초</small>
-                      <input
-                        name="responseTimeoutSeconds"
-                        type="number"
-                        min="30"
-                        max="1800"
-                        step="1"
-                        defaultValue={detail.responseTimeoutSeconds}
-                        required
-                      />
-                    </label>
                   </fieldset>
                   <label>
                     이전 메시지 수
@@ -1554,6 +1537,22 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                       defaultValue={detail.contextTokenLimit}
                       required
                     />
+                  </label>
+                  <label>
+                    응답 타임아웃
+                    <input
+                      name="responseTimeoutSeconds"
+                      type="number"
+                      min="30"
+                      max="1800"
+                      step="1"
+                      defaultValue={detail.responseTimeoutSeconds}
+                      required
+                    />
+                    <small>
+                      첫 응답 또는 다음 스트리밍 데이터를 기다릴 최대
+                      시간입니다. 기본값은 120초입니다.
+                    </small>
                   </label>
                   <label>
                     전송 기록 보관
