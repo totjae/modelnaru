@@ -626,3 +626,8 @@ builder와 parser는 공급자 인증이나 데이터베이스에 직접 접근�
 - Provider 오류 후 DB 상태 저장이나 요청 추적 종료가 실패해도 나머지 종료 절차와 브라우저 오류 전달을 계속 시도한다.
 - 브라우저로 보내는 `response.write()`가 `false`를 반환하면 Provider event 소비를 중단하고 Node writable의 `drain`을 기다린다.
 - `drain` 대기 중 연결이 닫히면 대기 Promise를 즉시 거부하고 기존 연결 취소 절차를 실행한다.
+- Provider 모델 목록 응답은 body stream을 읽는 동안 5MiB를 검사하며 초과
+  즉시 reader와 upstream 요청을 중단한다. JSON parse는 상한 안에서 수신을
+  완료한 뒤 한 번만 수행한다.
+- 모델 목록 원소는 최대 10,000개로 제한해 작은 항목이 매우 많이 포함된
+  응답의 정규화·정렬 CPU와 heap 사용량을 제한한다.

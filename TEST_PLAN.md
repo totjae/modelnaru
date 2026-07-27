@@ -298,15 +298,25 @@ pnpm build
 
 ## 16. 런타임 안정성 개선 시험
 
-| ID              | 종류 | 범위                 | 검증 내용                                            | 상태 |
-| --------------- | ---- | -------------------- | ---------------------------------------------------- | ---- |
-| RUNTIME-SSE-001 | 단위 | Provider SSE parser  | 미완성 이벤트가 1MiB를 넘으면 즉시 거부              | 통과 |
-| RUNTIME-SSE-002 | 단위 | 채팅 controller      | 실행 계층이 예외를 던져도 SSE response `end` 호출    | 통과 |
-| RUNTIME-SSE-003 | 단위 | Provider timeout     | 120초 동안 chunk가 없으면 upstream abort             | 통과 |
-| RUNTIME-SSE-004 | 회귀 | 정상 Provider stream | 분할 chunk·사용량·완료 event 동작 유지               | 통과 |
-| RUNTIME-WEB-001 | 빌드 | Browser SSE parser   | 1MiB client buffer 상한의 typecheck                  | 통과 |
-| RUNTIME-SSE-005 | 단위 | SSE response writer  | `write=false`이면 `drain` 전까지 event producer 대기 | 통과 |
-| RUNTIME-SSE-006 | 단위 | 대화별 timeout       | 1초 override 적용·전용 timeout 오류 반환             | 통과 |
+| ID                | 종류 | 범위                 | 검증 내용                                            | 상태 |
+| ----------------- | ---- | -------------------- | ---------------------------------------------------- | ---- |
+| RUNTIME-SSE-001   | 단위 | Provider SSE parser  | 미완성 이벤트가 1MiB를 넘으면 즉시 거부              | 통과 |
+| RUNTIME-SSE-002   | 단위 | 채팅 controller      | 실행 계층이 예외를 던져도 SSE response `end` 호출    | 통과 |
+| RUNTIME-SSE-003   | 단위 | Provider timeout     | 120초 동안 chunk가 없으면 upstream abort             | 통과 |
+| RUNTIME-SSE-004   | 회귀 | 정상 Provider stream | 분할 chunk·사용량·완료 event 동작 유지               | 통과 |
+| RUNTIME-WEB-001   | 빌드 | Browser SSE parser   | 1MiB client buffer 상한의 typecheck                  | 통과 |
+| RUNTIME-SSE-005   | 단위 | SSE response writer  | `write=false`이면 `drain` 전까지 event producer 대기 | 통과 |
+| RUNTIME-SSE-006   | 단위 | 대화별 timeout       | 1초 override 적용·전용 timeout 오류 반환             | 통과 |
+| RUNTIME-TRACE-001 | 단위 | 요청 추적 저장소     | 기록 ID index로 stream 갱신·완료 항목 조회           | 통과 |
+| RUNTIME-TRACE-002 | 단위 | 요청 추적 저장소     | process 64MiB 예산 초과 시 가장 오래된 기록 제거     | 통과 |
+| RUNTIME-TRACE-003 | 단위 | 요청 추적 저장소     | trim·session 종료 시 index와 byte 합계 동시 정리     | 통과 |
+| RUNTIME-CHAT-001  | 단위 | 대화 상세 API        | 기본 50개·최대 100개 pagination 입력 검증            | 통과 |
+| RUNTIME-CHAT-002  | 단위 | Web message page     | 이전 page 병합 시 중복 제거·시간순 유지              | 통과 |
+| RUNTIME-CHAT-003  | 회귀 | 분기 전환·재생성     | 활성 경로와 최신 답변 후보 탐색 유지                 | 통과 |
+| RUNTIME-CHAT-004  | 통합 | PostgreSQL 활성 경로 | 다단계 재생성 경로·50개 경계·cursor 연속 조회        | 대기 |
+| RUNTIME-WEB-002   | 단위 | 대화 비동기 상태     | 이전 fetch 취소·최신 요청만 화면 상태 반영           | 통과 |
+| RUNTIME-MODEL-001 | 단위 | Provider 모델 조회   | stream 5MiB 초과 즉시 cancel                         | 통과 |
+| RUNTIME-MODEL-002 | 단위 | Provider 모델 조회   | 최대 10,000개 원소 제한과 정상 분할 chunk 유지       | 통과 |
 
 실행 결과:
 
@@ -326,3 +336,80 @@ pnpm build
 - `0017` 기본 120초와 `0018`의 1~1,800초 DB 제약 확인
 - 대화 생성·수정 API 범위 검증과 1초 runtime override 확인
 - timeout을 일반 network 오류와 구분한 `CHAT_PROVIDER_TIMEOUT` 반환 확인
+
+5단계 요청 추적 저장소 개선 결과:
+
+- API 전체 38개 시험 파일, 143개 시험 통과
+- 전역 byte budget 초과 시 오래된 기록 제거와 session trim·종료 후 index 및
+  byte 합계 정리 확인
+- API TypeScript typecheck, 전체 lint와 변경 파일 Prettier 검사 통과
+
+6단계 활성 분기·message pagination 결과:
+
+- API 전체 38개 시험 파일, 145개 시험 통과
+- Web 전체 5개 시험 파일, 14개 시험 통과
+- API·Web TypeScript typecheck, 전체 lint와 production build 통과
+- 실제 PostgreSQL 다단계 분기와 50개 초과 대화 검증은 Ubuntu 배포 후 수행
+
+7단계 stale response·모델 조회 제한 결과:
+
+- API 전체 38개 시험 파일, 148개 시험 통과
+- Web 전체 6개 시험 파일, 16개 시험 통과
+- 1MiB 분할 chunk 정상 결합, 여섯 번째 chunk에서 5MiB 초과 cancel,
+  10,001개 모델 거부 확인
+- 이전 Web 요청 abort와 요청 세대 불일치 상태 갱신 차단 확인
+- 전체 lint, API·Web typecheck와 production build 통과
+
+### 16.1 Ubuntu 5·6·7단계 통합 확인
+
+배포 갱신 후 프로젝트 root에서 다음을 실행한다. 대화 ID를 생략하면 저장된
+메시지가 가장 많은 대화를 자동 선택한다.
+
+```bash
+cd /home/totquf4171/modelnaru
+chmod +x scripts/test-runtime-stages-5-7.sh
+./scripts/test-runtime-stages-5-7.sh
+```
+
+특정 대화를 검사하려면 UUID를 전달한다.
+
+```bash
+./scripts/test-runtime-stages-5-7.sh \
+  00000000-0000-4000-8000-000000000000
+```
+
+자동 시험의 인수 조건:
+
+- API 대상 시험과 Web 대상 시험이 모두 종료 코드 0으로 끝난다.
+- 활성 경로 진단에서 `active_path_messages`가 전체 분기 메시지보다 클 수
+  없고, `initial_page_size`는 최대 50이다.
+- 활성 경로가 51개 이상이면 `has_older_page`가 `t`다.
+- 마지막 health 응답의 `status`가 `ready`다.
+
+수동 시나리오:
+
+1. **5단계 요청 추적**
+   - 대화 설정의 전송 기록 보관을 3으로 저장한다.
+   - 같은 대화에서 네 번 답변을 완료하고 전송 기록 창을 연다.
+   - 최신 기록 세 개만 보이는지 확인한다.
+   - 로그아웃 후 다시 로그인해 이전 session의 전송 기록이 사라졌는지
+     확인한다.
+2. **6단계 pagination·분기**
+   - 활성 경로가 51개 이상인 대화를 연다.
+   - 처음에는 최근 50개만 표시되고 상단에 `이전 메시지 불러오기`가
+     보이는지 확인한다.
+   - 버튼을 누르면 중복 없이 과거 메시지가 추가되고 읽던 위치가 갑자기
+     이동하지 않는지 확인한다.
+   - 마지막 답변을 두 번 재생성한 뒤 좌우 화살표로 각 답변을 왕복하고,
+     선택한 답변 뒤에 새 메시지를 보내 해당 분기가 이어지는지 확인한다.
+3. **7단계 stale response**
+   - Chrome 개발자 도구 Network에서 `Slow 3G`를 선택한다.
+   - 메시지가 많은 대화 A를 누른 직후 대화 B를 선택한다.
+   - 요청 완료 후에도 제목·메시지·첨부·모델이 모두 B의 값인지 확인한다.
+   - `이전 메시지 불러오기` 직후 다른 대화로 전환해 이전 대화 page가 새
+     대화에 합쳐지지 않는지 확인한다.
+4. **7단계 Provider 모델 조회**
+   - 관리자 Provider 화면에서 기존 정상 Provider의 모델 동기화를 실행한다.
+   - 모델 목록과 기존 활성 상태가 정상 표시되는지 확인한다.
+   - 5MiB stream 중단과 10,000개 상한 자체는 자동 시험의 mock Provider
+     검증 결과로 확인하며 실제 Provider에 과대 응답을 보내지 않는다.

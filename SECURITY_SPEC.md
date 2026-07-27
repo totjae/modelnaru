@@ -135,7 +135,11 @@
 - 기록은 현재 API process 메모리에만 있고 PostgreSQL·Valkey·파일·관리자 로그에 저장하지 않는다.
 - Authorization, API key 계열 header, URL query의 key·token·secret과 이미지 base64를 저장 전에 제거한다. 기록용 요청은 실제 JSON 문자열을 다시 parse하지 않고 요청 builder가 만든 binary 제거 사본을 사용한다.
 - 대화 소유권과 현재 session ID를 함께 검사하며 같은 계정의 다른 브라우저 session과도 공유하지 않는다.
-- 단일 기록 2MB, session 전체 30개를 넘지 못한다.
+- 단일 기록 2MB, session 전체 30개, API process 전체 합계 64MiB를 넘지
+  못한다.
+- process 전체 예산을 초과하면 생성 시각이 가장 오래된 기록부터 제거한다.
+  기록 ID는 별도 index로 관리해 stream event 추가·완료·실패 처리에서 전체
+  session을 순회하지 않는다.
 - 로그아웃·만료·session 제한 폐기·credential 변경·계정 및 대화 삭제·게스트 종료 시 관련 기록을 즉시 삭제한다.
 - 관리자 통합 로그는 운영 진단 metadata만 취급하고 사용자 메시지, AI 답변, system prompt와 첨부 본문을 저장하지 않는다.
 - 관리자에게 이미지 입력이 명시적으로 허용된 모델만 원본 이미지를 외부 Provider로 전송한다.

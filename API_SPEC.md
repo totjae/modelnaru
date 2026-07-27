@@ -320,7 +320,15 @@ Request:
 
 대화 객체에 `branches`를 추가해 반환한다. 각 branch는 `id`, `parentBranchId`, `forkedFromMessageId`, `createdAt`, `isSelectable`, `messages`를 포함한다. 자식 branch의 `messages`는 부모 경로에서 분기 대상 assistant 직전까지의 메시지와 자식 branch에 저장된 메시지를 합성한 결과다.
 
-각 message는 저장된 분기를 식별하는 `branchId`, 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 호출 모델인 `providerModelId`를 포함한다. user message의 `attachments`에는 `id`, `originalName`, `mediaType`, `fileKind`, `pageCount`, `imageWidth`, `imageHeight`, `byteSize`, `includeInFutureMessages`, `expiresAt` metadata가 포함되며 추출 본문·원본 base64와 storage key는 반환하지 않는다. `pageCount`는 PDF에서만 숫자이고 이미지 크기는 이미지에서만 숫자다. 대화 객체의 `defaultProviderModelId`, `generationParameters`, `responseTimeoutSeconds`는 설정 모달의 대화방별 기본값이다.
+각 message는 저장된 분기를 식별하는 `branchId`, 표시·감사용 `providerTemplateIdSnapshot`, `modelIdSnapshot`과 함께 실제 호출 모델인 `providerModelId`를 포함한다. user message의 `attachments`에는 `id`, `originalName`, `mediaType`, `fileKind`, `pageCount`, `imageWidth`, `imageHeight`, `byteSize`, `includeInFutureMessages`, `expiresAt` metadata가 포함되며 추출 본문·원본 base64와 storage key는 반환하지 않는다. `pageCount`는 PDF에서만 숫자이고 이미지 크기는 이미지에서만 숫자다. 대화 객체의 `defaultProviderModelId`, `generationParameters`, `responseTimeoutSeconds`는 설정 모달의 대화방별 기본값이다. 상세 조회의 `messages`는 활성 분기 경로의 최근 50개이며 `messagePage.hasMore`와 `messagePage.nextBeforeSequence`로 이전 page 존재 여부를 알린다. `branches[].messages`에는 가장 최근 질문에 대한 해당 분기의 직접 답변만 포함한다.
+
+### `GET /api/conversations/:id/messages`
+
+현재 주체가 소유한 대화의 활성 분기 경로에서 이전 메시지를 조회한다.
+`beforeSequence`는 이전 응답의 `nextBeforeSequence`이며 1 이상의 정수다.
+`limit`은 1~100, 기본값은 50이다. 응답은 `messages`와
+`messagePage.hasMore`, `messagePage.nextBeforeSequence`를 반환한다. 활성
+분기가 바뀌면 기존 cursor를 재사용하지 않고 상세 조회부터 다시 시작한다.
 
 ### `PATCH /api/conversations/:id`
 
@@ -416,7 +424,7 @@ PDF·OCR 처리는 설정된 worker 수와 bounded queue를 사용한다. queue 
 
 ### `GET /api/conversations/:id/traces`
 
-현재 인증 session과 대상 대화에 한정된 최근 Provider 전송 기록을 최신순으로 반환한다. 대화의 `requestTraceLimit`이 0이면 빈 배열이다. 기록은 API process 메모리에만 존재하며 요청 body의 인증 header·URL query secret·이미지 base64는 마스킹된다. 다른 session이나 다른 주체는 같은 대화 제목을 사용해도 기록을 조회할 수 없다.
+현재 인증 session과 대상 대화에 한정된 최근 Provider 전송 기록을 최신순으로 반환한다. 대화의 `requestTraceLimit`이 0이면 빈 배열이다. 기록은 API process 메모리에만 존재하며 요청 body의 인증 header·URL query secret·이미지 base64는 마스킹된다. 다른 session이나 다른 주체는 같은 대화 제목을 사용해도 기록을 조회할 수 없다. 단일 기록은 2MB, session은 30개, API process 전체는 64MiB로 제한되므로 전체 예산 압박 시 오래된 기록은 session 만료 전에도 제거될 수 있다.
 
 ### `DELETE /api/conversations/:id/traces`
 

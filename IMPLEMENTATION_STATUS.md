@@ -52,6 +52,6 @@
 - 3단계 파일 처리 bounded semaphore와 취소: 구현 완료, queue 상한·대기 취소·종료 정리 단위 시험과 typecheck·lint 통과
 - 4단계 이미지 총용량·JSON 중복 생성 제거: 구현 완료, 20MiB 기본 요청 상한·순차 base64 변환·Provider 요청 단일 직렬화·binary 제거 trace 사본 적용 및 단위 시험·typecheck 통과
 - 대화별 응답 타임아웃: 구현 완료, 일반 대화 설정에서 기본 120초·1~1,800초 저장, 첫 응답·stream chunk idle timer와 전용 오류 적용, Ubuntu 검증 대기
-- 5단계 요청 추적 전역 byte budget·O(1) 조회: 계획
-- 6단계 활성 분기 중심 대화 조회·pagination: 계획
-- 7단계 Web stale response·Provider 모델 조회 streaming 제한: 계획
+- 5단계 요청 추적 전역 byte budget·O(1) 조회: 구현 완료, process 64MiB 상한·오래된 기록 제거·ID index·정리 경로 일원화 및 API 전체 143개 시험 통과
+- 6단계 활성 분기 중심 대화 조회·pagination: 구현 완료, Provider 컨텍스트·상세 조회 활성 경로화와 최근 50개·최대 100개 cursor page 및 Web 이전 메시지 병합 구현, Ubuntu PostgreSQL 검증 대기
+- 7단계 Web stale response·Provider 모델 조회 streaming 제한: 구현 완료, workspace·대화·이전 page 요청 취소 및 최신 세대 검증, 모델 목록 streaming 5MiB·10,000개 상한 적용과 전체 회귀시험·build 통과

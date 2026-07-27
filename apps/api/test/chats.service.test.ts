@@ -43,12 +43,12 @@ describe('ChatsService', () => {
     };
     const service = new ChatsService(repository as unknown as ChatsRepository);
 
-    await expect(service.detail(user, 'conversation-id')).rejects.toMatchObject(
-      {
-        code: 'CHAT_NOT_FOUND',
-        status: 404,
-      },
-    );
+    await expect(
+      service.detail(user, 'conversation-id', { limit: 50 }),
+    ).rejects.toMatchObject({
+      code: 'CHAT_NOT_FOUND',
+      status: 404,
+    });
   });
 
   it('activates a selectable branch for the authenticated owner', async () => {

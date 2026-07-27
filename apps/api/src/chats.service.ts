@@ -6,6 +6,7 @@ import {
   ChatsRepository,
   ConversationNotFoundError,
   type CreateConversationInput,
+  type MessagePageInput,
   type UpdateConversationInput,
 } from './chats.repository.js';
 import { RequestTraceService } from './request-trace.service.js';
@@ -58,9 +59,33 @@ export class ChatsService {
     }
   }
 
-  async detail(principal: AuthenticatedPrincipal, id: string) {
+  async detail(
+    principal: AuthenticatedPrincipal,
+    id: string,
+    page: MessagePageInput,
+  ) {
     try {
-      return await this.repository.detail(this.chatPrincipal(principal), id);
+      return await this.repository.detail(
+        this.chatPrincipal(principal),
+        id,
+        page,
+      );
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
+  async messagePage(
+    principal: AuthenticatedPrincipal,
+    id: string,
+    page: MessagePageInput,
+  ) {
+    try {
+      return await this.repository.messagePage(
+        this.chatPrincipal(principal),
+        id,
+        page,
+      );
     } catch (error) {
       this.mapError(error);
     }

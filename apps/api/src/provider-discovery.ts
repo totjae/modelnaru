@@ -23,7 +23,18 @@ export interface DiscoveredProviderModel {
   metadata: Record<string, string | string[]>;
 }
 
+const MAXIMUM_MODEL_RESPONSE_BYTES = 5 * 1024 * 1024;
+const MAXIMUM_DISCOVERED_MODELS = 10_000;
+
+interface FetchBodyReader {
+  cancel(reason?: unknown): Promise<void>;
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+}
+
 interface FetchResponse {
+  body?: {
+    getReader(): FetchBodyReader;
+  } | null;
   ok: boolean;
   status: number;
   text(): Promise<string>;
@@ -33,6 +44,42 @@ type FetchImplementation = (
   input: string,
   init: RequestInit,
 ) => Promise<FetchResponse>;
+
+async function readLimitedText(
+  response: FetchResponse,
+  onLimitExceeded: () => void,
+): Promise<string> {
+  if (!response.body) {
+    const raw = await response.text();
+    if (Buffer.byteLength(raw, 'utf8') > MAXIMUM_MODEL_RESPONSE_BYTES) {
+      onLimitExceeded();
+      throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
+    }
+    return raw;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      chunks.push(decoder.decode());
+      break;
+    }
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAXIMUM_MODEL_RESPONSE_BYTES) {
+      onLimitExceeded();
+      await reader
+        .cancel('Provider model response exceeded 5MiB')
+        .catch(() => undefined);
+      throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
+    }
+    chunks.push(decoder.decode(value, { stream: true }));
+  }
+  return chunks.join('');
+}
 
 async function fetchProviderText(
   url: string,
@@ -56,11 +103,7 @@ async function fetchProviderText(
       }
       throw new ProviderConnectionError('PROVIDER_UPSTREAM_ERROR');
     }
-    const raw = await response.text();
-    if (Buffer.byteLength(raw, 'utf8') > 5_242_880) {
-      throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
-    }
-    return raw;
+    return await readLimitedText(response, () => controller.abort());
   } catch (error) {
     if (error instanceof ProviderConnectionError) throw error;
     throw new ProviderConnectionError('PROVIDER_NETWORK_ERROR');
@@ -116,6 +159,9 @@ export function normalizeProviderModels(
         ? document
         : (root?.data ?? root?.models ?? root?.result);
   if (!Array.isArray(source)) {
+    throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
+  }
+  if (source.length > MAXIMUM_DISCOVERED_MODELS) {
     throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
   }
 
@@ -220,6 +266,9 @@ export async function discoverProviderModels(
   const models = new Map(
     [...discovered, ...staticModels].map((model) => [model.id, model]),
   );
+  if (models.size > MAXIMUM_DISCOVERED_MODELS) {
+    throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
+  }
   return [...models.values()].sort((left, right) =>
     left.id.localeCompare(right.id),
   );

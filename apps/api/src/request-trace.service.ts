@@ -8,6 +8,7 @@ import { DatabaseService } from './database.service.js';
 
 const MAX_TRACE_BYTES = 2 * 1024 * 1024;
 const MAX_SESSION_TRACES = 30;
+const MAX_GLOBAL_TRACE_BYTES = 64 * 1024 * 1024;
 const PRUNE_INTERVAL_MS = 60_000;
 
 export interface RequestTrace {
@@ -101,14 +102,15 @@ function sanitizedUrl(value: string): string {
 }
 
 function limited(value: unknown): { truncated: boolean; value: unknown } {
-  const text = JSON.stringify(value);
+  const text = JSON.stringify(value) ?? 'null';
   if (Buffer.byteLength(text, 'utf8') <= MAX_TRACE_BYTES) {
     return { truncated: false, value };
   }
+  const preview = fitText(text, MAX_TRACE_BYTES - 256);
   return {
     truncated: true,
     value: {
-      preview: text.slice(0, MAX_TRACE_BYTES),
+      preview: preview.text,
       warning: 'Trace exceeded 2MB and was truncated.',
     },
   };
@@ -128,10 +130,13 @@ function fitText(value: string, maximumBytes: number) {
 @Injectable()
 export class RequestTraceService implements OnModuleDestroy {
   private readonly traces = new Map<string, StoredTrace[]>();
+  private readonly traceIndex = new Map<string, StoredTrace>();
   private readonly sessionExpiry = new Map<
     string,
     { absolute: number; idle: number }
   >();
+  private maximumGlobalBytes = MAX_GLOBAL_TRACE_BYTES;
+  private totalApproximateBytes = 0;
   private readonly pruneTimer = setInterval(
     () => this.pruneExpired(),
     PRUNE_INTERVAL_MS,
@@ -144,7 +149,9 @@ export class RequestTraceService implements OnModuleDestroy {
   onModuleDestroy(): void {
     clearInterval(this.pruneTimer);
     this.traces.clear();
+    this.traceIndex.clear();
     this.sessionExpiry.clear();
+    this.totalApproximateBytes = 0;
   }
 
   async begin(input: BeginTraceInput): Promise<string | null> {
@@ -190,6 +197,8 @@ export class RequestTraceService implements OnModuleDestroy {
     const current = this.traces.get(input.sessionId) ?? [];
     current.push(trace);
     this.traces.set(input.sessionId, current);
+    this.traceIndex.set(trace.id, trace);
+    this.totalApproximateBytes += trace.approximateBytes;
     if (!this.sessionExpiry.has(input.sessionId)) {
       const expiresAt = input.absoluteExpiresAt.getTime();
       this.sessionExpiry.set(input.sessionId, {
@@ -198,6 +207,7 @@ export class RequestTraceService implements OnModuleDestroy {
       });
     }
     this.trim(input.sessionId, input.conversationId, input.limit);
+    this.enforceGlobalBudget();
     return id;
   }
 
@@ -205,16 +215,21 @@ export class RequestTraceService implements OnModuleDestroy {
     const trace = this.find(traceId);
     if (!trace || trace.truncated) return;
     const value = sanitize(document);
-    const bytes = Buffer.byteLength(JSON.stringify(value), 'utf8');
+    const bytes = Buffer.byteLength(JSON.stringify(value) ?? 'null', 'utf8');
     if (trace.approximateBytes + bytes > MAX_TRACE_BYTES) {
       trace.truncated = true;
-      trace.response.rawEvents.push({
+      const warning = {
         warning: 'Remaining provider events exceeded 2MB and were omitted.',
-      });
+      };
+      const warningBytes = Buffer.byteLength(JSON.stringify(warning), 'utf8');
+      if (trace.approximateBytes + warningBytes <= MAX_TRACE_BYTES) {
+        trace.response.rawEvents.push(warning);
+        this.addBytes(trace, warningBytes);
+      }
       return;
     }
-    trace.approximateBytes += bytes;
     trace.response.rawEvents.push(value);
+    this.addBytes(trace, bytes);
   }
 
   complete(
@@ -241,6 +256,7 @@ export class RequestTraceService implements OnModuleDestroy {
     trace.response.stopReason = input.stopReason;
     trace.status = 'completed';
     trace.truncated ||= content.truncated;
+    this.addBytes(trace, Buffer.byteLength(content.text, 'utf8'));
   }
 
   fail(
@@ -262,6 +278,7 @@ export class RequestTraceService implements OnModuleDestroy {
     trace.response.content = content.text;
     trace.status = input.cancelled ? 'cancelled' : 'failed';
     trace.truncated ||= content.truncated;
+    this.addBytes(trace, Buffer.byteLength(content.text, 'utf8'));
   }
 
   list(sessionId: string, conversationId: string): RequestTrace[] {
@@ -288,6 +305,13 @@ export class RequestTraceService implements OnModuleDestroy {
   }
 
   clearSession(sessionId: string): void {
+    for (const trace of this.traces.get(sessionId) ?? []) {
+      this.traceIndex.delete(trace.id);
+      this.totalApproximateBytes = Math.max(
+        0,
+        this.totalApproximateBytes - trace.approximateBytes,
+      );
+    }
     this.traces.delete(sessionId);
     this.sessionExpiry.delete(sessionId);
   }
@@ -304,11 +328,11 @@ export class RequestTraceService implements OnModuleDestroy {
   }
 
   clearSessionConversation(sessionId: string, conversationId: string): void {
-    const remaining = (this.traces.get(sessionId) ?? []).filter(
-      (trace) => trace.conversationId !== conversationId,
-    );
-    if (remaining.length === 0) this.clearSession(sessionId);
-    else this.traces.set(sessionId, remaining);
+    for (const trace of [...(this.traces.get(sessionId) ?? [])]) {
+      if (trace.conversationId === conversationId) {
+        this.remove(trace);
+      }
+    }
   }
 
   applyConversationLimit(
@@ -320,12 +344,12 @@ export class RequestTraceService implements OnModuleDestroy {
   }
 
   clearConversation(conversationId: string): void {
-    for (const [sessionId, traces] of this.traces) {
-      const remaining = traces.filter(
-        (trace) => trace.conversationId !== conversationId,
-      );
-      if (remaining.length === 0) this.clearSession(sessionId);
-      else this.traces.set(sessionId, remaining);
+    for (const traces of [...this.traces.values()]) {
+      for (const trace of [...traces]) {
+        if (trace.conversationId === conversationId) {
+          this.remove(trace);
+        }
+      }
     }
   }
 
@@ -379,11 +403,7 @@ export class RequestTraceService implements OnModuleDestroy {
 
   private find(traceId: string | null): StoredTrace | undefined {
     if (!traceId) return undefined;
-    for (const traces of this.traces.values()) {
-      const found = traces.find((trace) => trace.id === traceId);
-      if (found) return found;
-    }
-    return undefined;
+    return this.traceIndex.get(traceId);
   }
 
   private pruneExpired(): void {
@@ -409,10 +429,48 @@ export class RequestTraceService implements OnModuleDestroy {
         .slice(0, Math.max(0, conversation.length - conversationLimit))
         .map((trace) => trace.id),
     );
-    traces = traces.filter((trace) => !remove.has(trace.id));
-    if (traces.length > MAX_SESSION_TRACES) {
-      traces = traces.slice(-MAX_SESSION_TRACES);
+    for (const trace of traces) {
+      if (remove.has(trace.id)) this.remove(trace);
     }
-    this.traces.set(sessionId, traces);
+    traces = this.traces.get(sessionId) ?? [];
+    const sessionOverflow = Math.max(0, traces.length - MAX_SESSION_TRACES);
+    for (const trace of traces.slice(0, sessionOverflow)) {
+      this.remove(trace);
+    }
+  }
+
+  private addBytes(trace: StoredTrace, bytes: number): void {
+    if (!this.traceIndex.has(trace.id) || bytes <= 0) return;
+    trace.approximateBytes += bytes;
+    this.totalApproximateBytes += bytes;
+    this.enforceGlobalBudget();
+  }
+
+  private enforceGlobalBudget(): void {
+    while (
+      this.totalApproximateBytes > this.maximumGlobalBytes &&
+      this.traceIndex.size > 0
+    ) {
+      const oldest = this.traceIndex.values().next().value;
+      if (!oldest) break;
+      this.remove(oldest);
+    }
+  }
+
+  private remove(trace: StoredTrace): void {
+    if (!this.traceIndex.delete(trace.id)) return;
+    this.totalApproximateBytes = Math.max(
+      0,
+      this.totalApproximateBytes - trace.approximateBytes,
+    );
+    const remaining = (this.traces.get(trace.sessionId) ?? []).filter(
+      (candidate) => candidate.id !== trace.id,
+    );
+    if (remaining.length === 0) {
+      this.traces.delete(trace.sessionId);
+      this.sessionExpiry.delete(trace.sessionId);
+    } else {
+      this.traces.set(trace.sessionId, remaining);
+    }
   }
 }

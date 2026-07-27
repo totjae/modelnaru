@@ -2508,6 +2508,17 @@ h1 {
   overflow-y: auto;
 }
 
+.message-page-control {
+  display: flex;
+  margin-bottom: 18px;
+  justify-content: center;
+}
+
+.message-page-control .panel-toggle:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
 .chat-message {
   max-width: min(78%, 760px);
   margin-bottom: 16px;

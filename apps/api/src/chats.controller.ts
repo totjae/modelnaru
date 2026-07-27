@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -26,6 +27,7 @@ import { ChatError, ChatsService } from './chats.service.js';
 import {
   ConversationNotFoundError,
   type CreateConversationInput,
+  type MessagePageInput,
   type UpdateConversationInput,
 } from './chats.repository.js';
 import { RequestTraceService } from './request-trace.service.js';
@@ -94,6 +96,26 @@ function validInteger(
     value >= minimum &&
     value <= maximum
   );
+}
+
+function parseMessagePage(
+  beforeSequence: string | undefined,
+  limit: string | undefined,
+): MessagePageInput | undefined {
+  const parsedBefore =
+    beforeSequence === undefined ? undefined : Number(beforeSequence);
+  const parsedLimit = limit === undefined ? 50 : Number(limit);
+  if (
+    (parsedBefore !== undefined &&
+      !validInteger(parsedBefore, 1, Number.MAX_SAFE_INTEGER)) ||
+    !validInteger(parsedLimit, 1, 100)
+  ) {
+    return undefined;
+  }
+  return {
+    ...(parsedBefore === undefined ? {} : { beforeSequence: parsedBefore }),
+    limit: parsedLimit,
+  };
 }
 
 function title(value: unknown): string | undefined {
@@ -424,6 +446,30 @@ export class ChatsController {
       return await this.chats.detail(
         request.authenticatedSession!.principal,
         id,
+        { limit: 50 },
+      );
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
+  @Get(':id/messages')
+  @UseGuards(AuthenticatedSessionGuard)
+  async messages(
+    @Param('id') id: string,
+    @Query('beforeSequence') beforeSequence: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    const page = parseMessagePage(beforeSequence, limit);
+    if (!UUID.test(id) || !page) this.invalidInput();
+    try {
+      return await this.chats.messagePage(
+        request.authenticatedSession!.principal,
+        id,
+        page,
       );
     } catch (error) {
       this.mapError(error);
@@ -580,7 +626,9 @@ export class ChatsController {
   ) {
     response.setHeader('Cache-Control', 'no-store');
     if (!UUID.test(id)) this.invalidInput();
-    await this.chats.detail(request.authenticatedSession!.principal, id);
+    await this.chats.detail(request.authenticatedSession!.principal, id, {
+      limit: 1,
+    });
     return {
       traces: this.traces.list(request.authenticatedSession!.row.id, id),
     };
@@ -596,7 +644,9 @@ export class ChatsController {
   ): Promise<void> {
     response.setHeader('Cache-Control', 'no-store');
     if (!UUID.test(id)) this.invalidInput();
-    await this.chats.detail(request.authenticatedSession!.principal, id);
+    await this.chats.detail(request.authenticatedSession!.principal, id, {
+      limit: 1,
+    });
     this.traces.clearSessionConversation(
       request.authenticatedSession!.row.id,
       id,

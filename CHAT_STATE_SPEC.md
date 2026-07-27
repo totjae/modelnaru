@@ -96,7 +96,10 @@
 
 - `GET /api/conversations`: 현재 주체의 대화 목록
 - `POST /api/conversations`: 대화와 root 분기 생성
-- `GET /api/conversations/:id`: 활성 분기와 저장된 메시지를 포함한 상세 조회
+- `GET /api/conversations/:id`: 대화 설정·분기 선택 정보와 활성 경로의 최근
+  50개 메시지를 포함한 상세 조회
+- `GET /api/conversations/:id/messages`: 활성 경로의 이전 메시지를
+  `beforeSequence` cursor와 `limit`으로 조회
 - `PATCH /api/conversations/:id`: 제목·시스템 프롬프트·컨텍스트·기본 모델·생성 파라미터·응답 타임아웃 설정 변경
 - `DELETE /api/conversations/:id`: 대화 hard delete
 - `POST /api/conversations/:id/messages`: attachment를 user 메시지에 연결하고 user·assistant 메시지를 저장한 뒤 SSE로 AI 응답 전송
@@ -148,6 +151,11 @@
 - 재생성 결과는 기존 답변을 덮어쓰지 않는 새 분기로 저장할 수 있다.
 - 성공한 재생성만 활성화되고 이전·새 답변 분기를 왕복해도 각 경로가 보존된다.
 - 가장 최근 질문의 답변 후보만 인라인 탐색 대상으로 묶이며 과거 메시지에는 재생성 조작을 표시하지 않는다.
+- 상세 화면과 Provider 컨텍스트는 비활성 분기의 전체 본문을 읽지 않고
+  `active_branch_id`에서 root 방향으로 이어지는 경로만 조회한다.
+- 상세 화면은 활성 경로 최근 50개를 먼저 표시하고 이전 기록은 사용자가
+  요청할 때 최대 100개 단위로 추가한다. cursor는 현재 page의 최소
+  `sequence_number`이며 중복 없이 역방향으로 이동한다.
 - controller·service 단위시험, migration 정적 시험, typecheck와 production build가 통과한다.
 - 서로 다른 session이 같은 계정·대화를 열어도 전송 기록을 공유하지 않으며 종료된 session의 기록은 조회할 수 없다.
 

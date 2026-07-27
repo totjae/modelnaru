@@ -12,9 +12,11 @@ import {
 import { createPortal } from 'react-dom';
 
 import { csrfToken } from './client-auth';
+import { mergeOlderMessagePage } from './chat-message-pagination';
 import { selectConversationModel } from './chat-model-selection';
 import { responseAlternatives } from './chat-response-navigation';
 import { isNearScrollEnd } from './chat-scroll';
+import { LatestRequest } from './latest-request';
 import {
   defaultChatParameterValues,
   parameterValuesFromRequest,
@@ -90,6 +92,18 @@ interface ConversationDetail extends ConversationSummary {
     messages: ChatMessage[];
     parentBranchId: string | null;
   }>;
+  messagePage: MessagePageMetadata;
+  messages: ChatMessage[];
+}
+
+interface MessagePageMetadata {
+  hasMore: boolean;
+  nextBeforeSequence: number | null;
+}
+
+interface MessagePageResult {
+  messagePage: MessagePageMetadata;
+  messages: ChatMessage[];
 }
 
 interface RequestTrace {
@@ -243,6 +257,10 @@ async function responseMessage(response: Response): Promise<string> {
   }
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 function streamError(code: string): string {
   if (code === 'ACCESS_DAILY_LIMIT_REACHED') {
     return '오늘 사용할 수 있는 호출 횟수를 모두 사용했습니다.';
@@ -341,6 +359,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagePage, setMessagePage] = useState<MessagePageMetadata>({
+    hasMore: false,
+    nextBeforeSequence: null,
+  });
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [selectedModel, setSelectedModel] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -362,8 +385,15 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [traces, setTraces] = useState<RequestTrace[]>([]);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const detailRequestsRef = useRef(new LatestRequest());
+  const messagePageRequestsRef = useRef(new LatestRequest());
+  const workspaceRequestsRef = useRef(new LatestRequest());
   const followLatestRef = useRef(true);
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const prependScrollRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
   const modelsRef = useRef<AllowedModel[]>([]);
   const settingsSnapshotRef = useRef<{
     parameterValues: ParameterValues;
@@ -446,45 +476,111 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   }
 
   const loadDetail = useCallback(async (id: string) => {
-    const [response, pendingResponse] = await Promise.all([
-      fetch(`/api/conversations/${id}`, {
-        cache: 'no-store',
-        credentials: 'same-origin',
-      }),
-      fetch(`/api/files/conversations/${id}/pending`, {
-        cache: 'no-store',
-        credentials: 'same-origin',
-      }),
-    ]);
-    if (!response.ok || !pendingResponse.ok) throw new Error('detail failed');
-    const value = (await response.json()) as ConversationDetail;
-    const pending = (await pendingResponse.json()) as {
-      attachments: MessageAttachment[];
-    };
-    const active = value.branches.find(
-      (branch) => branch.id === value.activeBranchId,
-    );
-    const activeMessages = (active?.messages ?? []).filter(
-      (message) => message.role === 'user' || message.role === 'assistant',
-    );
-    setDetail(value);
-    setMessages(activeMessages);
-    setSelectedModel(
-      selectConversationModel(
-        activeMessages,
-        modelsRef.current,
-        value.defaultProviderModelId,
-      ),
-    );
-    setParameterValues(parameterValuesFromRequest(value.generationParameters));
-    setPendingAttachments((current) => [
-      ...current.filter((attachment) => attachment.conversationId !== id),
-      ...pending.attachments.map((attachment) => ({
-        ...attachment,
-        conversationId: id,
-      })),
-    ]);
+    messagePageRequestsRef.current.cancel();
+    prependScrollRef.current = null;
+    setLoadingOlderMessages(false);
+    const request = detailRequestsRef.current.start();
+    try {
+      const [response, pendingResponse] = await Promise.all([
+        fetch(`/api/conversations/${id}`, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: request.signal,
+        }),
+        fetch(`/api/files/conversations/${id}/pending`, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: request.signal,
+        }),
+      ]);
+      if (!response.ok || !pendingResponse.ok) throw new Error('detail failed');
+      const value = (await response.json()) as ConversationDetail;
+      const pending = (await pendingResponse.json()) as {
+        attachments: MessageAttachment[];
+      };
+      if (!request.isCurrent()) return false;
+      const activeMessages = value.messages.filter(
+        (message) => message.role === 'user' || message.role === 'assistant',
+      );
+      setDetail(value);
+      setMessages(activeMessages);
+      setMessagePage(value.messagePage);
+      setSelectedModel(
+        selectConversationModel(
+          activeMessages,
+          modelsRef.current,
+          value.defaultProviderModelId,
+        ),
+      );
+      setParameterValues(
+        parameterValuesFromRequest(value.generationParameters),
+      );
+      setPendingAttachments((current) => [
+        ...current.filter((attachment) => attachment.conversationId !== id),
+        ...pending.attachments.map((attachment) => ({
+          ...attachment,
+          conversationId: id,
+        })),
+      ]);
+      return true;
+    } catch (error) {
+      if (isAbortError(error) || !request.isCurrent()) return false;
+      throw error;
+    }
   }, []);
+
+  async function loadOlderMessages() {
+    if (
+      !selectedId ||
+      !messagePage.hasMore ||
+      messagePage.nextBeforeSequence === null ||
+      loadingOlderMessages
+    ) {
+      return;
+    }
+    const selectedConversationId = selectedId;
+    const request = messagePageRequestsRef.current.start();
+    const list = messageListRef.current;
+    if (list) {
+      prependScrollRef.current = {
+        scrollHeight: list.scrollHeight,
+        scrollTop: list.scrollTop,
+      };
+    }
+    followLatestRef.current = false;
+    setLoadingOlderMessages(true);
+    setError('');
+    try {
+      const response = await fetch(
+        `/api/conversations/${selectedConversationId}/messages?beforeSequence=${messagePage.nextBeforeSequence}&limit=50`,
+        {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: request.signal,
+        },
+      );
+      if (!response.ok) throw new Error(await responseMessage(response));
+      const value = (await response.json()) as MessagePageResult;
+      if (!request.isCurrent()) return;
+      setMessages((current) => {
+        const older = value.messages.filter(
+          (message) => message.role === 'user' || message.role === 'assistant',
+        );
+        return mergeOlderMessagePage(older, current);
+      });
+      setMessagePage(value.messagePage);
+    } catch (caught) {
+      prependScrollRef.current = null;
+      if (isAbortError(caught) || !request.isCurrent()) return;
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : '이전 메시지를 불러오지 못했습니다.',
+      );
+    } finally {
+      if (request.isCurrent()) setLoadingOlderMessages(false);
+    }
+  }
 
   const refreshConversations = useCallback(async () => {
     const response = await fetch('/api/conversations', {
@@ -500,6 +596,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
 
   const load = useCallback(
     async (preferredId?: string) => {
+      const request = workspaceRequestsRef.current.start();
       setLoading(true);
       setError('');
       try {
@@ -507,10 +604,12 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           fetch('/api/access/models', {
             cache: 'no-store',
             credentials: 'same-origin',
+            signal: request.signal,
           }),
           fetch('/api/conversations', {
             cache: 'no-store',
             credentials: 'same-origin',
+            signal: request.signal,
           }),
         ]);
         if (!modelResponse.ok || !conversationResponse.ok) {
@@ -522,6 +621,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         const conversationBody = (await conversationResponse.json()) as {
           conversations: ConversationSummary[];
         };
+        if (!request.isCurrent()) return;
         modelsRef.current = modelBody.models;
         setModels(modelBody.models);
         setConversations(conversationBody.conversations);
@@ -530,10 +630,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           setSelectedId(nextId);
           await loadDetail(nextId);
         }
-      } catch {
+      } catch (caught) {
+        if (isAbortError(caught) || !request.isCurrent()) return;
         setError('대화 공간을 불러오지 못했습니다.');
       } finally {
-        setLoading(false);
+        if (request.isCurrent()) setLoading(false);
       }
     },
     [loadDetail],
@@ -541,6 +642,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
 
   useEffect(() => {
     void load();
+    return () => {
+      workspaceRequestsRef.current.cancel();
+      detailRequestsRef.current.cancel();
+      messagePageRequestsRef.current.cancel();
+    };
   }, [load]);
 
   useEffect(() => {
@@ -744,10 +850,16 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   );
 
   useEffect(() => {
-    if (!followLatestRef.current) return;
     const animationFrame = window.requestAnimationFrame(() => {
       const list = messageListRef.current;
-      if (list) list.scrollTop = list.scrollHeight;
+      const prepend = prependScrollRef.current;
+      if (list && prepend) {
+        list.scrollTop =
+          prepend.scrollTop + (list.scrollHeight - prepend.scrollHeight);
+        prependScrollRef.current = null;
+      } else if (list && followLatestRef.current) {
+        list.scrollTop = list.scrollHeight;
+      }
     });
     return () => window.cancelAnimationFrame(animationFrame);
   }, [messages]);
@@ -1193,6 +1305,20 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 followLatestRef.current = isNearScrollEnd(event.currentTarget);
               }}
             >
+              {messagePage.hasMore && (
+                <div className="message-page-control">
+                  <button
+                    className="panel-toggle"
+                    type="button"
+                    disabled={busy || loadingOlderMessages}
+                    onClick={() => void loadOlderMessages()}
+                  >
+                    {loadingOlderMessages
+                      ? '이전 메시지 불러오는 중…'
+                      : '이전 메시지 불러오기'}
+                  </button>
+                </div>
+              )}
               {messages.length === 0 ? (
                 <div className="chat-welcome compact">
                   <h2>{detail.title}</h2>

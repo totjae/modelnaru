@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import type { JSONValue } from '@modelnaru/database';
+import type { DatabaseClient, JSONValue } from '@modelnaru/database';
 
 import type { AuthenticatedPrincipal } from './auth.service.js';
-import { composeBranchMessages } from './chat-branches.js';
 import type { ChatParameters } from './chat-streaming.js';
 import { DatabaseService } from './database.service.js';
 
@@ -76,6 +75,23 @@ export interface MessageAttachmentRecord {
 
 export interface ConversationDetail extends ConversationRecord {
   branches: ConversationBranchRecord[];
+  messagePage: MessagePageMetadata;
+  messages: MessageRecord[];
+}
+
+export interface MessagePageMetadata {
+  hasMore: boolean;
+  nextBeforeSequence: number | null;
+}
+
+export interface MessagePageResult {
+  messagePage: MessagePageMetadata;
+  messages: MessageRecord[];
+}
+
+export interface MessagePageInput {
+  beforeSequence?: number;
+  limit: number;
 }
 
 export interface CreateConversationInput {
@@ -120,6 +136,7 @@ interface RawBranchRow {
   created_at: Date;
   forked_from_message_id: string | null;
   id: string;
+  is_selectable: boolean;
   parent_branch_id: string | null;
 }
 
@@ -281,6 +298,7 @@ export class ChatsRepository {
   async detail(
     principal: ChatPrincipal,
     id: string,
+    page: MessagePageInput,
   ): Promise<ConversationDetail> {
     const sql = this.database.getClient();
     const rows =
@@ -300,31 +318,149 @@ export class ChatsRepository {
     const row = rows[0];
     if (!row) throw new ConversationNotFoundError();
     const branchRows = await sql<RawBranchRow[]>`
-      SELECT id, parent_branch_id, forked_from_message_id, created_at
-      FROM conversation_branches
-      WHERE conversation_id = ${id}
-      ORDER BY created_at, id
+      SELECT b.id, b.parent_branch_id, b.forked_from_message_id, b.created_at,
+        (
+          b.parent_branch_id IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM messages selectable
+            WHERE selectable.branch_id = b.id
+              AND selectable.role = 'assistant'
+              AND selectable.status = 'completed'
+          )
+        ) AS is_selectable
+      FROM conversation_branches b
+      WHERE b.conversation_id = ${id}
+      ORDER BY b.created_at, b.id
     `;
+    const activePage = await this.activeMessagePage(
+      sql,
+      id,
+      row.active_branch_id,
+      page,
+    );
+    const latest = activePage.messages.at(-1);
+    const alternativeRows =
+      latest?.role === 'assistant' && latest.parentMessageId
+        ? await sql<RawMessageRow[]>`
+            SELECT id, branch_id, parent_message_id, sequence_number, role,
+              status, content, provider_model_id,
+              provider_template_id_snapshot, model_id_snapshot,
+              request_parameters, input_tokens, output_tokens, error_code,
+              created_at, updated_at, completed_at
+            FROM messages
+            WHERE conversation_id = ${id}
+              AND role = 'assistant'
+              AND parent_message_id = ${latest.parentMessageId}
+            ORDER BY created_at, id
+          `
+        : [];
+    const alternativesByBranch = new Map<string, MessageRecord[]>();
+    for (const alternative of alternativeRows) {
+      const messages = alternativesByBranch.get(alternative.branch_id) ?? [];
+      messages.push(mapMessage(alternative, []));
+      alternativesByBranch.set(alternative.branch_id, messages);
+    }
+    return {
+      ...mapConversation(row),
+      branches: branchRows.map((branch) => ({
+        createdAt: branch.created_at,
+        forkedFromMessageId: branch.forked_from_message_id,
+        id: branch.id,
+        isSelectable: branch.is_selectable,
+        messages: alternativesByBranch.get(branch.id) ?? [],
+        parentBranchId: branch.parent_branch_id,
+      })),
+      ...activePage,
+    };
+  }
+
+  async messagePage(
+    principal: ChatPrincipal,
+    id: string,
+    page: MessagePageInput,
+  ): Promise<MessagePageResult> {
+    const sql = this.database.getClient();
+    const rows =
+      principal.type === 'user'
+        ? await sql<Array<{ active_branch_id: string }>>`
+            SELECT active_branch_id
+            FROM conversations
+            WHERE id = ${id} AND user_id = ${principal.id}
+            LIMIT 1
+          `
+        : await sql<Array<{ active_branch_id: string }>>`
+            SELECT active_branch_id
+            FROM conversations
+            WHERE id = ${id} AND guest_id = ${principal.id}
+            LIMIT 1
+          `;
+    const row = rows[0];
+    if (!row) throw new ConversationNotFoundError();
+    return this.activeMessagePage(sql, id, row.active_branch_id, page);
+  }
+
+  private async activeMessagePage(
+    sql: DatabaseClient,
+    conversationId: string,
+    activeBranchId: string,
+    page: MessagePageInput,
+  ): Promise<MessagePageResult> {
     const messageRows = await sql<RawMessageRow[]>`
-      SELECT id, branch_id, parent_message_id, sequence_number, role, status,
-        content, provider_model_id, provider_template_id_snapshot,
-        model_id_snapshot,
-        request_parameters, input_tokens, output_tokens, error_code,
-        created_at, updated_at, completed_at
-      FROM messages
-      WHERE conversation_id = ${id}
-      ORDER BY branch_id, sequence_number
+      WITH RECURSIVE active_path AS (
+        SELECT b.id, b.parent_branch_id, b.forked_from_message_id,
+          NULL::integer AS before_sequence
+        FROM conversation_branches b
+        WHERE b.id = ${activeBranchId}
+          AND b.conversation_id = ${conversationId}
+
+        UNION ALL
+
+        SELECT parent.id, parent.parent_branch_id,
+          parent.forked_from_message_id, fork.sequence_number
+        FROM active_path child
+        JOIN conversation_branches parent
+          ON parent.id = child.parent_branch_id
+          AND parent.conversation_id = ${conversationId}
+        JOIN messages fork
+          ON fork.id = child.forked_from_message_id
+          AND fork.conversation_id = ${conversationId}
+      )
+      SELECT m.id, m.branch_id, m.parent_message_id, m.sequence_number,
+        m.role, m.status, m.content, m.provider_model_id,
+        m.provider_template_id_snapshot, m.model_id_snapshot,
+        m.request_parameters, m.input_tokens, m.output_tokens, m.error_code,
+        m.created_at, m.updated_at, m.completed_at
+      FROM active_path path
+      JOIN messages m ON m.branch_id = path.id
+      WHERE m.conversation_id = ${conversationId}
+        AND (
+          path.before_sequence IS NULL
+          OR m.sequence_number < path.before_sequence
+        )
+        AND (
+          ${page.beforeSequence ?? null}::integer IS NULL
+          OR m.sequence_number < ${page.beforeSequence ?? null}
+        )
+      ORDER BY m.sequence_number DESC, m.id DESC
+      LIMIT ${page.limit + 1}
     `;
-    const attachmentRows = await sql<RawMessageAttachmentRow[]>`
-      SELECT id, message_id, original_name, media_type, file_kind, byte_size,
-        page_count, ocr_page_count, image_width, image_height,
-        include_in_future_messages, expires_at, status
-      FROM attachments
-      WHERE conversation_id = ${id}
-        AND message_id IS NOT NULL
-        AND status IN ('ready', 'expired')
-      ORDER BY created_at, id
-    `;
+    const hasMore = messageRows.length > page.limit;
+    const selectedRows = messageRows.slice(0, page.limit).reverse();
+    const messageIds = selectedRows.map((message) => message.id);
+    const attachmentRows =
+      messageIds.length === 0
+        ? []
+        : await sql<RawMessageAttachmentRow[]>`
+            SELECT id, message_id, original_name, media_type, file_kind,
+              byte_size, page_count, ocr_page_count, image_width, image_height,
+              include_in_future_messages, expires_at, status
+            FROM attachments
+            WHERE conversation_id = ${conversationId}
+              AND message_id = ANY(${messageIds}::uuid[])
+              AND status IN ('ready', 'expired')
+            ORDER BY created_at, id
+          `;
     const attachmentsByMessage = new Map<string, MessageAttachmentRecord[]>();
     for (const attachment of attachmentRows) {
       const records = attachmentsByMessage.get(attachment.message_id) ?? [];
@@ -344,34 +480,18 @@ export class ChatsRepository {
       });
       attachmentsByMessage.set(attachment.message_id, records);
     }
-    const messagesByBranch = new Map<string, MessageRecord[]>();
-    for (const messageRow of messageRows) {
-      const messages = messagesByBranch.get(messageRow.branch_id) ?? [];
-      messages.push(
-        mapMessage(messageRow, attachmentsByMessage.get(messageRow.id) ?? []),
-      );
-      messagesByBranch.set(messageRow.branch_id, messages);
-    }
-    const branches = branchRows.map((branch) => ({
-      forkedFromMessageId: branch.forked_from_message_id,
-      id: branch.id,
-      parentBranchId: branch.parent_branch_id,
-    }));
+    const messages = selectedRows.map((message) =>
+      mapMessage(message, attachmentsByMessage.get(message.id) ?? []),
+    );
     return {
-      ...mapConversation(row),
-      branches: branchRows.map((branch) => ({
-        createdAt: branch.created_at,
-        forkedFromMessageId: branch.forked_from_message_id,
-        id: branch.id,
-        isSelectable:
-          branch.parent_branch_id === null ||
-          (messagesByBranch.get(branch.id) ?? []).some(
-            (message) =>
-              message.role === 'assistant' && message.status === 'completed',
-          ),
-        messages: composeBranchMessages(branch.id, branches, messagesByBranch),
-        parentBranchId: branch.parent_branch_id,
-      })),
+      messagePage: {
+        hasMore,
+        nextBeforeSequence:
+          hasMore && messages.length > 0
+            ? Math.min(...messages.map((message) => message.sequenceNumber))
+            : null,
+      },
+      messages,
     };
   }
 

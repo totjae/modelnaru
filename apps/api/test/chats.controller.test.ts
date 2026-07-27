@@ -30,6 +30,42 @@ const response = () => ({ setHeader: vi.fn() });
 const execution = {} as ChatExecutionService;
 
 describe('ChatsController', () => {
+  it('loads the latest 50 active-path messages by default', async () => {
+    const chats = { detail: vi.fn(() => Promise.resolve({ id: 'detail' })) };
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
+    const id = '10000000-0000-4000-8000-000000000001';
+
+    await expect(controller.detail(id, request(), response())).resolves.toEqual(
+      { id: 'detail' },
+    );
+    expect(chats.detail).toHaveBeenCalledWith(principal, id, { limit: 50 });
+  });
+
+  it('validates the active message page cursor and maximum size', async () => {
+    const chats = {
+      messagePage: vi.fn(() => Promise.resolve({ messages: [] })),
+    };
+    const controller = new ChatsController(
+      chats as unknown as ChatsService,
+      execution,
+    );
+    const id = '10000000-0000-4000-8000-000000000001';
+
+    await expect(
+      controller.messages(id, '51', '100', request(), response()),
+    ).resolves.toEqual({ messages: [] });
+    expect(chats.messagePage).toHaveBeenCalledWith(principal, id, {
+      beforeSequence: 51,
+      limit: 100,
+    });
+    await expect(
+      controller.messages(id, '0', '101', request(), response()),
+    ).rejects.toBeInstanceOf(HttpException);
+  });
+
   it('creates a conversation with the documented defaults', async () => {
     const chats = { create: vi.fn(() => Promise.resolve({ id: 'created' })) };
     const controller = new ChatsController(

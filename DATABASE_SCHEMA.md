@@ -272,6 +272,11 @@ Index:
 - 대화마다 root branch가 하나이며 활성 branch가 같은 대화에 속함
 - 메시지 역할·상태·분기 순서·모델 snapshot 제약이 존재
 - 대화별 기본 모델 FK와 생성 파라미터 JSON object 제약이 존재하며 기존 대화 backfill이 활성 분기의 최신 assistant를 기준으로 한다.
+- 활성 분기 화면 조회와 Provider 컨텍스트 구성은
+  `conversation_branches.parent_branch_id`를 재귀적으로 따라가며, 각 부모
+  분기에서는 자식의 `forked_from_message_id`보다 앞선 sequence만 포함한다.
+  메시지 page는 기존 `messages_branch_sequence_unique` index를 사용하므로
+  별도 migration을 추가하지 않는다.
 - 대화별 응답 유휴 타임아웃이 1~1,800초 범위로 제한되고 기본값은 120초다.
 - 요약 설정 singleton, prompt 범위와 요약 범위 message FK·중복 방지 index가 존재
 - 사용량 원장은 본문 없이 주체·모델 snapshot, 상태, token과 처리 시간만 저장하고 원본 삭제 후에도 유지됨

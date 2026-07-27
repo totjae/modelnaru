@@ -118,4 +118,83 @@ describe('provider model discovery', () => {
     ).rejects.toMatchObject({ code: 'PROVIDER_AUTH_FAILED' });
     expect(fetchImplementation).toHaveBeenCalledTimes(1);
   });
+
+  it('reads split model responses as a bounded stream', async () => {
+    const chunks = [
+      new TextEncoder().encode('{"data":[{"id":'),
+      new TextEncoder().encode('"streamed-model"}]}'),
+    ];
+    const fetchImplementation = vi.fn(() =>
+      Promise.resolve({
+        body: {
+          getReader: () => ({
+            cancel: () => Promise.resolve(),
+            read: () => {
+              const value = chunks.shift();
+              return Promise.resolve(
+                value ? { done: false, value } : { done: true },
+              );
+            },
+          }),
+        },
+        ok: true,
+        status: 200,
+        text: () => Promise.reject(new Error('text fallback must not run')),
+      }),
+    );
+
+    await expect(
+      discoverProviderModels(
+        providerTemplateById('openai')!,
+        'secret-test-key',
+        fetchImplementation,
+      ),
+    ).resolves.toMatchObject([{ id: 'streamed-model' }]);
+  });
+
+  it('cancels a model response while it crosses the 5MiB limit', async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let reads = 0;
+    const cancel = vi.fn(() => Promise.resolve());
+    const fetchImplementation = vi.fn(() =>
+      Promise.resolve({
+        body: {
+          getReader: () => ({
+            cancel,
+            read: () => {
+              reads += 1;
+              return Promise.resolve({ done: false, value: chunk });
+            },
+          }),
+        },
+        ok: true,
+        status: 200,
+        text: () => Promise.reject(new Error('text fallback must not run')),
+      }),
+    );
+
+    await expect(
+      discoverProviderModels(
+        providerTemplateById('openai')!,
+        'secret-test-key',
+        fetchImplementation,
+      ),
+    ).rejects.toMatchObject({ code: 'PROVIDER_RESPONSE_INVALID' });
+    expect(reads).toBe(6);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('rejects model lists with more than 10,000 entries', () => {
+    const models = Array.from({ length: 10_001 }, (_, index) => ({
+      id: `model-${index}`,
+    }));
+
+    expect(() =>
+      normalizeProviderModels(providerTemplateById('openai')!, {
+        data: models,
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'PROVIDER_RESPONSE_INVALID' }),
+    );
+  });
 });

@@ -3,10 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { DatabaseTransaction, JSONValue } from '@modelnaru/database';
 
-import {
-  composeBranchMessages,
-  isLatestRegenerationTarget,
-} from './chat-branches.js';
+import { isLatestRegenerationTarget } from './chat-branches.js';
 import type { ChatParameters } from './chat-streaming.js';
 import type { ChatPrincipal } from './chats.repository.js';
 import { ConversationNotFoundError } from './chats.repository.js';
@@ -61,46 +58,12 @@ interface RawAttachment {
   storage_key: string;
 }
 
-interface RawBranchState {
-  forked_from_message_id: string | null;
-  id: string;
-  parent_branch_id: string | null;
-}
-
 export class ChatMessageStateError extends Error {}
 export class ChatRegenerationTargetError extends Error {}
 export class ChatAttachmentError extends Error {}
 
 function requestParameters(parameters: ChatParameters): JSONValue {
   return { ...parameters };
-}
-
-function composeContext(
-  branchId: string,
-  branches: RawBranchState[],
-  messages: RawContextMessage[],
-): RawContextMessage[] {
-  type ComposableContextMessage = RawContextMessage & {
-    sequenceNumber: number;
-  };
-  const messagesByBranch = new Map<string, ComposableContextMessage[]>();
-  for (const message of messages) {
-    const branchMessages = messagesByBranch.get(message.branch_id) ?? [];
-    branchMessages.push({
-      ...message,
-      sequenceNumber: message.sequence_number,
-    });
-    messagesByBranch.set(message.branch_id, branchMessages);
-  }
-  return composeBranchMessages(
-    branchId,
-    branches.map((branch) => ({
-      forkedFromMessageId: branch.forked_from_message_id,
-      id: branch.id,
-      parentBranchId: branch.parent_branch_id,
-    })),
-    messagesByBranch,
-  );
 }
 
 function contentWithAttachments(
@@ -129,6 +92,44 @@ function contentWithAttachments(
 @Injectable()
 export class ChatMessagesRepository {
   constructor(private readonly database: DatabaseService) {}
+
+  private activeContext(
+    transaction: DatabaseTransaction,
+    conversationId: string,
+    activeBranchId: string,
+  ): Promise<RawContextMessage[]> {
+    return transaction<RawContextMessage[]>`
+      WITH RECURSIVE active_path AS (
+        SELECT b.id, b.parent_branch_id, b.forked_from_message_id,
+          NULL::integer AS before_sequence
+        FROM conversation_branches b
+        WHERE b.id = ${activeBranchId}
+          AND b.conversation_id = ${conversationId}
+
+        UNION ALL
+
+        SELECT parent.id, parent.parent_branch_id,
+          parent.forked_from_message_id, fork.sequence_number
+        FROM active_path child
+        JOIN conversation_branches parent
+          ON parent.id = child.parent_branch_id
+          AND parent.conversation_id = ${conversationId}
+        JOIN messages fork
+          ON fork.id = child.forked_from_message_id
+          AND fork.conversation_id = ${conversationId}
+      )
+      SELECT m.id, m.branch_id, m.sequence_number, m.role, m.status, m.content
+      FROM active_path path
+      JOIN messages m ON m.branch_id = path.id
+      WHERE m.conversation_id = ${conversationId}
+        AND m.role IN ('user', 'assistant')
+        AND (
+          path.before_sequence IS NULL
+          OR m.sequence_number < path.before_sequence
+        )
+      ORDER BY m.sequence_number, m.id
+    `;
+  }
 
   private async beginUsageEvent(
     transaction: DatabaseTransaction,
@@ -215,22 +216,10 @@ export class ChatMessagesRepository {
             `;
       const conversation = conversationRows[0];
       if (!conversation) throw new ConversationNotFoundError();
-      const branches = await transaction<RawBranchState[]>`
-        SELECT id, parent_branch_id, forked_from_message_id
-        FROM conversation_branches
-        WHERE conversation_id = ${input.conversationId}
-      `;
-      const storedMessages = await transaction<RawContextMessage[]>`
-        SELECT id, branch_id, sequence_number, role, status, content
-        FROM messages
-        WHERE conversation_id = ${input.conversationId}
-          AND role IN ('user', 'assistant')
-        ORDER BY branch_id, sequence_number
-      `;
-      const previous = composeContext(
+      const previous = await this.activeContext(
+        transaction,
+        input.conversationId,
         conversation.active_branch_id,
-        branches,
-        storedMessages,
       );
       const attachmentIds = [...new Set(input.attachmentIds)];
       if (
@@ -405,22 +394,10 @@ export class ChatMessagesRepository {
       const conversation = conversationRows[0];
       if (!conversation) throw new ConversationNotFoundError();
 
-      const branches = await transaction<RawBranchState[]>`
-        SELECT id, parent_branch_id, forked_from_message_id
-        FROM conversation_branches
-        WHERE conversation_id = ${input.conversationId}
-      `;
-      const storedMessages = await transaction<RawContextMessage[]>`
-        SELECT id, branch_id, sequence_number, role, status, content
-        FROM messages
-        WHERE conversation_id = ${input.conversationId}
-          AND role IN ('user', 'assistant')
-        ORDER BY branch_id, sequence_number
-      `;
-      const activeMessages = composeContext(
+      const activeMessages = await this.activeContext(
+        transaction,
+        input.conversationId,
         conversation.active_branch_id,
-        branches,
-        storedMessages,
       );
       const attachments = await transaction<RawAttachment[]>`
         SELECT id, message_id, original_name, extracted_text, byte_size,

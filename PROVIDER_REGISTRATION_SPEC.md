@@ -537,6 +537,9 @@ Provider Manager에는 모델 그룹, manual·sequential·on-error 전략과 조
 - `provider-manager-v1.10.0.js`가 참조하는 `providers.json`의 32개 registry template을 서버 내장 snapshot으로 반영했다.
 - registry template은 API 키 등록, 고정 HTTPS endpoint, OpenAI 호환 streaming과 모델 동기화를 지원한다.
 - 모델 조회 endpoint가 없는 Provider는 registry의 `staticModels`를 사용한다.
+- 동적 모델 조회 응답은 streaming 5MiB 상한과 최대 10,000개 원소 제한을
+  적용한다. 상한을 넘으면 연결 등록·동기화를
+  `PROVIDER_RESPONSE_INVALID`로 중단하고 기존 모델 snapshot을 유지한다.
 - `bearer-optional` Provider는 API 키를 생략할 수 있으며, 키를 입력한 경우에만 Authorization header를 전송한다.
 - Cloudflare AI Gateway는 등록 시 Account ID를 추가로 받고, 서버가 고정 URL placeholder에 안전한 문자만 치환한다.
 - Vertex AI, AWS Bedrock, GitHub Copilot은 전용 인증 adapter 완료 전까지 `준비 중`이다. Gemini Express와 NovelAI도 공식 계약 검증 후 등록 가능 상태로 전환한다.
