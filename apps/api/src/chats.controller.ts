@@ -143,6 +143,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
   const contextTokenLimit = input.contextTokenLimit ?? 100_000;
   const requestTraceLimit = input.requestTraceLimit ?? 3;
   const responseTimeoutSeconds = input.responseTimeoutSeconds ?? 120;
+  const webSearchEnabled = input.webSearchEnabled ?? false;
   const defaultProviderModelId =
     input.defaultProviderModelId === undefined
       ? null
@@ -158,6 +159,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     !validInteger(contextTokenLimit, 1_000, 2_000_000) ||
     !validInteger(requestTraceLimit, 0, 3) ||
     !validInteger(responseTimeoutSeconds, 1, 1_800) ||
+    typeof webSearchEnabled !== 'boolean' ||
     (defaultProviderModelId !== null &&
       (typeof defaultProviderModelId !== 'string' ||
         !UUID.test(defaultProviderModelId))) ||
@@ -174,6 +176,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     responseTimeoutSeconds,
     systemPrompt: parsedSystemPrompt,
     title: parsedTitle,
+    webSearchEnabled,
   };
 }
 
@@ -225,6 +228,10 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
     const parameters = parseParameters(input.generationParameters);
     if (!parameters) return undefined;
     output.generationParameters = parameters;
+  }
+  if (input.webSearchEnabled !== undefined) {
+    if (typeof input.webSearchEnabled !== 'boolean') return undefined;
+    output.webSearchEnabled = input.webSearchEnabled;
   }
   return Object.keys(output).length > 0 ? output : undefined;
 }

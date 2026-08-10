@@ -55,3 +55,9 @@
 - 5단계 요청 추적 전역 byte budget·O(1) 조회: 구현 완료, process 64MiB 상한·오래된 기록 제거·ID index·정리 경로 일원화 및 API 전체 143개 시험 통과
 - 6단계 활성 분기 중심 대화 조회·pagination: 구현 완료, Provider 컨텍스트·상세 조회 활성 경로화와 최근 50개·최대 100개 cursor page 및 Web 이전 메시지 병합 구현, Ubuntu PostgreSQL 검증 대기
 - 7단계 Web stale response·Provider 모델 조회 streaming 제한: 구현 완료, workspace·대화·이전 page 요청 취소 및 최신 세대 검증, 모델 목록 streaming 5MiB·10,000개 상한 적용과 전체 회귀시험·build 통과
+# 2026-08-10 구현 현황
+
+- 완료: 모델별 웹 검색 능력 관리, 대화별 웹 검색 설정, Anthropic·Gemini·LLM Gateway 요청 변환.
+- 완료: 모든 Provider 호출의 시스템 문맥에 서버 기준 UTC ISO 8601 현재 시각 동적 주입.
+- 검증 중: 실제 자격증명을 사용한 Provider별 검색 응답 및 인용 표현 확인.
+- 보류: OpenAI Responses API 웹 검색 어댑터와 검색 인용의 별도 구조화·영구 저장.

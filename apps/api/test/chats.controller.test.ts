@@ -85,6 +85,7 @@ describe('ChatsController', () => {
       responseTimeoutSeconds: 120,
       systemPrompt: '',
       title: '새 대화',
+      webSearchEnabled: false,
     });
   });
 

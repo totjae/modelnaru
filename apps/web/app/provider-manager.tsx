@@ -30,6 +30,7 @@ interface ProviderModel {
   maxOutputTokens: number | null;
   modelId: string;
   supportsImageInput: boolean;
+  supportsWebSearch: boolean;
 }
 
 interface ProviderConnection {
@@ -89,6 +90,10 @@ function supportLabel(template: ProviderTemplate): string {
   if (template.canRegister) return '등록 가능';
   if (template.supportLevel === 'experimental') return '시험 예정';
   return '준비 중';
+}
+
+function supportsNativeWebSearch(templateId: string): boolean {
+  return ['anthropic', 'google', 'llm-gateway'].includes(templateId);
 }
 
 export function ProviderManager() {
@@ -242,7 +247,11 @@ export function ProviderManager() {
   async function updateModel(
     connectionId: string,
     model: ProviderModel,
-    patch: { isEnabled?: boolean; supportsImageInput?: boolean },
+    patch: {
+      isEnabled?: boolean;
+      supportsImageInput?: boolean;
+      supportsWebSearch?: boolean;
+    },
   ) {
     setBusy(model.id);
     setError('');
@@ -466,6 +475,23 @@ export function ProviderManager() {
                             disabled={!model.isAvailable || busy === model.id}
                           />
                           이미지 입력
+                        </label>
+                        <label className="provider-model-capability">
+                          <input
+                            type="checkbox"
+                            checked={model.supportsWebSearch}
+                            onChange={(event) =>
+                              void updateModel(connection.id, model, {
+                                supportsWebSearch: event.target.checked,
+                              })
+                            }
+                            disabled={
+                              !model.isAvailable ||
+                              busy === model.id ||
+                              !supportsNativeWebSearch(connection.templateId)
+                            }
+                          />
+                          웹 검색
                         </label>
                         <button
                           className={

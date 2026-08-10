@@ -297,4 +297,14 @@ describe('migration plan', () => {
     );
     expect(sql).toContain('response_timeout_seconds BETWEEN 1 AND 1800');
   });
+
+  it('adds model web-search capability and a conversation switch', async () => {
+    const sql = await readFile(
+      join(packageRoot, 'migrations', '0019_model_web_search.sql'),
+      'utf8',
+    );
+
+    expect(sql).toContain('supports_web_search boolean NOT NULL DEFAULT false');
+    expect(sql).toContain('web_search_enabled boolean NOT NULL DEFAULT false');
+  });
 });

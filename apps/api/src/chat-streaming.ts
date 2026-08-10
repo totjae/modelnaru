@@ -41,6 +41,7 @@ export interface ProviderStreamInput {
   signal: AbortSignal;
   systemPrompt: string;
   template: ProviderTemplate;
+  webSearchEnabled?: boolean;
 }
 
 export type ProviderProtocol = 'anthropic' | 'gemini' | 'openai';
@@ -69,6 +70,28 @@ export interface UpstreamRequest {
 
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/$/u, '')}/${path.replace(/^\//u, '')}`;
+}
+
+export function providerSupportsNativeWebSearch(
+  template: ProviderTemplate,
+): boolean {
+  return (
+    template.defaultFormat === 'anthropic' ||
+    template.defaultFormat === 'gemini' ||
+    template.id === 'llm-gateway'
+  );
+}
+
+export function runtimeSystemPrompt(
+  systemPrompt: string,
+  now = new Date(),
+): string {
+  const runtimeContext = [
+    '[ModelNaru runtime context]',
+    `Current time: ${now.toISOString()} (UTC).`,
+    'Use this timestamp as the current time for this request.',
+  ].join('\n');
+  return systemPrompt ? `${systemPrompt}\n\n${runtimeContext}` : runtimeContext;
 }
 
 function usesCompletionTokenParameter(modelId: string): boolean {
@@ -167,6 +190,13 @@ export function buildProviderStreamRequest(
     input.modelId,
     input.parameters,
   );
+  const systemPrompt = runtimeSystemPrompt(input.systemPrompt);
+  if (
+    input.webSearchEnabled &&
+    !providerSupportsNativeWebSearch(input.template)
+  ) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
   if (input.template.defaultFormat === 'anthropic') {
     return providerRequest(
       {
@@ -177,7 +207,18 @@ export function buildProviderStreamRequest(
         })),
         model: input.modelId,
         stream: true,
-        ...(input.systemPrompt ? { system: input.systemPrompt } : {}),
+        system: systemPrompt,
+        ...(input.webSearchEnabled
+          ? {
+              tools: [
+                {
+                  max_uses: 5,
+                  name: 'web_search',
+                  type: 'web_search_20250305',
+                },
+              ],
+            }
+          : {}),
         ...(parameters.temperature !== undefined
           ? { temperature: parameters.temperature }
           : {}),
@@ -253,8 +294,9 @@ export function buildProviderStreamRequest(
               }
             : {}),
         },
-        ...(input.systemPrompt
-          ? { systemInstruction: { parts: [{ text: input.systemPrompt }] } }
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        ...(input.webSearchEnabled
+          ? { tools: [{ google_search: {} }] }
           : {}),
       },
       headers,
@@ -266,9 +308,7 @@ export function buildProviderStreamRequest(
   return providerRequest(
     {
       messages: [
-        ...(input.systemPrompt
-          ? [{ content: input.systemPrompt, role: 'system' }]
-          : []),
+        { content: systemPrompt, role: 'system' },
         ...input.messages.map((message) => ({
           content: openAiContent(message),
           role: message.role,
@@ -306,6 +346,9 @@ export function buildProviderStreamRequest(
       ...(parameters.verbosity ? { verbosity: parameters.verbosity } : {}),
       ...(input.template.parameterProfile === 'novelai'
         ? { enable_thinking: (parameters.thinkingBudget ?? 0) > 0 }
+        : {}),
+      ...(input.webSearchEnabled && input.template.id === 'llm-gateway'
+        ? { web_search: true }
         : {}),
     },
     headers,

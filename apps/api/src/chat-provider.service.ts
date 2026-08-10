@@ -16,6 +16,7 @@ export interface ChatProviderRuntime {
   modelId: string;
   providerModelId: string;
   supportsImageInput: boolean;
+  supportsWebSearch: boolean;
   template: ProviderTemplate;
 }
 
@@ -29,6 +30,7 @@ interface RawRuntimeRow {
   model_id: string;
   provider_model_id: string;
   supports_image_input: boolean;
+  supports_web_search: boolean;
   template_id: string;
 }
 
@@ -44,7 +46,8 @@ export class ChatProviderService {
   async resolve(providerModelId: string): Promise<ChatProviderRuntime> {
     const rows = await this.database.getClient()<RawRuntimeRow[]>`
       SELECT m.id AS provider_model_id, m.model_id, m.context_window,
-        m.max_output_tokens, m.supports_image_input, c.template_id, c.base_url,
+        m.max_output_tokens, m.supports_image_input, m.supports_web_search,
+        c.template_id, c.base_url,
         c.credential_ciphertext, c.credential_nonce, c.credential_auth_tag
       FROM provider_models m
       JOIN provider_connections c ON c.id = m.provider_connection_id
@@ -77,6 +80,7 @@ export class ChatProviderService {
       modelId: row.model_id,
       providerModelId: row.provider_model_id,
       supportsImageInput: row.supports_image_input,
+      supportsWebSearch: row.supports_web_search,
       template,
     };
   }

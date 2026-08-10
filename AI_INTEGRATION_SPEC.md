@@ -631,3 +631,12 @@ builder와 parser는 공급자 인증이나 데이터베이스에 직접 접근�
   완료한 뒤 한 번만 수행한다.
 - 모델 목록 원소는 최대 10,000개로 제한해 작은 항목이 매우 많이 포함된
   응답의 정규화·정렬 CPU와 heap 사용량을 제한한다.
+# 모델별 Provider 웹 검색과 호출 시각 (2026-08-10)
+
+- 관리자는 `provider_models.supports_web_search`로 실제 웹 검색이 가능한 모델만 명시적으로 허용한다.
+- 사용자는 허용 모델을 선택한 대화에서 `web_search_enabled`를 켤 수 있다. 기본값은 `false`이다.
+- 실행 시 두 플래그가 모두 참이어야 검색 도구를 전송한다. 모델 변경으로 조건이 깨지면 호출은 `CHAT_WEB_SEARCH_MODEL_UNSUPPORTED`로 거부한다.
+- Anthropic은 `web_search_20250305`, Gemini는 `google_search`, LLM Gateway는 게이트웨이 계약의 `web_search: true`로 변환한다.
+- OpenAI 공식 연결은 현재 Chat Completions 어댑터를 사용하므로 Responses API 기반 웹 검색을 제공하지 않는다. Responses 어댑터 도입 전에는 검색 능력을 허용하지 않는다.
+- 모든 Provider 호출 직전에 저장된 시스템 프롬프트의 사본에 현재 UTC 시각을 ISO 8601로 덧붙인다. DB의 시스템 프롬프트 원문은 변경하지 않는다.
+- 검색 결과의 정확성과 최신성은 Provider에 의존한다. 검색 사용 여부와 전체 요청 본문은 기존 세션 한정 요청 추적 정책의 적용을 받는다.

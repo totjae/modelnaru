@@ -31,6 +31,7 @@ describe('ChatsService', () => {
       responseTimeoutSeconds: 120,
       systemPrompt: '',
       title: '새 대화',
+      webSearchEnabled: false,
     };
 
     await expect(service.create(user, input)).resolves.toBe(created);

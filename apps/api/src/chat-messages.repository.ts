@@ -25,6 +25,7 @@ export interface ChatTurnRecord {
   requestTraceLimit: number;
   responseTimeoutSeconds: number;
   systemPrompt: string;
+  webSearchEnabled: boolean;
   userMessageId: string | null;
 }
 
@@ -35,6 +36,7 @@ interface RawConversationState {
   request_trace_limit: number;
   response_timeout_seconds: number;
   system_prompt: string;
+  web_search_enabled: boolean;
 }
 
 interface RawContextMessage {
@@ -201,7 +203,7 @@ export class ChatMessagesRepository {
           ? await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
                 context_token_limit, request_trace_limit,
-                response_timeout_seconds, system_prompt
+                response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
               WHERE id = ${input.conversationId} AND user_id = ${principal.id}
               FOR UPDATE
@@ -209,7 +211,7 @@ export class ChatMessagesRepository {
           : await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
                 context_token_limit, request_trace_limit,
-                response_timeout_seconds, system_prompt
+                response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
               WHERE id = ${input.conversationId} AND guest_id = ${principal.id}
               FOR UPDATE
@@ -356,6 +358,7 @@ export class ChatMessagesRepository {
         responseTimeoutSeconds: conversation.response_timeout_seconds,
         systemPrompt: conversation.system_prompt,
         userMessageId,
+        webSearchEnabled: conversation.web_search_enabled,
       };
     });
   }
@@ -378,7 +381,7 @@ export class ChatMessagesRepository {
           ? await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
                 context_token_limit, request_trace_limit,
-                response_timeout_seconds, system_prompt
+                response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
               WHERE id = ${input.conversationId} AND user_id = ${principal.id}
               FOR UPDATE
@@ -386,7 +389,7 @@ export class ChatMessagesRepository {
           : await transaction<RawConversationState[]>`
               SELECT active_branch_id, history_message_limit,
                 context_token_limit, request_trace_limit,
-                response_timeout_seconds, system_prompt
+                response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
               WHERE id = ${input.conversationId} AND guest_id = ${principal.id}
               FOR UPDATE
@@ -500,6 +503,7 @@ export class ChatMessagesRepository {
         responseTimeoutSeconds: conversation.response_timeout_seconds,
         systemPrompt: conversation.system_prompt,
         userMessageId: null,
+        webSearchEnabled: conversation.web_search_enabled,
       };
     });
   }

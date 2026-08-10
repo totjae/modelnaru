@@ -132,7 +132,11 @@ export class ProvidersService {
 
   updateModel(
     id: string,
-    patch: { isEnabled?: boolean; supportsImageInput?: boolean },
+    patch: {
+      isEnabled?: boolean;
+      supportsImageInput?: boolean;
+      supportsWebSearch?: boolean;
+    },
     audit: ProviderAuditContext,
   ): Promise<ProviderModelRecord> {
     return this.mapNotFound(() =>

@@ -287,3 +287,8 @@ Index:
 
 - 이미지 OCR·변환 결과 metadata가 필요해지면 후속 migration에서 추가한다.
 - 폐기·만료 session의 hard delete 주기와 보존 log는 운영 단계에서 확정한다.
+# Migration 0019 — 모델 웹 검색 (2026-08-10)
+
+- `provider_models.supports_web_search boolean NOT NULL DEFAULT false`: 관리자가 검증한 모델별 Provider 네이티브 웹 검색 능력이다.
+- `conversations.web_search_enabled boolean NOT NULL DEFAULT false`: 해당 대화가 웹 검색 사용을 요청하는지 저장한다.
+- 기존 모델과 대화는 모두 안전하게 비활성 상태로 마이그레이션된다.

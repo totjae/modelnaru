@@ -2849,6 +2849,33 @@ h1 {
   gap: 14px;
 }
 
+.chat-settings .settings-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--field);
+  gap: 10px;
+}
+
+.settings-checkbox-row input {
+  width: 16px;
+  min-height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--cyan);
+}
+
+.settings-checkbox-row span {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-checkbox-row small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .chat-settings .card-label {
   margin-bottom: 2px;
   color: var(--blue);

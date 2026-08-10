@@ -33,6 +33,7 @@ interface AllowedModel {
   modelId: string;
   templateId: string;
   supportsImageInput: boolean;
+  supportsWebSearch: boolean;
   parameterPolicy?: ParameterPolicy;
 }
 
@@ -50,6 +51,7 @@ interface ConversationSummary {
   systemPrompt: string;
   title: string;
   updatedAt: string;
+  webSearchEnabled: boolean;
 }
 
 interface ChatMessage {
@@ -750,6 +752,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
           responseTimeoutSeconds: Number(data.get('responseTimeoutSeconds')),
           systemPrompt: data.get('systemPrompt'),
           title: data.get('title'),
+          webSearchEnabled: data.get('webSearchEnabled') === 'on',
         },
       );
       if (!response.ok) throw new Error(await responseMessage(response));
@@ -1625,6 +1628,24 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label className="settings-checkbox-row">
+                    <input
+                      name="webSearchEnabled"
+                      type="checkbox"
+                      defaultChecked={detail.webSearchEnabled}
+                      disabled={
+                        busy ||
+                        !models.find((model) => model.id === selectedModel)
+                          ?.supportsWebSearch
+                      }
+                    />
+                    <span>
+                      웹 검색 사용
+                      <small>
+                        관리자가 웹 검색을 허용한 모델에서만 사용할 수 있습니다.
+                      </small>
+                    </span>
                   </label>
                   <fieldset className="parameter-box">
                     <legend>생성 파라미터</legend>

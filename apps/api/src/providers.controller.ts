@@ -173,12 +173,19 @@ export class ProvidersController {
   ) {
     response.setHeader('Cache-Control', 'no-store');
     const input = recordBody(body);
-    const patch: { isEnabled?: boolean; supportsImageInput?: boolean } = {};
+    const patch: {
+      isEnabled?: boolean;
+      supportsImageInput?: boolean;
+      supportsWebSearch?: boolean;
+    } = {};
     if (typeof input?.isEnabled === 'boolean') {
       patch.isEnabled = input.isEnabled;
     }
     if (typeof input?.supportsImageInput === 'boolean') {
       patch.supportsImageInput = input.supportsImageInput;
+    }
+    if (typeof input?.supportsWebSearch === 'boolean') {
+      patch.supportsWebSearch = input.supportsWebSearch;
     }
     if (!uuid(id) || Object.keys(patch).length === 0) {
       this.invalidInput();

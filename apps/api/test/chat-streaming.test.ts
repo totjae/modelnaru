@@ -10,6 +10,13 @@ import { providerTemplateById } from '../src/provider-catalog.js';
 
 const messages = [{ content: '안녕', role: 'user' as const }];
 
+function requestBody(request: { init: RequestInit }): Record<string, unknown> {
+  if (typeof request.init.body !== 'string') {
+    throw new Error('Expected a JSON request body');
+  }
+  return JSON.parse(request.init.body) as Record<string, unknown>;
+}
+
 describe('chat provider streaming', () => {
   it('builds fixed OpenAI-compatible streaming requests', () => {
     const template = providerTemplateById('openai')!;
@@ -71,6 +78,51 @@ describe('chat provider streaming', () => {
     );
     expect(geminiRequest.init.headers).toMatchObject({
       'x-goog-api-key': 'google-key',
+    });
+  });
+
+  it('adds the current UTC timestamp without changing the stored prompt', () => {
+    const template = providerTemplateById('openai')!;
+    const request = buildProviderStreamRequest({
+      apiKey: 'test-key',
+      baseUrl: template.baseUrl!,
+      messages,
+      modelId: 'gpt-test',
+      parameters: {},
+      systemPrompt: '기존 지침',
+      template,
+    });
+    const body = requestBody(request) as unknown as {
+      messages: Array<{ content: string; role: string }>;
+    };
+
+    expect(body.messages[0]?.content).toContain('기존 지침');
+    expect(body.messages[0]?.content).toMatch(
+      /Current time: \d{4}-\d{2}-\d{2}T.+Z \(UTC\)\./u,
+    );
+  });
+
+  it('maps conversation web search to native Anthropic and Gemini tools', () => {
+    const bodyFor = (templateId: 'anthropic' | 'google') => {
+      const template = providerTemplateById(templateId)!;
+      const request = buildProviderStreamRequest({
+        apiKey: 'test-key',
+        baseUrl: template.baseUrl!,
+        messages,
+        modelId: 'search-model',
+        parameters: {},
+        systemPrompt: '',
+        template,
+        webSearchEnabled: true,
+      });
+      return requestBody(request);
+    };
+
+    expect(bodyFor('anthropic')).toMatchObject({
+      tools: [{ name: 'web_search', type: 'web_search_20250305' }],
+    });
+    expect(bodyFor('google')).toMatchObject({
+      tools: [{ google_search: {} }],
     });
   });
 

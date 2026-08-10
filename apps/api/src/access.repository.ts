@@ -16,6 +16,7 @@ export interface AccessModelRecord {
   modelId: string;
   templateId: string;
   supportsImageInput: boolean;
+  supportsWebSearch: boolean;
 }
 
 export interface ModelPermissionRecord {
@@ -84,6 +85,7 @@ interface RawAccessModelRow {
   model_id: string;
   template_id: string;
   supports_image_input: boolean;
+  supports_web_search: boolean;
 }
 
 interface RawPermissionRow {
@@ -204,6 +206,7 @@ export class AccessRepository {
     const models = await sql<RawAccessModelRow[]>`
       SELECT m.id, m.model_id, m.display_name, m.is_enabled, m.is_available,
         c.name AS connection_name, c.template_id, m.supports_image_input,
+        m.supports_web_search,
         c.is_enabled AS connection_enabled
       FROM provider_models m
       JOIN provider_connections c ON c.id = m.provider_connection_id
@@ -278,6 +281,7 @@ export class AccessRepository {
         modelId: row.model_id,
         templateId: row.template_id,
         supportsImageInput: row.supports_image_input,
+        supportsWebSearch: row.supports_web_search,
       })),
       users: users.map((row) => ({
         dailyRequestLimit: row.daily_request_limit,
@@ -409,7 +413,7 @@ export class AccessRepository {
         ? await sql<RawAccessModelRow[]>`
             SELECT m.id, m.model_id, m.display_name, m.is_enabled,
               m.is_available, c.name AS connection_name, c.template_id,
-              m.supports_image_input,
+              m.supports_image_input, m.supports_web_search,
               c.is_enabled AS connection_enabled
             FROM user_model_permissions p
             JOIN provider_models m ON m.id = p.provider_model_id
@@ -422,7 +426,7 @@ export class AccessRepository {
         : await sql<RawAccessModelRow[]>`
             SELECT m.id, m.model_id, m.display_name, m.is_enabled,
               m.is_available, c.name AS connection_name, c.template_id,
-              m.supports_image_input,
+              m.supports_image_input, m.supports_web_search,
               c.is_enabled AS connection_enabled
             FROM guest_model_permissions p
             JOIN provider_models m ON m.id = p.provider_model_id
@@ -441,6 +445,7 @@ export class AccessRepository {
       modelId: row.model_id,
       templateId: row.template_id,
       supportsImageInput: row.supports_image_input,
+      supportsWebSearch: row.supports_web_search,
     }));
   }
 

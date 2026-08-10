@@ -16,6 +16,7 @@ import {
   type ChatParameters,
   buildProviderStreamRequest,
   ChatUpstreamError,
+  providerSupportsNativeWebSearch,
   streamProviderRequest,
 } from './chat-streaming.js';
 import {
@@ -45,6 +46,7 @@ interface ActiveRequest {
 
 export class ChatParameterPolicyError extends Error {}
 export class ChatImageModelUnsupportedError extends Error {}
+export class ChatWebSearchModelUnsupportedError extends Error {}
 
 export interface ExecuteChatInput {
   absoluteExpiresAt?: Date;
@@ -129,6 +131,13 @@ export class ChatExecutionService {
       if (turn.imageAttachments.length > 0 && !runtime.supportsImageInput) {
         throw new ChatImageModelUnsupportedError();
       }
+      if (
+        turn.webSearchEnabled &&
+        (!runtime.supportsWebSearch ||
+          !providerSupportsNativeWebSearch(runtime.template))
+      ) {
+        throw new ChatWebSearchModelUnsupportedError();
+      }
       const effectiveContextLimit = Math.min(
         turn.contextTokenLimit,
         runtime.contextWindow ?? turn.contextTokenLimit,
@@ -168,6 +177,7 @@ export class ChatExecutionService {
         parameters,
         systemPrompt: turn.systemPrompt,
         template: runtime.template,
+        webSearchEnabled: turn.webSearchEnabled,
       };
       const providerRequest = buildProviderStreamRequest(
         providerInput,
@@ -426,6 +436,13 @@ export class ChatExecutionService {
       return {
         code: 'CHAT_IMAGE_MODEL_UNSUPPORTED',
         message: 'The selected model does not support image input.',
+        retryable: false,
+      };
+    }
+    if (error instanceof ChatWebSearchModelUnsupportedError) {
+      return {
+        code: 'CHAT_WEB_SEARCH_MODEL_UNSUPPORTED',
+        message: 'The selected model does not support web search.',
         retryable: false,
       };
     }

@@ -21,6 +21,7 @@ export interface ProviderModelRecord {
   modelId: string;
   providerConnectionId: string;
   supportsImageInput: boolean;
+  supportsWebSearch: boolean;
 }
 
 export interface ProviderConnectionRecord {
@@ -66,6 +67,7 @@ interface RawModelRow {
   model_id: string;
   provider_connection_id: string;
   supports_image_input: boolean;
+  supports_web_search: boolean;
 }
 
 export class ProviderNotFoundError extends Error {}
@@ -81,6 +83,7 @@ function mapModel(row: RawModelRow): ProviderModelRecord {
     modelId: row.model_id,
     providerConnectionId: row.provider_connection_id,
     supportsImageInput: row.supports_image_input,
+    supportsWebSearch: row.supports_web_search,
   };
 }
 
@@ -143,7 +146,7 @@ export class ProvidersRepository {
     const models = await sql<RawModelRow[]>`
       SELECT id, provider_connection_id, model_id, display_name,
         context_window, max_output_tokens, is_enabled, is_available,
-        supports_image_input
+        supports_image_input, supports_web_search
       FROM provider_models
       ORDER BY model_id
     `;
@@ -305,7 +308,11 @@ export class ProvidersRepository {
 
   async updateModel(
     id: string,
-    patch: { isEnabled?: boolean; supportsImageInput?: boolean },
+    patch: {
+      isEnabled?: boolean;
+      supportsImageInput?: boolean;
+      supportsWebSearch?: boolean;
+    },
     audit: ProviderAuditContext,
   ): Promise<ProviderModelRecord> {
     return this.database.getClient().begin(async (transaction) => {
@@ -315,11 +322,15 @@ export class ProvidersRepository {
           supports_image_input = COALESCE(
             ${patch.supportsImageInput ?? null},
             supports_image_input
+          ),
+          supports_web_search = COALESCE(
+            ${patch.supportsWebSearch ?? null},
+            supports_web_search
           )
         WHERE id = ${id} AND is_available = true
         RETURNING id, provider_connection_id, model_id, display_name,
           context_window, max_output_tokens, is_enabled, is_available,
-          supports_image_input
+          supports_image_input, supports_web_search
       `;
       const row = rows[0];
       if (!row) throw new ProviderNotFoundError();
@@ -335,6 +346,7 @@ export class ProvidersRepository {
           isEnabled: model.isEnabled,
           modelId: model.modelId,
           supportsImageInput: model.supportsImageInput,
+          supportsWebSearch: model.supportsWebSearch,
         },
         audit,
         targetId: id,
@@ -369,7 +381,7 @@ export class ProvidersRepository {
           last_seen_at = now()
         RETURNING id, provider_connection_id, model_id, display_name,
           context_window, max_output_tokens, is_enabled, is_available,
-          supports_image_input
+          supports_image_input, supports_web_search
       `;
       if (rows[0]) output.push(mapModel(rows[0]));
     }
@@ -385,7 +397,7 @@ export class ProvidersRepository {
     const rows = await transaction<RawModelRow[]>`
       SELECT id, provider_connection_id, model_id, display_name,
         context_window, max_output_tokens, is_enabled, is_available,
-        supports_image_input
+        supports_image_input, supports_web_search
       FROM provider_models
       WHERE provider_connection_id = ${connectionId}
       ORDER BY model_id

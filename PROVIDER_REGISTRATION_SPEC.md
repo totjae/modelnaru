@@ -543,3 +543,9 @@ Provider Manager에는 모델 그룹, manual·sequential·on-error 전략과 조
 - `bearer-optional` Provider는 API 키를 생략할 수 있으며, 키를 입력한 경우에만 Authorization header를 전송한다.
 - Cloudflare AI Gateway는 등록 시 Account ID를 추가로 받고, 서버가 고정 URL placeholder에 안전한 문자만 치환한다.
 - Vertex AI, AWS Bedrock, GitHub Copilot은 전용 인증 adapter 완료 전까지 `준비 중`이다. Gemini Express와 NovelAI도 공식 계약 검증 후 등록 가능 상태로 전환한다.
+# 모델 웹 검색 능력 관리 (2026-08-10)
+
+- 모델 동기화만으로 웹 검색 지원 여부를 추정하지 않는다. 관리자가 모델별 `웹 검색` 능력을 확인해 켠다.
+- 웹 검색 토글은 현재 네이티브 변환이 구현된 Anthropic, Gemini(AIS), LLM Gateway 연결에서만 활성화한다.
+- 모델의 일반 사용 활성화와 웹 검색 능력은 별도 값이다. 사용자·게스트 권한에 모델이 포함되어도 웹 검색 능력이 자동 부여되지는 않는다.
+- OpenAI 공식 Provider는 Responses API 어댑터가 추가될 때까지 웹 검색 토글을 비활성 상태로 표시한다.

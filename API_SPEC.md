@@ -532,3 +532,10 @@ PDF·OCR 처리는 설정된 worker 수와 bounded queue를 사용한다. queue 
 - 사용자가 연결을 닫거나 취소 endpoint를 호출하면 기존과 같이 upstream AbortSignal을 즉시 중단한다.
 - SSE `response.write()`가 backpressure를 알리면 다음 Provider event를 읽기 전에 `drain`을 기다린다.
 - `drain` 전에 연결이 종료되면 해당 대기를 해제하고 생성 요청을 취소 상태로 마무리한다.
+# 웹 검색·호출 시각 API 추가 (2026-08-10)
+
+- `PATCH /api/admin/provider-models/:id`는 선택적으로 `supportsWebSearch: boolean`을 받는다.
+- 모델 응답에는 `supportsWebSearch`가 포함된다.
+- 대화 생성·수정은 선택적으로 `webSearchEnabled: boolean`을 받고, 대화 목록·상세 응답에도 같은 값을 반환한다. 생성 기본값은 `false`이다.
+- 웹 검색이 켜진 대화를 검색 미지원 모델로 호출하면 SSE 오류 `CHAT_WEB_SEARCH_MODEL_UNSUPPORTED`를 반환한다.
+- 현재 시각은 클라이언트 입력 필드가 아니다. 서버가 Provider 요청 생성 시 UTC ISO 8601 값으로 주입한다.
