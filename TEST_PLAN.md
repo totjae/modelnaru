@@ -1,5 +1,12 @@
 # ModelNaru 시험 계획·결과
 
+## UI-H 운영 적용·공인 HTTPS 검증 완료 (2026-10-02)
+
+제품 commit2b544e5를 codex/refactor-v2에 push·서버 clean checkout ff-only 반영. CPU1.5/RAM3GiB builder에서 frozen-lockfile Linux build 통과. Web image sha256:6305cb179da9ab0d28141fbc878672374161ad5746cb32b8b5592ba638de09c6로 Web만 교체, Gateway nginx -t 및 graceful reload 통과. API/PostgreSQL 컨테이너 ID 불변,4서비스 healthy,live/ready 정상. 이전 Web image는 modelnaru-ui-h-rollback-web로 보존, 임시 builder 제거. config/secrets/data·migration 변경과 외부 Provider 호출 없음.
+
+외부 PC Edge 실제 DNS/공인 CA HTTPS에서 사용자 TOTP 슬롯0/관리자 필수 필드/사용자 카드 높이 감소, 게스트 링크·소개5절/예시2개/부가기능6개·390px 가로 넘침 없음·로그인 복귀·favicon·ready200/pageerror0 확인. 증거 tmp/ui-h/production 및 production-check.mjs. 인증 후 실제 채팅·보내기/중지는 이번 운영 시험에 포함하지 않았고 로컬 N10 인수 근거 유지.
+
+
 ## UI-H 로컬 구현·검증 완료 (2026-10-02)
 
 Web31개·typecheck/build·전체 lint·변경 파일 Prettier/diff 검사 통과. N10 Edge56개 캡처/생성3·취소1·구독6 통과:44px 아이콘 전송/빈 입력 비활성/입력 활성·중지·첨부 오류/재처리 등 기존 흐름 유지. N11 Edge132개 캡처/HTTP280건 정상 종료: 사용자 TOTP DOM 부재·관리자 required·사용자 카드가 관리자보다50px 이상 짧고 너비 유지, dark/light320~2560 로그인 회귀, guest320/390/768/1440 가로 넘침 없음, 소개5절/가상 예시2개/기능6개 및 비조작 예시 확인.
