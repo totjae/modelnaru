@@ -1,5 +1,9 @@
 # ModelNaru 시험 계획·결과
 
+## Git 운영 CLI 환경 파일 보완 (2026-10-02)
+
+최종 health에서 기존 CLI가 --env-file .runtime.env만 전달해 .env의 COMPOSE_PROJECT_NAME/COMPOSE_FILE을 누락하는 결함을 확인했다. 새 Docker 서비스 자체는 정상이며 helper의 두 env-file 호출은 이미 통과했다. bin/modelnaru가 .env 존재 시 .env→.runtime.env 순으로 명시 로드하도록 보완했다. .env 없는 설치는 기존 동작을 유지한다. host 실행 스크립트만 변경하며 API/Web 이미지 재빌드 대상은 아니다. 실제 status/health·shell 구문·env 유무 인자 전달 검증 결과를 아래에 기록한다.
+
 ## 2026-10-02 Git 재설치 운영 인수 (전환 완료·old 삭제 대기)
 
 - 사용자 승인: codex/refactor-v2 새 브랜치·전체139개 코드/명세/이미지 GitHub push, 기존 운영/백업과 관리자 로그인 정보까지 초기화. 최초 push 자동 검토 거절 후 저장소/범위 명시 승인을 받아 진행했다. 실제 repo origin https://github.com/totjae/modelnaru.git. 소스 build commit 5bfe5dbc9e410fd400bdb0c3f4fb3c489a68a4fb. 이후 결과 문서 commit은 제품 source와 구분한다.

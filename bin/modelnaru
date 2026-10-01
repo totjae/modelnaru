@@ -7,28 +7,33 @@ APICHAT_UID=${APICHAT_UID:-$(id -u)}
 APICHAT_GID=${APICHAT_GID:-$(id -g)}
 export APICHAT_UID APICHAT_GID
 cd "$DEPLOYMENT_ROOT"
+# Explicit runtime env files must also retain the checkout's Compose settings.
+set -- --env-file .runtime.env
+if [ -f .env ]; then
+  set -- --env-file .env "$@"
+fi
 case "$COMMAND" in
   start|restart|update)
     # Build and validate before interrupting a running release.
     docker compose build admin-tool api web migrate
     "$SCRIPT_DIR/apichat-admin" validate
     "$SCRIPT_DIR/apichat-admin" render-env
-    docker compose --env-file .runtime.env stop gateway api web
-    exec docker compose --env-file .runtime.env up -d --no-build --force-recreate --wait
+    docker compose "$@" stop gateway api web
+    exec docker compose "$@" up -d --no-build --force-recreate --wait
     ;;
   stop)
-    exec docker compose --env-file .runtime.env down
+    exec docker compose "$@" down
     ;;
   status)
-    exec docker compose --env-file .runtime.env ps -a
+    exec docker compose "$@" ps -a
     ;;
   logs)
-    exec docker compose --env-file .runtime.env logs --tail=200 -f
+    exec docker compose "$@" logs --tail=200 -f
     ;;
   health)
-    docker compose --env-file .runtime.env exec -T gateway wget -q -O - http://127.0.0.1:8080/api/health/live
-    docker compose --env-file .runtime.env exec -T gateway wget -q -O - http://127.0.0.1:8080/api/health/ready
-    docker compose --env-file .runtime.env exec -T gateway wget -q --spider http://127.0.0.1:8080/
+    docker compose "$@" exec -T gateway wget -q -O - http://127.0.0.1:8080/api/health/live
+    docker compose "$@" exec -T gateway wget -q -O - http://127.0.0.1:8080/api/health/ready
+    docker compose "$@" exec -T gateway wget -q --spider http://127.0.0.1:8080/
     ;;
   help|-h|--help)
     printf '%s\n' 'Usage: ./bin/modelnaru <start|stop|restart|update|status|logs|health>' 'start/restart/update: build, validate, stop application, migrate and recreate; wait for health.' 'Update requires an approved release and compatible config/schema. No automatic rollback.'

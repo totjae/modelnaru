@@ -4,7 +4,7 @@
 
 사용자는 새 리팩토링 브랜치 생성, 기존 ModelNaru 운영 데이터/이전 백업 삭제와 새 설치를 명시 요청했고 관리자 ID/비밀번호/TOTP도 재생성을 선택했다. 메인 담당. 범위: 전체 N00~N14/UI-F 작업을 codex/refactor-v2로 커밋/원격 push, Git clone 배포 /home/totquf4171/modelnaru-git, project modelnaru-git, 새 DB·업로드·암호화 키·관리자. 선행: 소스 비밀값 검사·회귀·새 build/빈 DB 인수. 순서: 새 checkout 준비→32433 staging 검증→기존 v2 중지→32432 전환·외부 HTTPS 검증→정확한 기존 ModelNaru 경로/컨테이너/network/image와 N04 DB 제거. 새 배포 실패 시 삭제를 실행하지 않는다.
 
-수정/생성 허용: .gitignore/.dockerignore/.gitattributes/eslint.config.mjs, bin 두 파일의 실행 mode, deploy/compose.production.yaml, scripts/cleanup-legacy-modelnaru.py와 README/DEPLOYMENT_RUNBOOK/DEPLOYMENT_PROFILE/DEVELOPMENT_WORKFLOW/TEST_PLAN/IMPLEMENTATION_STATUS/HANDOFF/본 계획. 로컬 tmp/git-deploy 아래 준비/안전 결과 허용. 제품/API/DB 명세·의존성/lockfile 변경 없음. tmp lint 제외는 생성 진단 artifact에 한정하며 제품/시험 lint를 유지한다. 이전 UI-F 배포/초기화 금지는 이번 명시 사용자 요청 범위에서 대체된다.
+수정/생성 허용: .gitignore/.dockerignore/.gitattributes/eslint.config.mjs, bin 두 파일의 실행 mode 및 bin/modelnaru의 .env/.runtime.env 동시 로드, deploy/compose.production.yaml, scripts/cleanup-legacy-modelnaru.py와 README/DEPLOYMENT_RUNBOOK/DEPLOYMENT_PROFILE/DEVELOPMENT_WORKFLOW/TEST_PLAN/IMPLEMENTATION_STATUS/HANDOFF/본 계획. 로컬 tmp/git-deploy 아래 준비/안전 결과 허용. 제품/API/DB 명세·의존성/lockfile 변경 없음. tmp lint 제외는 생성 진단 artifact에 한정하며 제품/시험 lint를 유지한다. 이전 UI-F 배포/초기화 금지는 이번 명시 사용자 요청 범위에서 대체된다.
 
 보존: host Nginx·현재 공인 인증서·SSH·다른 서비스/volume·공유 base image. docker system prune/전역 디렉터리 삭제 금지. scripts/cleanup-legacy-modelnaru.py는 dry-run 기본이며 새 서비스 healthy/cutoverVerified 검증 후 명시 old allowlist만 삭제한다. root 파일 삭제에 사용자 sudo 실행이 필요하면 새 배포를 먼저 검증하고 검토 가능한 최종 명령을 인계한다. 완료: 원격 branch/서버 HEAD 일치·Git clean·새4서비스 healthy·로그인/빈 DB/migration·외부 HTTPS·old 자원0과 사용법 문서 일치. 실제 삭제 전 완료로 기록하지 않는다.
 
