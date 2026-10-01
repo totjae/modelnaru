@@ -1,8 +1,8 @@
 # ModelNaru
 
-## Git 기반 설치·운영 (2026-10-02, 전환 준비 중)
+## 현재 운영: Git 기반 설치 (2026-10-02 전환 완료)
 
-새 배포는 `codex/refactor-v2`의 Git checkout이다. 대상은 `/home/totquf4171/modelnaru-git`, project `modelnaru-git`, 공인 주소 `https://chat.mihoservice.xyz`, loopback32432다. 실제 상태는 IMPLEMENTATION_STATUS.md GIT-RESET을 따른다. 아래 N14 archive 설명은 이전 기록이다.
+새 배포는 `codex/refactor-v2`의 Git checkout이다. 대상은 `/home/totquf4171/modelnaru-git`, project `modelnaru-git`, 공인 주소 `https://chat.mihoservice.xyz`, loopback32432다. Git 운영 전환은 완료했으며 이전 설치/백업의 sudo 삭제만 남았다. 실제 상태는 IMPLEMENTATION_STATUS.md GIT-RESET을 따른다. 아래 N14 archive 설명은 이전 기록이다.
 
 사용자 요청으로 DB·업로드·Provider 키·관리자 비밀번호/TOTP를 새로 생성한다. 이전 계정/대화/Provider를 이전하지 않는다. 이번 자동 초기화의 관리자 정보는 서버 `secrets/bootstrap-admin.json`에서 본인이 확인해 인증 앱에 등록하고 안전하게 보관한 뒤 임시 파일을 삭제한다. 비밀값을 Git/채팅에 붙여넣지 않는다. config.yaml·secrets/·data/·.env·.runtime.env·deployment-state.json은 Git 제외다.
 

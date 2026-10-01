@@ -1,5 +1,18 @@
 # ModelNaru 시험 계획·결과
 
+## 2026-10-02 Git 재설치 운영 인수 (전환 완료·old 삭제 대기)
+
+- 사용자 승인: codex/refactor-v2 새 브랜치·전체139개 코드/명세/이미지 GitHub push, 기존 운영/백업과 관리자 로그인 정보까지 초기화. 최초 push 자동 검토 거절 후 저장소/범위 명시 승인을 받아 진행했다. 실제 repo origin https://github.com/totjae/modelnaru.git. 소스 build commit 5bfe5dbc9e410fd400bdb0c3f4fb3c489a68a4fb. 이후 결과 문서 commit은 제품 source와 구분한다.
+- 소스 검사: staged139개 파일의 제외 경로/주요 key·private key 패턴 검사0건. config/runtime/secrets/data/tmp/agent 첨부 제외. pnpm test301개 통과·8개 조건부 제외(API229/Web31/config15/database21/admin-cli5), pnpm typecheck/lint exit0. tmp 생성 진단 mjs와 agent 첨부만 eslint ignore에 추가했고 실제 소스/시험 규칙은 완화하지 않았다. bin2개 실행mode와 LF를 Git 관리했다.
+- 새 서버: /home/totquf4171/modelnaru-git에 실제 git clone·branch checkout. .env의 COMPOSE_PROJECT_NAME=modelnaru-git 및 COMPOSE_FILE=compose.yaml:deploy/compose.production.yaml. 전용 frontend와 backend, 기존 한도의4서비스를 사용한다. Docker builder CPU1.5/RAM3GiB로 frozen-lockfile Linux config/database/admin/API/Web build 및 image4개 완료. 초기 shell 전달 마지막 CR로 service 이름 오류가 났으나 build 명령을 정상 재실행했고 dependency/lockfile 변경0이다. builder는 제거했다.
+- fresh init: 관리자 admin/새 random password/TOTP·DB password·Provider master key 모두 서버 내부에서 생성. 기존 config/secret 복사0. config0600, secrets0700, bootstrap-admin.json0600. 사용자는 서버 private 파일에서 확인한다. 문서/로그/PC에 비밀값 저장0. subnet을 실제 Docker network에서 조회해 trustProxy에 정확히 반영했다.
+- 32433 staging: migration20개 적용, migrate 재실행 checksum 검사, 실제 관리자 로그인/TOTP/session/health 통과. 운영 전환 후32432·기존 host Nginx 공인 CA HTTPS에서 같은 로그인과 ready 통과. PC 실제 DNS/CA에서 ready config/database ok 및 Web HTTP200. 새 api/web/gateway/postgres4개 healthy.
+- 무료 mock: 새 임시 private-IP Provider/model/user로 공인 HTTPS 실제 HTTP 생성→완료→GET snapshot/SSE terminal 일치, 별도 취소→cancelled 검증. 외부 유료 호출0. 임시 user/provider/conversation/mock container/파일 제거 후 users/provider_connections/conversations/attachments 각0개. 새 운영에는 시험 모델·키가 남지 않았다. 안전 state는 서버 deployment-state.json, PC tmp/git-deploy/deployment-state.json으로 보존한다.
+- source/운영: build commit에서 checkout clean 확인. API image sha256:1422d9cf6f15b6efb0c074183bca3856b3c95b71dbdf5885dacd9d1cbd3233e1, Web sha256:634b5536a98f627f94b4280a9cfefb9698cf51c4180859b957c8bad8d257dac8. 전체 image는 safe state 참조. 제품 UI는 앞선 UI-F Edge 인수 재사용이며 이번 변경에서 실기기 음성/가상 키보드를 다시 검증했다고 주장하지 않는다.
+- old 삭제: cleanup-legacy-modelnaru.py 구문과 실제 dry-run 통과. old root3개, container12개, network4개, N04 volume1개, old image tag10개를 정확히 검사했다. root 삭제에는 사용자 sudo가 필요해 실행하지 않았다. 기존 v2 gateway/api/web는 중지했으며 old PostgreSQL 등 남은 자원은 최종 cleanup 대상이다. host site/cert/SSH·다른 risuai volume/network 보존. 실제 데이터 삭제 완료가 아니므로 GIT-RESET은 부분 완료다.
+- 다음: README/RUNBOOK의 sudo cleanup 실행 뒤 old 자원0·새 healthy를 다시 확인한다. 과거 N14 rollback 명령은 old 삭제 이후 폐기된다. 미래 신규 데이터 초기화는 이번 승인에 포함하지 않는다.
+
+
 ## UI-F 구현·로컬 검증 완료 (2026-10-02 최신)
 
 상태: F01~F11 로컬 구현·검증 완료. 사용자 최종 시각 확인·실기기 재검증·운영 반영은 별도다. 아래 최초 UI-F 계획은 당시 기록이다. 기준은 WEB_UI_SPEC.md UI-F, 수정 범위는 UI_FEEDBACK_HANDOFF.md4절이며 메인이 순차 수행했다.

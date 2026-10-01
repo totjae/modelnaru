@@ -1,5 +1,14 @@
 # ModelNaru 새 버전 구현 인계
 
+## Git 운영 전환 완료·최종 old 삭제 대기 (2026-10-02 최신)
+
+현재 운영 root /home/totquf4171/modelnaru-git, project modelnaru-git, branch codex/refactor-v2. GitHub push/서버 clone·Linux build·새 DB와 관리자 비밀번호/TOTP·공인 HTTPS/login/무료 생성·SSE·취소 인수 완료. 제품 build commit5bfe5db, 결과 문서 후속 commit은 별도다. 실제 상태/증거는 TEST_PLAN 최신 절과 서버 deployment-state.json을 따른다. 이전 archive 설치는 현재 운영이 아니다.
+
+관리자 ID admin이며 새 password/TOTP는 서버 secrets/bootstrap-admin.json0600에서 사용자 본인이 확인한다. 기존 관리자 정보는 더 이상 새 설치에 적용되지 않는다. 기존 사용자/Provider/대화/첨부는 이전하지 않았고 새 설치의 시험 데이터도 제거했다. 승인된 외부 유료 호출은0이며 이후에도 과거 승인 재사용 금지.
+
+마지막 작업은 서버 터미널의 sudo python3 /home/totquf4171/modelnaru-git/scripts/cleanup-legacy-modelnaru.py --execute. dry-run/구문/새 healthy/경로 검사는 완료했지만 사용자 sudo 비밀번호가 필요해 old 실제 삭제는 대기다. 이 명령은 old2개 설치·N04 데이터/자원만 지우며 새 root와 host HTTPS/SSH/다른 서비스는 보존한다. 사용자 실행 결과 뒤 읽기 전용으로 old0/new healthy를 재확인하고 GIT-RESET을 완료로 기록한다. 이미 삭제했다고 주장하지 않는다. 최신 사용자 요청이 과거 N14/UI-F의 보존-only 조건을 이번 한정 범위에서 대체한다.
+
+
 ## Git 재설치 진행 중 (2026-10-02 최신)
 
 사용자가 기존 운영 데이터·이전 ModelNaru 백업·관리자 자격증명까지 모두 초기화하고 Git 브랜치로 새 설치를 요청했다. IMPLEMENTATION_PLAN.md GIT-RESET이 이번 계약이며 과거 보존-only 제약을 해당 ModelNaru 범위에서 대체한다. 브랜치 codex/refactor-v2, 새 root /home/totquf4171/modelnaru-git, project modelnaru-git. 아직 완료 아님. 기존 root2곳과 N04 전용 DB는 새 배포 검증 후 제거 대상, host HTTPS/SSH/다른 서비스는 보존한다.

@@ -30,7 +30,7 @@
 | N13 | 통합 인수 | 완료 | 필수 HTTPS/OCR/제목/모바일·스크린리더/이미지 실제 인수 통과. 사용자 sudo 정리 후 SSH 재확인: 시험 컨테이너0/network0/image0·root/site/cert 제거, 운영5개 healthy 유지. TEST_PLAN.md 최상단·tmp/n13/server-cleanup-result.json 참조 |
 | N14 | 서버 전환 | 완료 | 2026-10-02 https://chat.mihoservice.xyz → 별도 modelnaru-v2 새 DB/config2/migration20 전환. 기존 관리자 보존·실제 HTTP/SSE/취소/HTTPS·CLI health·외부 Edge 통과, 실제 rollback 후 재전환 성공. 새4개 healthy·기존5개 중지/보존, 사용자/Provider 빈 설치. TEST_PLAN.md 최상단 참조 |
 | UI-F | 운영 UI 피드백 F01~F11 | 완료 (로컬 구현·검증) | 메인 UI-F0~F6 순차 완료. Web31개·typecheck/build·tmp 제외 소스 lint 통과. Edge 채팅56/관리자124개 캡처,9개 폭·2테마·경계/초안 회귀 통과. 전체 pnpm lint는 기존 tmp/n13 파서 오류로 실패. TEST_PLAN 최신 UI-F 결과 참조. 사용자 시각 확인·실기기 재검증·운영 반영 별도 |
-| GIT-RESET | Git 기반 전체 재설치 | 구현·검증 중 | 사용자 승인: 운영/백업 및 관리자까지 초기화. codex/refactor-v2·modelnaru-git 준비, 새 인수 후 old 자원 제거 |
+| GIT-RESET | Git 기반 전체 재설치 | 부분 완료·old sudo 삭제 대기 | codex/refactor-v2 원격 push/서버 clone·Linux build·새 관리자/DB/키·HTTPS 생성/SSE/취소·4개 healthy 통과. old 전용 삭제 script dry-run 완료, 사용자 sudo 실행 후 old0 재확인 필요 |
 
 완료 증거는 TEST_PLAN.md 또는 해당 계약 시험 문서에 기록하고 이 표에서 참조한다. 구현을 시작하면 담당자·수정 파일·차단 사유·다음 인계 내용을 추가한다. 아래 날짜별 기록은 배경과 결정 이력이며 이 원장의 실행 상태를 덮어쓰지 않는다.
 
