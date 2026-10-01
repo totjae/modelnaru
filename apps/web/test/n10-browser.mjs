@@ -673,7 +673,7 @@ try {
   await page.waitForFunction(
     () =>
       ![...document.querySelectorAll('button')].find(
-        (button) => button.textContent === '보내기',
+        (button) => button.getAttribute('aria-label') === '보내기',
       )?.disabled,
   );
   // Known rejections keep the draft and give distinct recovery guidance.
@@ -824,6 +824,16 @@ try {
       assert(ratio >= minimum, theme + '/' + foreground + ':' + ratio);
       contrasts.push({ theme, foreground, background, ratio, minimum });
     }
+    const sendButton = page.getByRole('button', {
+      name: '보내기',
+      exact: true,
+    });
+    assert(await sendButton.isDisabled(), 'empty composer is disabled');
+    assert.equal((await sendButton.textContent()).trim(), '');
+    const sendBox = await sendButton.boundingBox();
+    assert(sendBox.width === 44 && sendBox.height === 44);
+    await composer.fill('버튼 활성 상태 확인');
+    assert.equal(await sendButton.isDisabled(), false);
     const actionColors = await page.evaluate(() => ({
       secondary: getComputedStyle(document.querySelector('.new-chat-button'))
         .backgroundColor,
@@ -832,6 +842,7 @@ try {
       ).backgroundColor,
     }));
     assert.notEqual(actionColors.secondary, actionColors.primary);
+    await composer.fill('');
     for (const width of [320, 390, 768, 1023, 1024, 1280, 1440, 1920, 2560]) {
       await page.setViewportSize({ width, height: 900 });
       if (width < 768)

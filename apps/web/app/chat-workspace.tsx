@@ -1997,24 +1997,50 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 {detail.activeJob ? (
                   <button
                     type="button"
-                    className="stop-button"
+                    className="stop-button composer-send"
+                    aria-label="답변 중지"
+                    title="답변 중지"
                     onClick={stopResponse}
                   >
-                    답변 중지
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect
+                        x="6"
+                        y="6"
+                        width="12"
+                        height="12"
+                        rx="2"
+                        fill="currentColor"
+                      />
+                    </svg>
                   </button>
                 ) : (
                   <button
                     type="submit"
+                    className="composer-send"
+                    aria-label="보내기"
+                    title="보내기"
                     disabled={
                       busy ||
                       !selectedModel ||
+                      (!draft.trim() &&
+                        currentPendingAttachments.length === 0) ||
                       uploading ||
                       currentPendingAttachments.some(
                         (item) => item.status !== 'ready',
                       )
                     }
                   >
-                    보내기
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 19V5m-6 6 6-6 6 6" />
+                    </svg>
                   </button>
                 )}
               </div>

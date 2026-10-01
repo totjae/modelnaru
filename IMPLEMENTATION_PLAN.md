@@ -1,5 +1,14 @@
 # ModelNaru 새 버전 실행 계획
 
+## UI-H 운영 반영 계약 (2026-10-02)
+
+사용자 운영 적용 승인. UI-H 검증 완료 변경을 codex/refactor-v2에 commit/push하고 clean 운영 checkout에서 ff-only 반영한다. 메인 담당, UI-G와 동일한 Web-only 절차: 이전 Web image rollback tag 보존→CPU1.5/RAM3GiB builder build→Web만 no-deps 교체/healthy→Gateway 설정 검사/graceful reload→공인 HTTPS 로그인 여백·guest 소개·health 확인. API/DB container·config/secrets/data 보존. migration/인증정보 열람/유료 호출/초기화 금지. 실패하면 보존 Web image로 복구하며 결과/한계를 TEST_PLAN/STATUS/HANDOFF에 기록한다.
+
+## UI-H 작업 계약 (2026-10-02)
+
+선행 UI-G 운영 완료, 메인 직접 수행. 기준 WEB_UI_SPEC UI-H·AI_INTEGRATION_SPEC·GUEST_ACCESS_SPEC·현재 기능. 수정 허용 apps/web/app/{entry-workspace.tsx,chat-workspace.tsx,styles.css}, apps/web/test/{n10-browser.mjs,n11-browser.mjs}; 생성 허용 apps/web/app/guest-showcase.tsx. 관련 WEB_UI_SPEC/GUEST_ACCESS_SPEC/README/TEST_PLAN/IMPLEMENTATION_STATUS/HANDOFF/본 계획 함께 갱신. API/DB/의존성·lockfile/인증 정책/운영 설정 변경 금지. 순서 계약→아이콘/로그인→정적 포트폴리오→Web 시험/typecheck/build/lint/Edge 회귀 및 캡처→인계. 완료 조건 UI-H 인수 및 실제 검증 기록, 미통과는 완료 처리 금지.
+
+
 ## UI-G 운영 반영 계약 (2026-10-02)
 
 사용자 운영 적용 요청 승인. 메인 담당. 로컬 검증 완료 UI-G와 관리자 README 보완을 codex/refactor-v2에 commit/push하고 clean 서버 checkout에서 ff-only 반영한다. Web만 변경하므로 DB migration/API 재시작 없이 제한된 builder로 web image를 build한 뒤 Web만 교체하고 Gateway의 nginx 설정 검사 후 graceful reload로 upstream DNS를 갱신한다. 기존 Web image를 별도 rollback tag로 보존하고 실패 시 그 image로 Web을 복구한다. config/secrets/data와 API/PostgreSQL container를 보존한다. 공인 HTTPS ready·/·/guest·아이콘과 실제 브라우저 진입을 검증한다. 인증정보 읽기/유료 호출/데이터 초기화 금지. 결과는 TEST_PLAN/STATUS/HANDOFF에 기록한다.

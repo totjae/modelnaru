@@ -204,6 +204,11 @@ const gateway = createServer(async (req, res) => {
       },
     );
     upstream.on('error', () => {
+      if (res.destroyed || res.writableEnded) return;
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
       res.writeHead(502);
       res.end();
     });
@@ -541,12 +546,13 @@ try {
       await page.evaluate(() => scrollTo(0, 0));
       const bounds = () =>
         page
-          .locator('.auth-card, .brand-panel .mark')
+          .locator('.auth-card')
           .evaluateAll((els) =>
             els.map((el) => el.getBoundingClientRect().toJSON()),
           );
       const user = await bounds();
       assert.equal(await page.locator('input[name="totp"]').count(), 0);
+      assert.equal(await page.locator('.auth-totp-slot').count(), 0);
       assert.equal(
         await page
           .locator('.auth-card')
@@ -562,12 +568,15 @@ try {
         await page.getByLabel('인증 앱 코드').getAttribute('required'),
         '',
       );
-      for (let i = 0; i < user.length; i++)
-        for (const key of ['top', 'bottom', 'left', 'right'])
-          assert(
-            Math.abs(user[i][key] - admin[i][key]) <= 1,
-            `login shift ${theme}/${width}/${i}/${key}: ${user[i][key]} vs ${admin[i][key]}`,
-          );
+      assert(
+        admin[0].height > user[0].height + 50,
+        'user card must release the TOTP space',
+      );
+      assert(
+        Math.abs(user[0].width - admin[0].width) <= 1,
+        'auth card width stays stable',
+      );
+      assert.equal(await page.locator('.auth-totp-slot').count(), 1);
       authLayouts.push({ theme, width, user, admin });
       if ([390, 1440, 2560].includes(width))
         await shot(`${theme}-${width}-admin-stable`);
@@ -1029,12 +1038,24 @@ try {
     await page.evaluate((t) => {
       document.documentElement.dataset.theme = t;
     }, theme);
-    for (const width of [390, 1440]) {
+    for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       assert(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
+      );
+      assert.equal(await page.locator('.guest-showcase section').count(), 5);
+      assert.equal(
+        await page
+          .locator('.guest-showcase input, .guest-showcase button')
+          .count(),
+        0,
+      );
+      assert.equal(await page.locator('.showcase-preview').count(), 2);
+      assert.equal(
+        await page.locator('.showcase-feature-grid article').count(),
+        6,
       );
       await shot(theme + '-' + width + '-guest-page');
     }

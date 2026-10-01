@@ -1,5 +1,12 @@
 # ModelNaru 시험 계획·결과
 
+## UI-H 로컬 구현·검증 완료 (2026-10-02)
+
+Web31개·typecheck/build·전체 lint·변경 파일 Prettier/diff 검사 통과. N10 Edge56개 캡처/생성3·취소1·구독6 통과:44px 아이콘 전송/빈 입력 비활성/입력 활성·중지·첨부 오류/재처리 등 기존 흐름 유지. N11 Edge132개 캡처/HTTP280건 정상 종료: 사용자 TOTP DOM 부재·관리자 required·사용자 카드가 관리자보다50px 이상 짧고 너비 유지, dark/light320~2560 로그인 회귀, guest320/390/768/1440 가로 넘침 없음, 소개5절/가상 예시2개/기능6개 및 비조작 예시 확인.
+
+초기 레이아웃 시험은 로고를 카드로 잘못 참조한 harness를 수정했고, 기존 카드 동일 높이 검사는 사용자 요청으로 내용에 맞는 높이 계약으로 대체했다. 소개 추가로 종료 시 발생한 proxy headers 중복 오류는 headersSent/종료 여부 guard로 수정 후 전체 N11 재실행 exit0을 확인했다. 최종 dark 채팅/사용자 로그인·dark desktop/light mobile 소개 캡처 육안 확인. 실제 캡처는 tmp/ui-feedback/n10,n11이며 소개는 실데이터 캡처가 아닌 명시된 정적 가상 UI다. 운영 반영/실 Provider 호출 없음, 실기기 및 사용자 시각 인수는 미실행.
+
+
 ## UI-G 운영 반영 완료 (2026-10-02)
 
 사용자 요청으로 codex/refactor-v2 제품 commit 99d0940을 운영 /home/totquf4171/modelnaru-git에 ff-only 반영했다. 제한 builder(CPU1.5/RAM3GiB) frozen-lockfile Linux build 통과. Web image sha256:9b0eef0a64c5406840e6615c61cff7a6c255d5cb84da84a98c6bc3a3ee801bc8로 Web만 교체, Gateway nginx -t/reload 성공. API/PostgreSQL container ID 불변,4서비스 healthy·live/ready 정상. config/secrets/data 수정·migration·실 Provider 호출 없음. 이전 Web은 modelnaru-ui-g-rollback-web 태그로 보존, 임시 builder 제거.

@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import { GuestShowcase } from './guest-showcase';
 import { AdminWorkspace } from './admin-workspace';
 import { ChatWorkspace } from './chat-workspace';
 import { csrfToken } from './client-auth';
@@ -316,6 +317,7 @@ export function EntryWorkspace({
             <p>관리자가 체험을 활성화한 뒤 다시 방문해 주세요.</p>
           </section>
         )}
+        <GuestShowcase />
       </main>
     );
 
@@ -417,25 +419,23 @@ export function EntryWorkspace({
                 required
               />
 
-              <div className="auth-totp-slot">
-                {loginMode === 'admin' && (
-                  <>
-                    <label htmlFor="totp">인증 앱 코드</label>
-                    <input
-                      id="totp"
-                      name="totp"
-                      className="totp-input"
-                      type="text"
-                      autoComplete="one-time-code"
-                      inputMode="numeric"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      placeholder="000000"
-                      required
-                    />
-                  </>
-                )}
-              </div>
+              {loginMode === 'admin' && (
+                <div className="auth-totp-slot">
+                  <label htmlFor="totp">인증 앱 코드</label>
+                  <input
+                    id="totp"
+                    name="totp"
+                    className="totp-input"
+                    type="text"
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="000000"
+                    required
+                  />
+                </div>
+              )}
               <div className="auth-error-slot">
                 {error && (
                   <p className="form-error" role="alert">
