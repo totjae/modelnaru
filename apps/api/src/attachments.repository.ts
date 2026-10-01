@@ -57,10 +57,92 @@ function mapAttachment(row: RawAttachmentRow): AttachmentRecord {
 
 export class AttachmentLimitError extends Error {}
 export class AttachmentNotFoundError extends Error {}
+export class AttachmentBusyError extends Error {}
+export class AttachmentExpiredError extends Error {}
 
 @Injectable()
 export class AttachmentsRepository {
   constructor(private readonly database: DatabaseService) {}
+
+  private async assertMutable(
+    principal: ChatPrincipal,
+    conversationId: string,
+    id: string,
+  ) {
+    const [row] = await this.database.getClient()<
+      { id: string }[]
+    >`SELECT a.id FROM attachments a JOIN conversations c ON c.id=a.conversation_id
+      WHERE a.id=${id} AND c.id=${conversationId} AND c.user_id IS NOT DISTINCT FROM ${principal.type === 'user' ? principal.id : null}::uuid
+        AND c.guest_id IS NOT DISTINCT FROM ${principal.type === 'guest' ? principal.id : null}::uuid
+        AND (a.message_id IS NOT NULL OR EXISTS(SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming')))`;
+    if (row) throw new AttachmentBusyError();
+  }
+
+  async recoverProcessing() {
+    await this.database.ready();
+    await this.database.getClient()`UPDATE attachments SET status='failed' WHERE status='processing'`;
+  }
+  async metadata(
+    principal: ChatPrincipal,
+    conversationId: string,
+    attachmentId: string,
+  ) {
+    const sql = this.database.getClient();
+    const [row] = await sql<
+      RawAttachmentRow[]
+    >`SELECT a.* FROM attachments a JOIN conversations c ON c.id=a.conversation_id
+      WHERE a.id=${attachmentId} AND c.id=${conversationId}
+        AND c.user_id IS NOT DISTINCT FROM ${principal.type === 'user' ? principal.id : null}::uuid
+        AND c.guest_id IS NOT DISTINCT FROM ${principal.type === 'guest' ? principal.id : null}::uuid`;
+    if (!row) throw new AttachmentNotFoundError();
+    return mapAttachment(row);
+  }
+  async claimRetry(
+    principal: ChatPrincipal,
+    conversationId: string,
+    id: string,
+  ) {
+    return this.database.getClient().begin(async (sql) => {
+      const [row] = await sql<
+        (RawAttachmentRow & {
+          message_id: string | null;
+          in_use_job_id: string | null;
+        })[]
+      >`SELECT a.* FROM attachments a JOIN conversations c ON c.id=a.conversation_id
+        WHERE a.id=${id} AND c.id=${conversationId} AND c.user_id IS NOT DISTINCT FROM ${principal.type === 'user' ? principal.id : null}::uuid
+          AND c.guest_id IS NOT DISTINCT FROM ${principal.type === 'guest' ? principal.id : null}::uuid FOR UPDATE OF a`;
+      if (!row) throw new AttachmentNotFoundError();
+      if (row.expires_at.getTime() <= Date.now() || row.status === 'expired')
+        throw new AttachmentExpiredError();
+      if (row.status !== 'failed' || row.message_id || row.in_use_job_id)
+        throw new AttachmentBusyError();
+      await sql`UPDATE attachments SET status='processing' WHERE id=${id}`;
+      return { ...mapAttachment(row), storageKey: row.storage_key };
+    });
+  }
+  async finishProcessing(
+    id: string,
+    input: {
+      status: 'ready' | 'failed';
+      encoding?: string | null;
+      extractedText?: string | null;
+      pageCount?: number | null;
+      ocrPageCount?: number;
+      imageWidth?: number | null;
+      imageHeight?: number | null;
+    },
+  ) {
+    const sql = this.database.getClient();
+    const [row] = await sql<
+      RawAttachmentRow[]
+    >`UPDATE attachments SET status=${input.status},
+      extracted_text=${input.extractedText ?? null},text_encoding=${input.encoding ?? null},page_count=${input.pageCount ?? null},
+      ocr_page_count=${input.ocrPageCount ?? 0},image_width=${input.imageWidth ?? null},image_height=${input.imageHeight ?? null}
+      WHERE id=${id} AND status='processing' AND message_id IS NULL AND in_use_job_id IS NULL
+        AND (${input.status === 'failed'} OR expires_at>now()) RETURNING *`;
+    if (!row) throw new AttachmentNotFoundError();
+    return mapAttachment(row);
+  }
 
   async assertConversation(
     principal: ChatPrincipal,
@@ -101,6 +183,7 @@ export class AttachmentsRepository {
       pageCount: number | null;
       retentionDays: number;
       storageKey: string;
+      status?: 'ready' | 'processing';
     },
   ): Promise<AttachmentRecord> {
     return this.database.getClient().begin(async (transaction) => {
@@ -139,7 +222,7 @@ export class AttachmentsRepository {
           ${input.extractedText}, ${input.encoding},
           ${input.pageCount}, ${input.ocrPageCount},
           ${input.imageWidth}, ${input.imageHeight},
-          ${input.includeInFutureMessages}, 'ready',
+          ${input.includeInFutureMessages}, ${input.status ?? 'ready'},
           now() + (${input.retentionDays} * interval '1 day')
         )
         RETURNING id, original_name, media_type, file_kind, byte_size,
@@ -156,6 +239,7 @@ export class AttachmentsRepository {
     conversationId: string,
     attachmentId: string,
   ): Promise<string> {
+    await this.assertMutable(principal, conversationId, attachmentId);
     const sql = this.database.getClient();
     const rows =
       principal.type === 'user'
@@ -165,6 +249,7 @@ export class AttachmentsRepository {
             WHERE a.id = ${attachmentId}
               AND a.conversation_id = ${conversationId}
               AND a.message_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming'))
               AND a.conversation_id = c.id
               AND c.user_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
@@ -179,6 +264,7 @@ export class AttachmentsRepository {
             WHERE a.id = ${attachmentId}
               AND a.conversation_id = ${conversationId}
               AND a.message_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming'))
               AND a.conversation_id = c.id
               AND c.guest_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
@@ -209,8 +295,7 @@ export class AttachmentsRepository {
             WHERE a.conversation_id = ${conversationId}
               AND c.user_id = ${principal.id}
               AND a.message_id IS NULL
-              AND a.status = 'ready'
-              AND a.expires_at > now()
+              AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming'))
             ORDER BY a.created_at, a.id
           `
         : await sql<RawAttachmentRow[]>`
@@ -224,8 +309,7 @@ export class AttachmentsRepository {
             WHERE a.conversation_id = ${conversationId}
               AND c.guest_id = ${principal.id}
               AND a.message_id IS NULL
-              AND a.status = 'ready'
-              AND a.expires_at > now()
+              AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming'))
             ORDER BY a.created_at, a.id
           `;
     if (rows.length === 0) {
@@ -240,6 +324,7 @@ export class AttachmentsRepository {
     attachmentId: string,
     includeInFutureMessages: boolean,
   ): Promise<AttachmentRecord> {
+    await this.assertMutable(principal, conversationId, attachmentId);
     const sql = this.database.getClient();
     const rows =
       principal.type === 'user'
@@ -250,6 +335,7 @@ export class AttachmentsRepository {
             WHERE a.id = ${attachmentId}
               AND a.conversation_id = ${conversationId}
               AND a.message_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming'))
               AND a.conversation_id = c.id
               AND c.user_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,
@@ -265,6 +351,7 @@ export class AttachmentsRepository {
             WHERE a.id = ${attachmentId}
               AND a.conversation_id = ${conversationId}
               AND a.message_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=a.in_use_job_id AND j.status IN ('pending','streaming'))
               AND a.conversation_id = c.id
               AND c.guest_id = ${principal.id}
             RETURNING a.id, a.original_name, a.media_type, a.file_kind,

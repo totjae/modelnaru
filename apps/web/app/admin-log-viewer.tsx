@@ -1,7 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useRef,
+  type FormEvent,
+} from 'react';
+import { ChatDialog } from './chat-dialog';
 
 import { csrfToken } from './client-auth';
 
@@ -82,6 +88,7 @@ export function AdminLogViewer() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const sequence = useRef(0);
 
   const query = useCallback(
     (selectedPage = page) => {
@@ -100,6 +107,7 @@ export function AdminLogViewer() {
   );
 
   const load = useCallback(async () => {
+    const current = ++sequence.current;
     setBusy(true);
     setError('');
     try {
@@ -108,16 +116,20 @@ export function AdminLogViewer() {
         credentials: 'same-origin',
       });
       if (!response.ok) throw new Error('log load failed');
-      setData((await response.json()) as LogPage);
+      const result = (await response.json()) as LogPage;
+      if (current === sequence.current) setData(result);
     } catch {
-      setError('로그를 불러오지 못했습니다.');
+      if (current === sequence.current) setError('로그를 불러오지 못했습니다.');
     } finally {
-      setBusy(false);
+      if (current === sequence.current) setBusy(false);
     }
   }, [query]);
 
   useEffect(() => {
     void load();
+    return () => {
+      sequence.current++;
+    };
   }, [load]);
 
   async function loadSettings() {
@@ -388,170 +400,160 @@ export function AdminLogViewer() {
         </button>
       </div>
 
-      {selected &&
-        createPortal(
-          <div
-            className="settings-modal-backdrop"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setSelected(null);
-            }}
-          >
-            <section
-              className="log-detail-modal"
-              role="dialog"
-              aria-modal="true"
-            >
-              <header className="settings-modal-header">
-                <div>
-                  <p className="card-label">
-                    {selected.category.toUpperCase()}
-                  </p>
-                  <h2>{selected.action}</h2>
-                </div>
-                <button
-                  className="settings-modal-close"
-                  onClick={() => setSelected(null)}
-                  type="button"
-                >
-                  ×
-                </button>
-              </header>
-              <dl className="log-detail-grid">
-                <div>
-                  <dt>시각</dt>
-                  <dd>{dateLabel(selected.occurredAt)}</dd>
-                </div>
-                <div>
-                  <dt>상태</dt>
-                  <dd>{selected.status}</dd>
-                </div>
-                <div>
-                  <dt>주체</dt>
-                  <dd>{selected.actorLabel || selected.actorType || '-'}</dd>
-                </div>
-                <div>
-                  <dt>대상</dt>
-                  <dd>{selected.targetType || '-'}</dd>
-                </div>
-                <div>
-                  <dt>Provider</dt>
-                  <dd>{selected.providerTemplateId || '-'}</dd>
-                </div>
-                <div>
-                  <dt>모델</dt>
-                  <dd>{selected.modelId || '-'}</dd>
-                </div>
-                <div>
-                  <dt>처리 시간</dt>
-                  <dd>{selected.durationMs ?? '-'} ms</dd>
-                </div>
-                <div>
-                  <dt>오류</dt>
-                  <dd>{selected.errorCode || '-'}</dd>
-                </div>
-              </dl>
-              <h3>비민감 상세 정보</h3>
-              <pre className="log-json">
-                {JSON.stringify(selected.metadata, null, 2)}
-              </pre>
-            </section>
-          </div>,
-          document.body,
-        )}
-
-      {settingsOpen &&
-        settings &&
-        createPortal(
-          <div className="settings-modal-backdrop">
-            <form className="log-settings-modal" onSubmit={saveSettings}>
-              <header className="settings-modal-header">
-                <div>
-                  <p className="card-label">LOG RETENTION</p>
-                  <h2>로그 보관기간</h2>
-                </div>
-                <button
-                  className="settings-modal-close"
-                  onClick={() => setSettingsOpen(false)}
-                  type="button"
-                >
-                  ×
-                </button>
-              </header>
-              <div className="log-retention-grid">
-                <label>
-                  AI 요청
-                  <input
-                    name="aiRetentionDays"
-                    type="number"
-                    min={7}
-                    max={365}
-                    defaultValue={settings.aiRetentionDays}
-                  />
-                </label>
-                <label>
-                  로그인·보안
-                  <input
-                    name="securityRetentionDays"
-                    type="number"
-                    min={30}
-                    max={730}
-                    defaultValue={settings.securityRetentionDays}
-                  />
-                </label>
-                <label>
-                  관리자 감사
-                  <input
-                    name="auditRetentionDays"
-                    type="number"
-                    min={90}
-                    max={1825}
-                    defaultValue={settings.auditRetentionDays}
-                  />
-                </label>
-                <label>
-                  파일 처리
-                  <input
-                    name="fileRetentionDays"
-                    type="number"
-                    min={7}
-                    max={365}
-                    defaultValue={settings.fileRetentionDays}
-                  />
-                </label>
-                <label>
-                  시스템 작업
-                  <input
-                    name="systemRetentionDays"
-                    type="number"
-                    min={7}
-                    max={180}
-                    defaultValue={settings.systemRetentionDays}
-                  />
-                </label>
+      {selected && (
+        <ChatDialog label="로그 상세" onClose={() => setSelected(null)}>
+          <section className="log-detail-modal">
+            <header className="settings-modal-header">
+              <div>
+                <p className="card-label">{selected.category.toUpperCase()}</p>
+                <h2>{selected.action}</h2>
               </div>
-              <p>
-                최근 정리: {dateLabel(settings.lastCleanupAt)} · 삭제{' '}
-                {settings.lastCleanupDeletedCount}건
-              </p>
-              <footer className="settings-modal-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => void cleanup()}
-                >
-                  지금 정리
-                </button>
-                <button type="button" onClick={() => setSettingsOpen(false)}>
-                  취소
-                </button>
-                <button className="settings-save-button" type="submit">
-                  저장
-                </button>
-              </footer>
-            </form>
-          </div>,
-          document.body,
-        )}
+              <button
+                aria-label="닫기"
+                className="settings-modal-close"
+                onClick={() => setSelected(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            <dl className="log-detail-grid">
+              <div>
+                <dt>시각</dt>
+                <dd>{dateLabel(selected.occurredAt)}</dd>
+              </div>
+              <div>
+                <dt>상태</dt>
+                <dd>{selected.status}</dd>
+              </div>
+              <div>
+                <dt>주체</dt>
+                <dd>{selected.actorLabel || selected.actorType || '-'}</dd>
+              </div>
+              <div>
+                <dt>대상</dt>
+                <dd>{selected.targetType || '-'}</dd>
+              </div>
+              <div>
+                <dt>Provider</dt>
+                <dd>{selected.providerTemplateId || '-'}</dd>
+              </div>
+              <div>
+                <dt>모델</dt>
+                <dd>{selected.modelId || '-'}</dd>
+              </div>
+              <div>
+                <dt>처리 시간</dt>
+                <dd>{selected.durationMs ?? '-'} ms</dd>
+              </div>
+              <div>
+                <dt>오류</dt>
+                <dd>{selected.errorCode || '-'}</dd>
+              </div>
+            </dl>
+            <h3>비민감 상세 정보</h3>
+            <pre className="log-json">
+              {JSON.stringify(selected.metadata, null, 2)}
+            </pre>
+          </section>
+        </ChatDialog>
+      )}
+
+      {settingsOpen && settings && (
+        <ChatDialog
+          label="로그 보관기간"
+          onClose={() => setSettingsOpen(false)}
+        >
+          <form className="log-settings-modal" onSubmit={saveSettings}>
+            <header className="settings-modal-header">
+              <div>
+                <p className="card-label">LOG RETENTION</p>
+                <h2>로그 보관기간</h2>
+              </div>
+              <button
+                aria-label="닫기"
+                className="settings-modal-close"
+                onClick={() => setSettingsOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            <div className="log-retention-grid">
+              <label>
+                AI 요청
+                <input
+                  name="aiRetentionDays"
+                  type="number"
+                  min={7}
+                  max={365}
+                  defaultValue={settings.aiRetentionDays}
+                />
+              </label>
+              <label>
+                로그인·보안
+                <input
+                  name="securityRetentionDays"
+                  type="number"
+                  min={30}
+                  max={730}
+                  defaultValue={settings.securityRetentionDays}
+                />
+              </label>
+              <label>
+                관리자 감사
+                <input
+                  name="auditRetentionDays"
+                  type="number"
+                  min={90}
+                  max={1825}
+                  defaultValue={settings.auditRetentionDays}
+                />
+              </label>
+              <label>
+                파일 처리
+                <input
+                  name="fileRetentionDays"
+                  type="number"
+                  min={7}
+                  max={365}
+                  defaultValue={settings.fileRetentionDays}
+                />
+              </label>
+              <label>
+                시스템 작업
+                <input
+                  name="systemRetentionDays"
+                  type="number"
+                  min={7}
+                  max={180}
+                  defaultValue={settings.systemRetentionDays}
+                />
+              </label>
+            </div>
+            <p>
+              최근 정리: {dateLabel(settings.lastCleanupAt)} · 삭제{' '}
+              {settings.lastCleanupDeletedCount}건
+            </p>
+            {error && <p role="alert">{error}</p>}
+            <footer className="settings-modal-actions">
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => void cleanup()}
+              >
+                지금 정리
+              </button>
+              <button type="button" onClick={() => setSettingsOpen(false)}>
+                취소
+              </button>
+              <button className="settings-save-button" type="submit">
+                저장
+              </button>
+            </footer>
+          </form>
+        </ChatDialog>
+      )}
     </section>
   );
 }

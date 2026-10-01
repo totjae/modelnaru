@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm, statfs } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import type { LoadedConfig } from '@modelnaru/config';
 
 import {
@@ -68,7 +73,7 @@ export class FileProcessingCancelledError extends Error {}
 export type UploadByteStream = AsyncIterable<Uint8Array>;
 
 @Injectable()
-export class AttachmentsService implements OnModuleDestroy {
+export class AttachmentsService implements OnModuleDestroy, OnModuleInit {
   private readonly ocrPool: BoundedTaskPool;
   private readonly pdfPool: BoundedTaskPool;
 
@@ -97,6 +102,82 @@ export class AttachmentsService implements OnModuleDestroy {
   onModuleDestroy(): void {
     this.pdfPool.close();
     this.ocrPool.close();
+  }
+  async onModuleInit() {
+    await this.repository.recoverProcessing();
+  }
+
+  metadata(
+    principal: AuthenticatedPrincipal,
+    conversationId: string,
+    id: string,
+  ) {
+    return this.repository.metadata(
+      this.chatPrincipal(principal),
+      conversationId,
+      id,
+    );
+  }
+  async retry(
+    principal: AuthenticatedPrincipal,
+    conversationId: string,
+    id: string,
+  ) {
+    await this.assertStorageCapacity();
+    const row = await this.repository.claimRetry(
+      this.chatPrincipal(principal),
+      conversationId,
+      id,
+    );
+    try {
+      const extracted = await this.extractStored(
+        this.storagePath(row.storageKey),
+        row.fileKind,
+        row.mediaType,
+      );
+      return await this.repository.finishProcessing(id, {
+        status: 'ready',
+        encoding: 'encoding' in extracted ? extracted.encoding : null,
+        extractedText: 'text' in extracted ? extracted.text : null,
+        pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
+        ocrPageCount: 'ocrPageCount' in extracted ? extracted.ocrPageCount : 0,
+        imageWidth: 'width' in extracted ? extracted.width : null,
+        imageHeight: 'height' in extracted ? extracted.height : null,
+      });
+    } catch (error) {
+      await this.repository
+        .finishProcessing(id, { status: 'failed' })
+        .catch(() => undefined);
+      this.throwProcessingError(error);
+    }
+  }
+  private extractStored(
+    path: string,
+    kind: 'text' | 'image' | 'pdf',
+    mediaType: string,
+    signal?: AbortSignal,
+  ) {
+    if (kind !== 'pdf')
+      return this.extractNonPdf(path, kind, mediaType, signal);
+    return this.pdfPool.run(async () => {
+      const bytes = await readFile(path);
+      if (signal?.aborted) throw new TaskQueueCancelledError();
+      return extractPdfAttachment(
+        bytes,
+        this.loaded.config.limits.maximumPdfPages,
+        {
+          recognize: (pdf, pageCount) =>
+            this.ocrPool.run(
+              () =>
+                new LocalPdfOcrEngine(this.loaded.paths.storageTemp).recognize(
+                  pdf,
+                  pageCount,
+                ),
+              signal,
+            ),
+        },
+      );
+    }, signal);
   }
 
   async upload(
@@ -130,6 +211,7 @@ export class AttachmentsService implements OnModuleDestroy {
     const finalPath = this.storagePath(storageKey);
     const retentionDays = await this.lifecycle.retentionDays();
     let finalCreated = false;
+    let rowCreated = false;
     try {
       await mkdir(dirname(temporaryPath), { recursive: true });
       const byteSize = await this.writeLimited(
@@ -138,54 +220,42 @@ export class AttachmentsService implements OnModuleDestroy {
         this.loaded.config.limits.maximumFileBytes,
         input.signal,
       );
-      const extracted =
-        parsedName.fileKind === 'pdf'
-          ? await this.pdfPool.run(async () => {
-              const bytes = await readFile(temporaryPath);
-              if (input.signal?.aborted) {
-                throw new TaskQueueCancelledError();
-              }
-              return extractPdfAttachment(
-                bytes,
-                this.loaded.config.limits.maximumPdfPages,
-                {
-                  recognize: (pdfBytes, pageCount) =>
-                    this.ocrPool.run(
-                      () =>
-                        new LocalPdfOcrEngine(
-                          this.loaded.paths.storageTemp,
-                        ).recognize(pdfBytes, pageCount),
-                      input.signal,
-                    ),
-                },
-              );
-            }, input.signal)
-          : await this.extractNonPdf(
-              temporaryPath,
-              parsedName.fileKind,
-              mediaType,
-              input.signal,
-            );
       await mkdir(dirname(finalPath), { recursive: true });
       await rename(temporaryPath, finalPath);
       finalCreated = true;
-      const created = await this.repository.createReady(principal, {
+      await this.repository.createReady(principal, {
         byteSize,
         conversationId: input.conversationId,
-        encoding: 'encoding' in extracted ? extracted.encoding : null,
-        extractedText: 'text' in extracted ? extracted.text : null,
+        encoding: null,
+        extractedText: null,
         fileKind: parsedName.fileKind,
-        imageHeight: 'height' in extracted ? extracted.height : null,
-        imageWidth: 'width' in extracted ? extracted.width : null,
+        imageHeight: null,
+        imageWidth: null,
         id,
         includeInFutureMessages: input.includeInFutureMessages,
         maximumPending: this.loaded.config.limits.maximumAttachmentsPerMessage,
         mediaType,
         originalName,
-        ocrPageCount: 'ocrPageCount' in extracted ? extracted.ocrPageCount : 0,
-        pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
+        ocrPageCount: 0,
+        pageCount: null,
         retentionDays,
         storageKey,
+        status: 'processing',
+      });
+      rowCreated = true;
+      const extracted = await this.extractStored(
+        finalPath,
+        parsedName.fileKind,
+        mediaType,
+      );
+      const created = await this.repository.finishProcessing(id, {
+        status: 'ready',
+        encoding: 'encoding' in extracted ? extracted.encoding : null,
+        extractedText: 'text' in extracted ? extracted.text : null,
+        imageHeight: 'height' in extracted ? extracted.height : null,
+        imageWidth: 'width' in extracted ? extracted.width : null,
+        ocrPageCount: 'ocrPageCount' in extracted ? extracted.ocrPageCount : 0,
+        pageCount: 'pageCount' in extracted ? extracted.pageCount : null,
       });
       await this.logs.record({
         action: 'file.upload_completed',
@@ -209,9 +279,14 @@ export class AttachmentsService implements OnModuleDestroy {
       });
       return created;
     } catch (error) {
-      await rm(finalCreated ? finalPath : temporaryPath, {
-        force: true,
-      }).catch(() => undefined);
+      if (rowCreated)
+        await this.repository
+          .finishProcessing(id, { status: 'failed' })
+          .catch(() => undefined);
+      else
+        await rm(finalCreated ? finalPath : temporaryPath, {
+          force: true,
+        }).catch(() => undefined);
       await this.logs.record({
         action: 'file.upload_failed',
         actorId: principal.id,
@@ -224,53 +299,57 @@ export class AttachmentsService implements OnModuleDestroy {
         status: 'failed',
         targetType: 'attachment',
       });
-      if (error instanceof TextAttachmentTooLargeError) {
-        throw new FileTextTooLargeError();
-      }
-      if (error instanceof TextAttachmentTypeError) {
-        throw new FileTypeUnsupportedError();
-      }
-      if (error instanceof PdfTextTooLargeError) {
-        throw new FileTextTooLargeError();
-      }
-      if (error instanceof PdfPageLimitError) {
-        throw new FilePdfPageLimitError();
-      }
-      if (error instanceof PdfPasswordProtectedError) {
-        throw new FilePdfPasswordProtectedError();
-      }
-      if (error instanceof PdfOcrUnavailableError) {
-        throw new FilePdfOcrUnavailableError();
-      }
-      if (error instanceof PdfOcrFailedError) {
-        throw new FilePdfOcrFailedError();
-      }
-      if (error instanceof PdfOcrNoTextError) {
-        throw new FilePdfOcrNoTextError();
-      }
-      if (error instanceof PdfOcrRequiredError) {
-        throw new FilePdfOcrRequiredError();
-      }
-      if (error instanceof PdfInvalidError) {
-        throw new FilePdfInvalidError();
-      }
-      if (error instanceof ImageDimensionsError) {
-        throw new FileImageDimensionsError();
-      }
-      if (error instanceof ImageTypeError) {
-        throw new FileTypeUnsupportedError();
-      }
-      if (error instanceof TaskQueueFullError) {
-        throw new FileProcessingBusyError();
-      }
-      if (
-        error instanceof TaskQueueCancelledError ||
-        error instanceof TaskPoolClosedError
-      ) {
-        throw new FileProcessingCancelledError();
-      }
-      throw error;
+      this.throwProcessingError(error);
     }
+  }
+
+  private throwProcessingError(error: unknown): never {
+    if (error instanceof TextAttachmentTooLargeError) {
+      throw new FileTextTooLargeError();
+    }
+    if (error instanceof TextAttachmentTypeError) {
+      throw new FileTypeUnsupportedError();
+    }
+    if (error instanceof PdfTextTooLargeError) {
+      throw new FileTextTooLargeError();
+    }
+    if (error instanceof PdfPageLimitError) {
+      throw new FilePdfPageLimitError();
+    }
+    if (error instanceof PdfPasswordProtectedError) {
+      throw new FilePdfPasswordProtectedError();
+    }
+    if (error instanceof PdfOcrUnavailableError) {
+      throw new FilePdfOcrUnavailableError();
+    }
+    if (error instanceof PdfOcrFailedError) {
+      throw new FilePdfOcrFailedError();
+    }
+    if (error instanceof PdfOcrNoTextError) {
+      throw new FilePdfOcrNoTextError();
+    }
+    if (error instanceof PdfOcrRequiredError) {
+      throw new FilePdfOcrRequiredError();
+    }
+    if (error instanceof PdfInvalidError) {
+      throw new FilePdfInvalidError();
+    }
+    if (error instanceof ImageDimensionsError) {
+      throw new FileImageDimensionsError();
+    }
+    if (error instanceof ImageTypeError) {
+      throw new FileTypeUnsupportedError();
+    }
+    if (error instanceof TaskQueueFullError) {
+      throw new FileProcessingBusyError();
+    }
+    if (
+      error instanceof TaskQueueCancelledError ||
+      error instanceof TaskPoolClosedError
+    ) {
+      throw new FileProcessingCancelledError();
+    }
+    throw error;
   }
 
   async deletePending(

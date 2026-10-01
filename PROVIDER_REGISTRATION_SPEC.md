@@ -1,5 +1,42 @@
 # AI 서비스 제공자 등록 명세
 
+## N02 커스텀·로컬 연결 계약 (2026-09-30 확정, N07 API·fixture 구현)
+
+첫 새 버전의 커스텀 연결은 `openai-chat-completions` protocol 한 가지다. 내장 OpenAI/Anthropic/Gemini 연결은 기존 template protocol을 유지한다. 커스텀 Anthropic·Gemini 주소, Ollama native API, 임의 header/body/경로 override, 원격 registry 자동 실행은 이번 범위에서 제외한다. 표시는 관리자가 정한 연결 이름이며 입력 주소·키는 일반 사용자/게스트 응답에 나타나지 않는다. 상세 네트워크 검증은 SECURITY_SPEC.md N02 절이 원장이다.
+
+- 등록 입력: 이름(기존 1~100자 고유 규칙), `baseUrl`, `authMode: bearer | none`, bearer일 때 API key, `destinationKind: public | local`, local일 때 승인 IP literal·port, 선택적인 수동 model ID. `baseUrl`은 scheme/host/port와 API prefix path까지다. trailing slash 하나로 정규화하고 정확히 `GET {baseUrl}/models`, `POST {baseUrl}/chat/completions`를 사용한다. base path가 `/v1`이면 다시 `/v1`을 붙이지 않는다. query·fragment·userinfo·경로 dot segment·인코딩 slash는 거부한다.
+- `public`은 HTTPS+공인 목적지, `local`은 정확한 사설 IP·port에 대한 HTTP만 허용한다. local host명과 loopback은 1차 지원하지 않는다. 관리자 승인값과 URL의 IP/port가 같아야 하며 승인은 연결별 저장한다. 로컬 주소 변경 시 새 승인과 연결 시험이 필요하고 해당 연결의 활성 chat job이 있으면 주소·인증 변경을 거부한다. 인증 없음은 Authorization header를 보내지 않는다. bearer 키는 기존 AES-256-GCM 암호화·마스킹을 사용한다.
+- 등록 저장은 원격 생성 요청을 자동 실행하지 않는다. 모델 목록 조회는 관리자가 동기화를 눌렀을 때만 수행하며 15초·5 MiB·10,000개 상한을 적용한다. 목록 미지원/실패라면 기존 모델을 삭제하지 않고 수동 ID를 등록할 수 있다. 수동 ID도 형식·중복·연결 활성 상태를 검증하고 기본 capability는 text-only, 이미지/웹 검색 false다. `contextWindow` 미확인 모델은 N02 AI budget의 16,384 fallback을 쓴다.
+- 관리자 연결 시험은 `DNS/TCP/TLS`, 인증·models 조회, 선택한 모델의 실제 chat stream 세 단계를 분리한다. chat 단계는 비용 가능성을 표시하고 관리자가 명시적으로 실행할 때만 1회 요청한다. models가 없어도 수동 모델의 chat 시험은 가능하다. 성공 상태는 `reachable`, `models_available`, `chat_verified`를 별도로 저장하고 시험 시각·안전한 오류 code를 남긴다. 목록 성공만으로 채팅 가능/이미지/웹 검색 지원이라고 표시하지 않는다.
+- 모델 capability와 `imageTokenEstimate`(이미지 한 장당 budget 예약값, 최소 1,024)를 관리자에게 명시적으로 설정하게 한다. 검증되지 않은 이미지 모델은 text-only로 남긴다. 사용자·게스트에게는 기존 allowlist/일일 제한을 그대로 적용한다. 제목·요약의 보조 모델 선택도 동일 outbound 검증 경로를 사용한다.
+- API 계약은 API_SPEC.md N02, 저장 제약은 DATABASE_SCHEMA.md N02를 따른다. N07에서 등록·조회·수동 ID·시험·실행의 동일 목적지 검증과 key/none을 별도 API 프로세스·격리 PostgreSQL·사설 IP mock 서버로 확인했다. Docker API 컨테이너에서 실제 로컬 모델 서버에 도달하는 배포 경로는 N13 인수 대상이다. N07 구현은 승인된 사설 IP 또는 검증된 공인 HTTPS 주소만 런타임에서 허용한다.
+
+## 새 버전: 커스텀·로컬 Provider (2026-09-30 원안, N07 구현 범위는 위 N02 절)
+
+- 관리자가 직접 API 기본 주소와 API 키를 입력해 커스텀 Provider 연결을 등록할 수 있어야 한다. API 키가 없는 로컬 모델 서버도 연결 대상으로 포함한다.
+- 이는 기존 내장 고정 URL만 허용하는 범위와 신규 Adapter 보류 원칙의 새 버전 예외다. 일반 사용자·게스트는 주소·자격증명을 변경하지 않고 관리자가 허용한 모델만 사용한다.
+
+### 1차 설계안
+
+- 등록 항목: 연결 이름, API 기본 URL, 프로토콜, 인증 방식, API 키, 외부/로컬 연결 구분, 자동 조회 또는 수동 모델 ID.
+- 우선 OpenAI 호환 Chat Completions와 SSE를 공통 Adapter로 지원한다. API 키 인증 또는 인증 없음으로 연결한다. Anthropic·Gemini 커스텀 주소와 Ollama 네이티브 API 지원 여부는 후속 확정한다.
+- 기본 URL은 API prefix까지 입력하고 서버가 상대 models·chat/completions 경로를 조합한다. 중복 /v1 방지와 후행 slash 정규화 규칙을 구현 전에 확정한다.
+- 모델 목록 API가 없으면 수동 모델 ID로 등록할 수 있다. 목록 조회 성공과 채팅 가능 상태를 구분하고 수동 모델에도 명시적 연결 시험을 제공한다.
+- 연결 시험은 관리자가 직접 실행하며 실제 생성 요청은 비용이 발생할 수 있음을 표시한다. 등록 저장만으로 임의 생성 요청을 보내지 않는다.
+- 이미지·웹 검색·컨텍스트 한도·생성 파라미터는 모델별로 지정·검증한다. OpenAI 호환이라는 이유만으로 모든 기능을 활성화하지 않는다.
+- 커스텀 연결의 모델도 기존 사용자·게스트 권한, 일일 제한과 관리자 지정 제목·요약 모델 선택 체계에 포함한다.
+- API 키는 기존 암호화·마스킹 정책을 적용하고 브라우저에서 Provider로 직접 요청하지 않는다.
+- 로컬 주소는 ModelNaru API 서버/컨테이너가 접근 가능한 주소를 뜻한다. 사용자의 PC 또는 같은 LAN 모델 서버 연결은 서버에서 해당 목적지에 도달 가능한 경우에만 지원한다.
+- 모델 실행·다운로드·GPU 관리 기능은 이 요청의 연결 Adapter 범위에 포함하지 않는다.
+
+### 보안·배포·검증
+
+- 외부 HTTPS와 관리자가 명시적으로 허용한 로컬 HTTP 목적지를 구분한다. 구체적 목적지 제한은 SECURITY_SPEC.md의 새 버전 설계안을 따른다.
+- Docker 내부 localhost와 호스트·LAN 주소의 차이, 호스트 접근 설정과 연결 예제는 README.md 및 DEPLOYMENT_RUNBOOK.md에 구현과 함께 작성한다.
+- 자동 조회·수동 ID·인증 없음/키 사용·stream·cancel·timeout·사용량 누락·목적지 검증을 계약 시험에 포함한다.
+- 참고: [Ollama OpenAI 호환 API](https://docs.ollama.com/api/openai-compatibility), [LM Studio OpenAI 호환 API](https://lmstudio.ai/docs/developer/openai-compat).
+- 미결정: 1차 프로토콜의 최종 범위, 고급 header·경로 재정의 범위, 로컬 목적지 승인 저장 방식과 Docker 연결 구성. 실서비스 호환 시험은 미실행이다.
+
 ## 1. 목적
 
 관리자가 AI 서비스 제공자를 선택하고 API 키를 입력하는 것만으로 모델 목록을 불러와 기본 설정으로 사용할 수 있게 한다. 필요한 경우 제공자·모델별 엔드포인트, 요청 형식, 추론, 캐시, 재시도와 커스텀 필드를 고급 설정에서 조정할 수 있어야 한다.

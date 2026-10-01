@@ -1,5 +1,114 @@
 # ModelNaru API 상세 명세
 
+## N09 탐색·설정 계약 (2026-10-01 구현·격리 검증 완료)
+
+- 대화 목록은 `{conversations,nextCursor}`다. query는 trim/NFC 정규화·최대 200자 제목 literal 부분 검색, pinned는 true/false 또는 생략, limit 기본 50·최대 100이다. 정렬은 pinned→updatedAt→UUID 내림차순 keyset이다. cursor는 version·owner/query/filter fingerprint·정렬 tuple을 base64url로 담고 형식/조건을 검증한다. cursor는 인증 자격증명이나 서명된 snapshot이 아니다. 소유권을 매 조회 다시 적용하며 변경된 행/새 행의 완전한 snapshot 일관성은 보장하지 않는다. 조건 변경·잘못된 cursor는 `400 CHAT_INPUT_INVALID`다.
+- 대화 PATCH는 십진 문자열 settingsRevision(1~bigint 최대)을 필수로 받는다. 누락/추가 필드/변경 없음은 400이다. 소유권 행 잠금 후 CAS하며 stale은 `409 CHAT_SETTINGS_CONFLICT`의 error에 최신 conversation/settingsRevision을 포함한다. title·isPinned만 변경하는 경우 활성 생성 중에도 허용하고 나머지는 `409 CHAT_CONVERSATION_BUSY`다. branch 변경에도 같은 revision을 요구한다.
+- 모델 선택은 create/PATCH에서 현재 권한·활성/가용 모델을 검사한다. 모델 변경 시 저장된 파라미터를 새 모델 policy와 대조하여 지원하지 않는 필드를 제거하고 `removedParameters` 배열을 반환한다. 같은 PATCH의 명시 파라미터는 새 policy를 엄격히 검증하며 오류는 `400 CHAT_PARAMETER_INVALID`다. 모델을 null로 지우면 이전 파라미터를 모두 지우고 명시 비어 있지 않은 파라미터는 거부한다. 권한 없는 모델은 `404 ACCESS_MODEL_FORBIDDEN`이며 자동 대체하지 않는다.
+- `GET /api/access/models`는 query(최대 200자), provider(연결 표시 이름, 최대 100자), image/webSearch/favoriteOnly(true/false) 필터를 지원한다. 현재 허용 모델만 검색하고 각 항목에 isFavorite를 포함한다. `GET /api/model-favorites`는 `{favorites:[{providerModelId,selectable}]}`이며 권한 회수/비활성 모델도 소유자의 저장 ID만 반환하고 selectable=false다. PUT/DELETE `.../:modelId`는 204, PUT은 현재 허용 모델만 저장하고 중복은 멱등이다. DELETE는 권한 회수 뒤에도 자신의 항목을 지울 수 있다. 즐겨찾기는 권한을 부여하지 않는다.
+- 모든 조회는 인증·no-store, mutation은 인증·CSRF를 요구한다. 첨부 조회/재처리는 FILE_PROCESSING_SPEC.md N09를 따른다. 원문·내부 경로·비밀값은 탐색/오류 응답에 추가하지 않는다.
+- N09-R2 보완(2026-10-01 구현·실DB/HTTP 검증): PATCH 성공 응답과 CHAT_SETTINGS_CONFLICT의 최신 conversation은 같은 transaction에서 조회한 activeJob을 포함한다. pending/streaming 작업의 id/status/revision 등은 기존 activeJob 계약을 따르며 terminal이면 null이다. 이후 job 상태 변화는 GET/SSE로 갱신한다.
+
+## N08 자동 제목 API 구현 (2026-10-01)
+
+| 요청 | 성공 응답 | 조건 |
+| --- | --- | --- |
+| `GET /api/admin/title-generation` | `200 {providerModelId: UUID 또는 null, version: string}` | 관리자 session |
+| `PUT /api/admin/title-generation` | 동일 형태의 `200`, version 증가 | 관리자 session + CSRF, body는 `{providerModelId: UUID 또는 null}`만 허용 |
+
+`null`은 이후 첫 정상 답변의 자동 제목을 끈다. 모델 지정은 활성·가용 model/connection을 요구하며 원문을 전송하지 않고 설정만 저장한다. 모든 응답은 `Cache-Control: no-store`다. 오류는 입력 형식/추가 필드 `400 TITLE_INPUT_INVALID`, 비가용 모델 `409 TITLE_MODEL_UNAVAILABLE`, 일반 사용자/게스트 `403 AUTH_ADMIN_REQUIRED`, 기존 인증·CSRF 오류다. 감사 기록에는 모델 ID·version만 저장하고 제목·대화·credential은 넣지 않는다.
+
+대화 생성/목록/상세/수정/branch 응답은 `titleSource: default|auto|manual`, `titleStatus: none|pending|completed|failed`를 반환한다. 생성 시 title 생략은 default이고 명시적 title은 manual이다. 수동 title PATCH는 pending 제목 task를 취소한다. 클라이언트는 titleSource/titleStatus를 쓰기 입력으로 지정할 수 없다. 자동 제목 정책은 `CHAT_STATE_SPEC.md` N01/N08을 따른다. 관리자 화면은 N11에서 연결한다.
+
+## N02 관리자 커스텀 Provider 계약 (2026-09-30 확정, N07 API 구현)
+
+모든 경로는 관리자 session을 요구하고 mutation은 CSRF를 요구한다. 일반 사용자·게스트는 URL·key·목적지 승인에 접근할 수 없다. `Cache-Control: no-store`이며 응답/감사 기록에 API key, 내부 주소의 전체 값, upstream 오류 본문을 포함하지 않는다. 입력과 검증의 원장은 PROVIDER_REGISTRATION_SPEC.md·SECURITY_SPEC.md N02 절이다.
+
+| 요청 | 성공 | body·규칙 |
+| --- | --- | --- |
+| `POST /api/admin/provider-connections/custom` | `201 Created` | `{name, baseUrl, authMode, apiKey?, destinationKind, approvedLocalIp?, approvedLocalPort?}`. key 없는 `none`과 bearer key 필수 조건을 검사한다. 저장만으로 remote 호출하지 않는다 |
+| `PATCH /api/admin/provider-connections/:id` | `200 OK` | 기존 이름/활성 변경에 custom의 `baseUrl/authMode/apiKey/destinationKind/approvedLocalIp/approvedLocalPort` 변경을 허용. 활성 chat job이 해당 연결을 사용 중이면 주소·인증 변경은 `409 PROVIDER_IN_USE`로 거부한다. 성공한 목적지 변경은 진단 상태를 지우고 새 요청 전 다시 검증한다 |
+| `POST /api/admin/provider-connections/:id/models/sync` | `200 OK` | 기존 경로를 사용. custom은 `{data:[{id,...}]}` 또는 문서화된 호환 모델 응답만 정규화. 실패해도 기존 수동/저장 모델을 삭제하지 않는다 |
+| `POST /api/admin/provider-connections/:id/models/manual` | `201 Created` | `{modelId, displayName?, contextWindow?, maxOutputTokens?}`. 연결 내 modelId unique, 기본 비활성·text-only |
+| `POST /api/admin/provider-connections/:id/test` | `200 OK` | `{stage:"network"|"models"|"chat", providerModelId?}`. chat은 명시적 선택 모델과 고정된 짧은 시험 입력을 1회 전송하며 비용 가능성 안내 후 호출 |
+| `PATCH /api/admin/provider-models/:id` | `200 OK` | 기존 capability에 `imageTokenEstimate` nullable positive integer 추가. image true인데 estimate 없으면 이미지 실행은 거부 |
+
+연결 목록에는 `kind`, `protocol`, `name`, host를 마스킹한 `baseUrlDisplay`, `authMode`, `destinationKind`, `approvedLocalIpDisplay`, `diagnostics` 단계별 결과·시각·안전 code를 반환한다. key 원문/ciphertext/nonce/tag, 내부 IP 전체, URL query는 반환하지 않는다. 수동 모델은 `source:"manual"`로 표시하고 자동 조회 실패와 구분한다. `test`의 network 성공은 models/chat 성공을 의미하지 않으며 `chat`은 완전한 정상 종료를 확인해야 성공이다.
+
+오류: `400 PROVIDER_INPUT_INVALID`(URL/필드/모델 형식), `403 AUTH_ADMIN_REQUIRED` 또는 CSRF 오류, `404 PROVIDER_NOT_FOUND`, `409 PROVIDER_CONNECTION_CONFLICT`/`PROVIDER_IN_USE`, `422 PROVIDER_DESTINATION_DENIED`(차단 주소/승인 불일치/redirect), `422 PROVIDER_AUTH_FAILED`, `422 PROVIDER_RESPONSE_INVALID`, `429 PROVIDER_RATE_LIMITED`, `502 PROVIDER_NETWORK_ERROR`/`PROVIDER_UPSTREAM_ERROR`. DNS/실접속 불일치는 `PROVIDER_DESTINATION_DENIED`이며 외부 사용자에게 주소 세부를 노출하지 않는다. 이 경로들은 N07에서 구현했으며 실제 배포 경로는 N13에서 확인한다.
+
+## N01 새 버전 채팅 계약 (2026-09-30 확정, N06 job 경로 구현)
+
+이 절의 job 시작·GET·SSE·중지 경로와 `activeJob`/`jobId`는 N06에서 구현했다. 아래 현행 `POST /api/conversations/:id/messages` 및 `.../regenerate` 동기 SSE와 기존 quota/모델 자동 대체 설명은 N10 UI 전환 전 기존 화면 호환 기록으로 적용한다. N09 설정 PATCH·탐색 계약은 구현·검증했고 새 UI는 N10에서 연결한다. 공통 인증: 모든 경로는 유효한 user/guest session과 대화 소유권을 요구하고, POST/PATCH/DELETE에는 기존 CSRF guard를 적용한다. 모든 응답은 `Cache-Control: no-store`; 타인 소유·없는 대화/job은 모두 `404 CHAT_NOT_FOUND`다. `Idempotency-Key`는 UUID v4 문자열이며 새 시작에 필수다. 주체·상태 정책은 CHAT_STATE_SPEC.md N01 절이 원장이다.
+
+| 요청 | 성공 | 의미 |
+| --- | --- | --- |
+| `POST /api/conversations/:id/jobs` | `202 Accepted` 또는 동일 key 재조회 `200 OK` | 새 질문 시작. body는 `{content, attachmentIds, providerModelId, parameters, settingsRevision}`. 기존 message 입력 범위와 모델 policy를 적용한다 |
+| `POST /api/conversations/:id/messages/:messageId/regeneration-jobs` | `202` 또는 동일 key `200` | 활성 경로의 마지막 assistant 답변 재생성. body는 `{providerModelId, parameters, settingsRevision}`. 성공할 때만 새 branch 활성화 |
+| `GET /api/conversations/:id/jobs/:jobId` | `200 OK` | 저장된 작업 snapshot. 생성 실행이나 quota에 영향 없음. terminal 7일 보존 뒤에는 `404` |
+| `GET /api/conversations/:id/jobs/:jobId/events` | `200 text/event-stream` | listener 등록 후 본문 없는 snapshot 메타데이터, 이후 commit된 revision 변경과 heartbeat 전송. `Last-Event-ID`는 무시하고 항상 snapshot부터 시작 |
+| `POST /api/conversations/:id/jobs/:jobId/cancel` | `204 No Content` | 명시적 중지. terminal이면 `409 CHAT_NOT_CANCELLABLE` |
+
+시작은 응답 수신 전에 commit된 job만 반환한다. 같은 주체+key+정규화 입력은 이미 존재하는 job을 반환하며, 다른 입력은 `409 CHAT_IDEMPOTENCY_CONFLICT`다. 응답을 받지 못한 클라이언트는 같은 key와 body를 재전송하거나 이미 확인한 job ID로 `GET`한다. `settingsRevision`은 숫자가 아닌 십진 문자열이다. 생성 중 설정·분기 변경이나 같은 대화 시작은 `409 CHAT_CONVERSATION_BUSY`; 다른 대화의 주체 활성 작업은 `409 CHAT_PRINCIPAL_BUSY`; 전역 슬롯 부족은 `503 CHAT_SERVER_BUSY`와 `Retry-After: 1`이다. 슬롯 부족·입력 거부는 job·메시지·quota를 생성하지 않는다. quota 초과는 기존 `429 ACCESS_DAILY_LIMIT_REACHED`에 `scope`, `resetAt`을 포함한다.
+
+시작 응답 예시 (`turn`; 재생성은 `kind: "regenerate"`, `userMessageId: null`):
+
+```json
+{
+  "job": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "kind": "turn",
+    "status": "pending",
+    "revision": "1",
+    "conversationId": "20000000-0000-4000-8000-000000000001",
+    "branchId": "30000000-0000-4000-8000-000000000001",
+    "userMessageId": "40000000-0000-4000-8000-000000000001",
+    "assistantMessageId": "50000000-0000-4000-8000-000000000001",
+    "content": "",
+    "errorCode": null,
+    "inputTokens": null,
+    "outputTokens": null,
+    "startedAt": "2026-09-30T00:00:00.000Z",
+    "finishedAt": null
+  }
+}
+```
+
+`GET .../jobs/:jobId`의 `job.content`는 마지막 DB checkpoint만 포함하고 미저장 token은 포함하지 않는다. 최종 조회에는 terminal transaction에서 기록된 마지막 본문도 포함한다. `revision`은 단조 증가 십진 문자열이다. 대화 상세의 `activeJob`은 `pending|streaming` 작업이 있으면 `{id,kind,status,revision,branchId,userMessageId,assistantMessageId}`이고 없으면 `null`이다. 목록 각 대화에도 같은 `activeJob` 요약을 반환한다. 조회 시 대화 소유권을 확인한 뒤 DB의 활성 job을 join하므로 새로고침·다른 기기의 유효 session에서도 job ID를 찾을 수 있다. 대화 상세·메시지 페이지·branch 직접 답변의 assistant message에는 nullable `jobId`를 포함한다. `chat_jobs.assistant_message_id`의 unique 관계에서 계산하며 N01 이전 메시지 또는 terminal job 7일 정리 뒤에는 `null`이다. user message의 `jobId`는 `null`이다. 활성 작업은 `activeJob.assistantMessageId`와 message `jobId`로 연결되며 해당 message가 최근 50개 밖에 있더라도 `activeJob`은 유지한다. GET/구독은 현재 session·대화 소유권을 재검증하며 시작 session이 무효화되면 CHAT_STATE_SPEC.md N01에 따라 작업을 종료한다.
+
+SSE의 첫 `event: snapshot`은 `{ "jobId": "...", "revision": "1", "status": "streaming", "contentBytes": 0 }`처럼 메타데이터만 보내고 본문을 중복 전송하지 않는다. SSE `id`는 revision이다. 클라이언트는 구독을 열어 첫 snapshot을 받은 뒤 `GET .../jobs/:jobId`로 해당 작업의 설정된 `maximumGeneratedTextBytes`까지 본문을 가져온다. 서버는 listener를 먼저 등록하고 DB revision `r`을 읽어 snapshot을 전송한다. 등록 뒤 대기한 commit 중 `revision <= r`은 중복이므로 버리고 `> r`만 순서대로 전달한다. 클라이언트는 GET이 끝날 때까지 직렬화된 SSE frame byte 합계 256 KiB 이하로 변경을 보관하고, GET revision 이하를 버린 뒤 정확히 1 증가하는 event만 적용한다. 틈·서버 또는 클라이언트 buffer 초과 시 연결을 닫고 같은 job을 GET/재구독한다. GET이 이미 terminal이면 SSE 재연결 없이 완료한다. `Last-Event-ID`로 history를 재생하지 않는다.
+
+일반 본문 checkpoint는 `event: append`와 `{ "revision": "2", "text": "추가 본문" }`, 본문 없는 비종료 상태 변경은 `event: state`와 `{ "revision": "3", "status": "streaming" }`다. terminal commit은 남은 본문·상태·errorCode·usage·finishedAt을 **하나의 DB transaction**에서 revision 1회 증가와 함께 저장한다. 이를 `event: terminal` 한 건의 `{ "revision": "4", "text": "마지막 본문", "status": "completed", "errorCode": null, "inputTokens": 10, "outputTokens": 20, "finishedAt": "..." }`로 보낸다. terminal event의 `text`는 빈 문자열일 수 있다. 앞서 commit된 checkpoint는 독립적이지만 terminal을 위해 마지막 본문만 별도 선행 commit하지 않는다. 취소와 완료는 terminal UPDATE 선착순 한 건만 성공하고 패자는 추가 event를 내지 않는다. `event: heartbeat`는 data 없이 15초마다 보내며 revision을 올리지 않는다. terminal event 또는 terminal GET을 처리하면 구독을 닫는다. 구독은 재호출·재차감하지 않는다.
+
+`GET` job 응답의 `job.content`는 생성 때 적용한 `limits.maximumGeneratedTextBytes`와 같은 UTF-8 byte 상한(기본 2 MiB, 최대 8 MiB)을 따른다. JSON escaping의 최악 사례를 포함하도록 HTTP 응답 body 상한은 `6 × 해당 작업의 maximumGeneratedTextBytes + 1 MiB`다. GET은 SSE 구독 pending buffer에 넣지 않고 HTTP backpressure로 직접 전송한다. SSE 초기 snapshot은 본문 없는 작은 frame이다. `append`와 `terminal`은 **UTF-8 직렬화된 완성 frame**(`id`·`event`·`data`·JSON escape·줄바꿈 포함)이 AI_INTEGRATION_SPEC.md N02의 frame 상한 이내가 되도록 Unicode scalar 경계에서 본문을 나눈다. 설정 최솟값 64 KiB에서도 frame 상한 32 KiB를 지킨다. 각 일반 checkpoint는 revision 하나와 frame 하나로 대응하고 terminal은 남은 작은 본문과 상태를 한 transaction/revision/frame으로 보낸다. 생성·checkpoint·message·GET 복원의 본문 byte 상한은 동일하며, 서버 256 KiB 기본 pending/클라이언트 256 KiB buffer는 실제 frame byte를 합산한다.
+
+추가 오류: `400 CHAT_INPUT_INVALID`(key/body/revision 형식), `401 AUTH_SESSION_REQUIRED`, `403 AUTH_CSRF_INVALID`, `404 CHAT_NOT_FOUND`, `409 CHAT_SETTINGS_CONFLICT`(현재 `conversation`과 `settingsRevision` 포함), `409 CHAT_REGENERATION_INVALID`, `409 CHAT_NOT_CANCELLABLE`, `429 ACCESS_DAILY_LIMIT_REACHED`, `503 CHAT_SERVER_BUSY`. 실행 중 Provider/요약/권한/재시작 오류는 job `failed`와 안전한 `errorCode`로 저장하며, 이미 성공한 시작 HTTP 상태를 바꾸지 않는다. upstream 본문·내부 URL·자격증명은 JSON/SSE에 포함하지 않는다.
+
+`PATCH /api/conversations/:id`는 새 버전에서 `{settingsRevision, ...changes}`를 필수로 받는다. 모델 즉시 저장과 고급 설정 적용 모두 조건부 갱신 후 새 `settingsRevision`을 반환한다. `title`은 수동 변경으로 기록한다. 활성 job 중 모델·파라미터·system prompt·context·branch 변경은 서버에서 거부한다. 제목 검색·고정 목록은 `GET /api/conversations?query=...&pinned=...&cursor=...&limit=...`이며 기본 50·최대 100, 정렬은 고정 내림차순→`updatedAt` 내림차순→UUID 내림차순이다. cursor는 서버가 owner/query/filter/정렬 tuple을 검증하는 불투명 문자열이며 조건이 바뀌면 재사용할 수 없다. 모델 즐겨찾기는 `GET /api/model-favorites`, `PUT /api/model-favorites/:modelId`, `DELETE /api/model-favorites/:modelId`; 유효 모델·주체 소유권을 검사하며 즐겨찾기 자체는 모델 권한을 부여하지 않는다. 세부 탐색 구현은 N09다.
+
+자동 제목 설정은 관리자만 `GET/PUT /api/admin/title-generation`으로 조회·저장한다. PUT body는 `{ "providerModelId": "uuid-or-null" }`이며 null은 비활성화다. CSRF가 필요하고 모델은 활성·가용 상태여야 한다. 사용자/게스트는 이 경로에서 `403`이다. 대화 응답에는 `title`, `titleSource: "default" | "auto" | "manual"`, `titleStatus: "none" | "pending" | "completed" | "failed"`가 포함된다. 제목 입력/실패·수동 우선 조건은 CHAT_STATE_SPEC.md N01 절을 따른다.
+
+검증: N06에서 동일 key 동시 시작 1회·상이 입력 충돌, 새 session의 `activeJob` 발견과 message `jobId`, terminal/취소 경합, snapshot revision, 설정 최대 8 MiB의 checkpoint→message→GET 본문 일치, JSON escape frame 32 KiB 상한·느린 구독자, 소유권·session 폐기·stale 설정·quota/slot 거부를 격리 PostgreSQL+mock Provider 및 단위 시험으로 확인했다(`TEST_PLAN.md` 최신 N06 절). 기본 2 MiB와 설정 8 MiB의 실제 Provider 대용 전체 출력 스트림을 HTTP부터 GET까지 통과시키는 대용량 통합 시험, 브라우저 CSRF·재접속 사용성은 N10/N13 인수에서 추가한다.
+
+## 새 버전 예정 계약: 생성 작업·즐겨찾기 (2026-09-30, 미구현)
+
+- 생성 시작과 이벤트 구독을 분리하고 작업 ID·현재 상태·부분 본문 snapshot·revision으로 재접속을 지원한다. 주체별 idempotency key로 시작 중복을 차단한다.
+- 작업 조회·구독·중지는 session·소유권·현재 권한을 검증하고 mutation에 CSRF를 적용한다. 구독 해제는 취소 요청이 아니다.
+- 모델 즐겨찾기와 대화 제목 검색·고정 계약을 추가한다. 즐겨찾기는 주체별이며 모델 권한을 부여하지 않는다.
+- 상세 정책은 CHAT_STATE_SPEC.md의 새 버전 절을 따른다. URL·필드·오류 코드·cursor 형식은 구현 전 확정하며 기존 endpoint를 이미 변경한 것으로 보지 않는다.
+
+## 새 버전 예정 변경: 커스텀 Provider (2026-09-30)
+
+- 관리자 등록·수정·연결 시험에 커스텀 기본 URL, 프로토콜, 키/무인증, 모델 수동 등록과 로컬 목적지 승인 계약이 필요하다.
+- 동작 기준은 PROVIDER_REGISTRATION_SPEC.md의 새 버전 절을 따른다. endpoint·필드·오류 코드는 미확정·미구현이며 사용자·게스트에게 주소·자격증명 변경 권한을 제공하지 않는다.
+
+## 새 버전 예정 변경: 설정 저장·자동 제목 (2026-09-30)
+
+- 현재 endpoint 계약과 별개인 계획이다. 동작 기준은 [채팅 상태 명세](./CHAT_STATE_SPEC.md)의 새 버전 절을 따른다.
+- 모델 즉시 저장과 고급 설정 적용을 분리하고, 자동 제목 설정·제목 상태 노출·목록 갱신 방식의 계약을 구현 전에 확정한다.
+- 자동 결과 저장 시 수동 제목 변경과 삭제를 원자적으로 확인해야 한다. 새 endpoint·필드·오류 코드는 아직 확정하거나 구현하지 않았다.
+- 제목 생성 모델 설정 변경은 관리자 인증·CSRF 검증을 요구하고 사용자·게스트의 변경을 거부한다. 전역 설정 계약은 구현 전에 확정한다.
+
 ## 1. 목적
 
 현재 구현된 HTTP API 계약과 이후 API가 따라야 할 공통 규칙을 기록한다.
@@ -438,7 +547,7 @@ PDF·OCR 처리는 설정된 worker 수와 bounded queue를 사용한다. queue 
 - `404 CHAT_NOT_FOUND`: 대상 없음, 다른 주체 소유 또는 관리자 workspace 요청
 - `409 CHAT_NOT_CANCELLABLE`: 완료됐거나 진행 중이 아닌 메시지
 
-스트림 내부 오류 code에는 `CHAT_CONTEXT_LIMIT_EXCEEDED`, `CHAT_MODEL_UNAVAILABLE`, `CHAT_REGENERATION_INVALID`, `CHAT_IMAGE_MODEL_UNSUPPORTED`, `CHAT_IMAGE_PAYLOAD_TOO_LARGE`, `CHAT_PROVIDER_AUTH_FAILED`, `CHAT_PROVIDER_RATE_LIMITED`, `CHAT_PROVIDER_NETWORK_ERROR`, `CHAT_PROVIDER_RESPONSE_INVALID`, `CHAT_PROVIDER_UPSTREAM_ERROR`, `CHAT_CANCELLED`이 있다.
+스트림 내부 오류 code에는 `CHAT_CONTEXT_LIMIT_EXCEEDED`, `CHAT_MODEL_UNAVAILABLE`, `CHAT_REGENERATION_INVALID`, `CHAT_IMAGE_MODEL_UNSUPPORTED`, `CHAT_IMAGE_PAYLOAD_TOO_LARGE`, `CHAT_PROVIDER_AUTH_FAILED`, `CHAT_PROVIDER_RATE_LIMITED`, `CHAT_PROVIDER_NETWORK_ERROR`, `CHAT_PROVIDER_RESPONSE_INVALID`, `CHAT_PROVIDER_UPSTREAM_ERROR`, `CHAT_PROVIDER_TIMEOUT`, `CHAT_PROVIDER_INCOMPLETE`, `CHAT_PROVIDER_REFUSED`, `CHAT_OUTPUT_LIMIT`, `CHAT_EMPTY_RESPONSE`, `CHAT_CANCELLED`이 있다. N05부터 Provider parser가 정상 terminal을 확인하지 못한 EOF, 거부·길이 초과·빈 답변을 위 code로 분류한다. 부분 text/usage가 먼저 전송될 수 있고 오류 뒤 `done`은 전송하지 않는다. N06 job API 전환 전에는 기존 SSE 실행 수명이 적용된다.
 
 ### `GET /api/admin/summarization`
 

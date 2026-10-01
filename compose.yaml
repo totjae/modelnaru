@@ -1,8 +1,15 @@
 name: modelnaru
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   gateway:
     image: nginx:1.28-alpine
+    logging: *logging
     restart: unless-stopped
     depends_on:
       api:
@@ -34,6 +41,7 @@ services:
     build:
       context: .
       target: web
+    logging: *logging
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -51,15 +59,15 @@ services:
       - frontend
 
   api:
+    stop_grace_period: ${APICHAT_STOP_GRACE_SECONDS:-40}s
     build:
       context: .
       target: api
+    logging: *logging
     restart: unless-stopped
     depends_on:
       migrate:
         condition: service_completed_successfully
-      valkey:
-        condition: service_healthy
     environment:
       API_PORT: 3001
       APICHAT_CONFIG_FILE: /app/config.yaml
@@ -87,6 +95,7 @@ services:
     build:
       context: .
       target: api
+    logging: *logging
     restart: 'no'
     depends_on:
       postgres:
@@ -109,6 +118,7 @@ services:
 
   postgres:
     image: postgres:17-alpine
+    logging: *logging
     restart: unless-stopped
     environment:
       POSTGRES_DB: modelnaru
@@ -126,22 +136,8 @@ services:
     networks:
       - backend
 
-  valkey:
-    image: valkey/valkey:8-alpine
-    restart: unless-stopped
-    command: ['valkey-server', '--appendonly', 'yes']
-    volumes:
-      - ./data/valkey:/data
-    healthcheck:
-      test: ['CMD', 'valkey-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
-    networks:
-      - backend
-
   admin-tool:
+    logging: *logging
     build:
       context: .
       target: admin

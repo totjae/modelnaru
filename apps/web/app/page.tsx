@@ -34,6 +34,7 @@ export default function HomePage() {
     Promise.all([
       fetch('/api/auth/session', {
         credentials: 'same-origin',
+        cache: 'no-store',
         signal: controller.signal,
       }).then(async (response) =>
         response.ok ? ((await response.json()) as SessionResponse) : null,
@@ -41,18 +42,23 @@ export default function HomePage() {
       fetch('/api/auth/guest/status', {
         credentials: 'same-origin',
         signal: controller.signal,
-      }).then(async (response) =>
-        response.ok
-          ? ((await response.json()) as { enabled: boolean })
-          : { enabled: false },
-      ),
+      })
+        .then(async (response) =>
+          response.ok
+            ? ((await response.json()) as { enabled: boolean })
+            : { enabled: false },
+        )
+        .catch(() => ({ enabled: false })),
     ])
       .then(([session, guest]) => {
+        if (controller.signal.aborted) return;
         setPrincipal(session?.principal ?? null);
         setGuestEnabled(guest.enabled);
       })
       .catch(() => undefined)
-      .finally(() => setChecking(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setChecking(false);
+      });
     return () => controller.abort();
   }, []);
 
@@ -60,7 +66,8 @@ export default function HomePage() {
     event.preventDefault();
     setSubmitting(true);
     setError('');
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     try {
       const payload: Record<string, FormDataEntryValue | null> = {
         username: data.get('username'),
@@ -84,6 +91,7 @@ export default function HomePage() {
         return;
       }
       const session = (await response.json()) as SessionResponse;
+      form.reset();
       setPrincipal(session.principal);
     } catch {
       setError('서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요.');
@@ -96,7 +104,8 @@ export default function HomePage() {
     event.preventDefault();
     setSubmitting(true);
     setGuestError('');
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     try {
       const response = await fetch('/api/auth/guest/session', {
         method: 'POST',
@@ -113,6 +122,7 @@ export default function HomePage() {
         return;
       }
       const session = (await response.json()) as SessionResponse;
+      form.reset();
       setPrincipal(session.principal);
     } catch {
       setGuestError('서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요.');
@@ -132,6 +142,8 @@ export default function HomePage() {
       });
       if (!response.ok) throw new Error('logout failed');
       setPrincipal(null);
+      setLoginMode('user');
+      setGuestError('');
       const guestResponse = await fetch('/api/auth/guest/status', {
         cache: 'no-store',
         credentials: 'same-origin',
@@ -199,8 +211,15 @@ export default function HomePage() {
     );
   }
 
+  if (checking)
+    return (
+      <main className="entry-loading" role="status">
+        세션 확인 중…
+      </main>
+    );
+
   return (
-    <main className="landing-page">
+    <main className="landing-page n11-entry">
       <section className="shell landing-hero">
         <div className="brand-panel" aria-labelledby="page-title">
           <div className="mark" aria-hidden="true" />
@@ -215,7 +234,6 @@ export default function HomePage() {
             계정별로 분리된 대화를 이어갑니다.
           </p>
           <div className="landing-actions">
-            <a href="#how-it-works">구성 살펴보기</a>
             {guestEnabled && <a href="#guest-experience">게스트 체험</a>}
           </div>
           <div className="security-note">
@@ -230,16 +248,17 @@ export default function HomePage() {
               <span className="spinner" /> 세션 확인 중
             </div>
           ) : (
-            <form className={`auth-card auth-${loginMode}`} onSubmit={login}>
-              <div
-                className="login-mode"
-                role="tablist"
-                aria-label="로그인 유형"
-              >
+            <form
+              key={loginMode}
+              className={`auth-card auth-${loginMode}`}
+              onSubmit={login}
+            >
+              <div className="login-mode" role="group" aria-label="로그인 유형">
                 <button
+                  disabled={submitting}
                   type="button"
-                  role="tab"
-                  aria-selected={loginMode === 'user'}
+
+                  aria-pressed={loginMode === 'user'}
                   className={loginMode === 'user' ? 'active' : ''}
                   onClick={() => {
                     setLoginMode('user');
@@ -249,9 +268,10 @@ export default function HomePage() {
                   사용자
                 </button>
                 <button
+                  disabled={submitting}
                   type="button"
-                  role="tab"
-                  aria-selected={loginMode === 'admin'}
+
+                  aria-pressed={loginMode === 'admin'}
                   className={loginMode === 'admin' ? 'active' : ''}
                   onClick={() => {
                     setLoginMode('admin');
@@ -296,25 +316,32 @@ export default function HomePage() {
                 required
               />
 
-              {loginMode === 'admin' && (
-                <>
-                  <label htmlFor="totp">인증 앱 코드</label>
-                  <input
-                    id="totp"
-                    name="totp"
-                    className="totp-input"
-                    type="text"
-                    autoComplete="one-time-code"
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    placeholder="000000"
-                    required
-                  />
-                </>
-              )}
-
-              {error && <p className="form-error">{error}</p>}
+              <div className="auth-totp-slot">
+                {loginMode === 'admin' && (
+                  <>
+                    <label htmlFor="totp">인증 앱 코드</label>
+                    <input
+                      id="totp"
+                      name="totp"
+                      className="totp-input"
+                      type="text"
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      placeholder="000000"
+                      required
+                    />
+                  </>
+                )}
+              </div>
+              <div className="auth-error-slot">
+                {error && (
+                  <p className="form-error" role="alert">
+                    {error}
+                  </p>
+                )}
+              </div>
               <button type="submit" disabled={submitting}>
                 {submitting ? '확인 중…' : '로그인'}
               </button>
@@ -323,200 +350,77 @@ export default function HomePage() {
         </section>
       </section>
 
-      <section
-        id="how-it-works"
-        className="portfolio-section architecture-section"
-        aria-labelledby="architecture-title"
-      >
-        <div className="section-heading">
-          <p className="eyebrow">HOW IT WORKS · INFRASTRUCTURE</p>
-          <h2 id="architecture-title" className="architecture-title">
-            <span>한 대의 서버 안에서,</span>
-            <span>경계는 분명하게</span>
-          </h2>
-          <p>
-            브라우저에서 시작된 요청은 웹 진입, 애플리케이션, 데이터 계층을
-            차례로 거칩니다.
-            <br />
-            서비스는 컨테이너 단위로 역할을 나누되 하나의 대화 흐름으로
-            연결됩니다.
-          </p>
-        </div>
-        <ol className="architecture-flow">
-          <li className="architecture-node node-blue">
-            <span>01 · WEB SERVICE</span>
-            <strong>사용자와 관리자의 구분</strong>
+      {guestEnabled && !checking && (
+        <section
+          id="guest-experience"
+          className="portfolio-section guest-portfolio"
+          aria-labelledby="guest-title"
+        >
+          <div className="guest-story">
+            <p className="eyebrow">LIVE DEMO · ISOLATED GUEST SESSION</p>
+            <h2 id="guest-title" className="guest-title">
+              <span>모델을 만나보세요</span>
+              <span>나만의 임시 대화 공간</span>
+            </h2>
             <p>
-              사용자는 허용된 모델과 자신의 대화에만 접근하고, 관리자는
-              계정·Provider·권한과 운영 기록을 관리합니다. 일상적인 사용 권한과
-              시스템 변경 권한이 섞이지 않도록 역할을 분리했습니다.
+              코드를 입력하면 다른 방문자와 분리된 임시 대화 공간이 만들어지고,
+              관리자가 허용한 모델과 횟수 안에서 실제 채팅 기능을 체험할 수
+              있습니다.
             </p>
-          </li>
-          <li className="architecture-node node-violet">
-            <span>02 · REVERSE PROXY</span>
-            <strong>Nginx</strong>
-            <p>
-              기존 도메인과 인증서 운영을 재사용하고 Web과 API를 같은 출처로
-              묶습니다. AI 답변 스트리밍도 끊기지 않도록 전달 방식을 제어합니다.
-            </p>
-          </li>
-          <li className="architecture-node node-cyan">
-            <span>03 · APPLICATION</span>
-            <strong>Next.js · NestJS</strong>
-            <p>
-              Next.js는 역할별 화면과 채팅 상태를, NestJS는 인증·권한·대화·파일
-              처리와 Provider 연동을 기능별 모듈로 나누어 담당합니다.
-            </p>
-          </li>
-          <li className="architecture-node node-green">
-            <span>04 · DATA</span>
-            <strong>PostgreSQL · Valkey</strong>
-            <p>
-              PostgreSQL은 계정·권한·대화·사용량·감사 기록의 기준 원장입니다.
-              Valkey는 빠른 임시 상태와 작업 처리를 보조하도록 분리했습니다.
-            </p>
-          </li>
-        </ol>
-        <div className="infrastructure-detail-grid">
-          <article>
-            <span className="feature-index">A</span>
-            <h3>모델이 바뀌어도 대화는 이어지게</h3>
-            <p>
-              서로 다른 AI 제공자의 요청과 응답을 공통 흐름으로 정리하면서도
-              제공자별 생성 파라미터는 유지했습니다. 같은 대화 안에서 모델을
-              바꾸고 답변을 분기로 보존할 수 있습니다.
-            </p>
-          </article>
-          <article>
-            <span className="feature-index">B</span>
-            <h3>공간은 나누고 비밀은 서버에만</h3>
-            <p>
-              사용자와 게스트의 대화·파일을 소유권 기준으로 격리하고 모든 권한을
-              서버에서 다시 확인합니다. Provider 자격증명은 암호화하며
-              브라우저와 일반 로그에 노출하지 않습니다.
-            </p>
-          </article>
-          <article>
-            <span className="feature-index">C</span>
-            <h3>운영자가 이해하고 통제할 수 있게</h3>
-            <p>
-              계정과 모델 권한, 호출 제한, 자동 요약, 파일 보관과 사용량·감사
-              기록을 관리자 화면에 모았습니다. 기능의 편리함뿐 아니라 운영
-              과정의 확인 가능성을 함께 설계했습니다.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section
-        className="portfolio-section role-section"
-        aria-labelledby="roles-title"
-      >
-        <div className="section-heading">
-          <p className="eyebrow">PRODUCT SURFACES · ROLES</p>
-          <h2 id="roles-title">관리하는 화면과 대화하는 화면</h2>
-          <p>
-            관리자는 서비스의 연결과 권한을 통제하고, 사용자는 자신에게 허용된
-            모델로 독립된 대화를 이어갑니다.
-          </p>
-        </div>
-        <div className="role-grid">
-          <article className="role-card admin-role">
-            <header>
-              <span>ADMIN</span>
-              <h3>관리자 공간</h3>
-            </header>
-            <ul>
-              <li>사용자 생성·비밀번호 변경·비활성화와 세션 종료</li>
-              <li>Provider API 키 등록·모델 동기화·활성 모델 관리</li>
-              <li>사용자·게스트별 모델 권한과 일일 호출 제한</li>
-              <li>자동 요약 모델·프롬프트·생성 파라미터 설정</li>
-              <li>사용량, 감사·보안·AI·파일·시스템 통합 로그</li>
-              <li>첨부파일 보관 기간과 만료 파일 정리</li>
-            </ul>
-          </article>
-          <article className="role-card user-role">
-            <header>
-              <span>USER</span>
-              <h3>사용자 공간</h3>
-            </header>
-            <ul>
-              <li>계정별로 분리된 대화방과 대화별 독립 설정</li>
-              <li>대화 중 모델 변경과 Provider별 생성 파라미터</li>
-              <li>스트리밍 답변·생성 중단·답변 재생성과 분기</li>
-              <li>시스템 프롬프트·이전 문맥 범위·자동 요약</li>
-              <li>TXT·Markdown·JSON·PDF·OCR·이미지 첨부</li>
-              <li>현재 세션의 실제 Provider 요청·응답 확인</li>
-            </ul>
-          </article>
-        </div>
-      </section>
-
-      <section
-        id="guest-experience"
-        className="portfolio-section guest-portfolio"
-        aria-labelledby="guest-title"
-      >
-        <div className="guest-story">
-          <p className="eyebrow">LIVE DEMO · ISOLATED GUEST SESSION</p>
-          <h2 id="guest-title" className="guest-title">
-            <span>설명을 읽었다면,</span>
-            <span>이제 직접 건너가 보세요</span>
-          </h2>
-          <p>
-            게스트 체험은 ModelNaru의 포트폴리오 데모입니다. 코드를 입력하면
-            다른 방문자와 분리된 임시 대화 공간이 만들어지고, 관리자가 허용한
-            모델과 횟수 안에서 실제 채팅 기능을 체험할 수 있습니다.
-          </p>
-          <div className="guest-principles">
-            <div>
-              <strong>독립 세션</strong>
-              <span>다른 게스트의 대화와 파일에 접근할 수 없습니다.</span>
-            </div>
-            <div>
-              <strong>제한된 권한</strong>
-              <span>허용 모델·일일 요청·동시 세션 제한을 적용합니다.</span>
-            </div>
-            <div>
-              <strong>자동 정리</strong>
-              <span>
-                로그아웃하거나 만료되면 임시 대화와 파일을 삭제합니다.
-              </span>
+            <div className="guest-principles">
+              <div>
+                <strong>독립 세션</strong>
+                <span>다른 게스트의 대화와 파일에 접근할 수 없습니다.</span>
+              </div>
+              <div>
+                <strong>제한된 권한</strong>
+                <span>허용 모델·일일 요청·동시 세션 제한을 적용합니다.</span>
+              </div>
+              <div>
+                <strong>자동 정리</strong>
+                <span>
+                  로그아웃하거나 만료되면 임시 대화와 파일을 삭제합니다.
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-        <form className="guest-demo-card" onSubmit={joinGuest}>
-          <p className="card-label">GUEST ACCESS</p>
-          <h3>{guestEnabled ? '게스트 채팅 시작' : '현재 체험 준비 중'}</h3>
-          <p>
-            {guestEnabled
-              ? '공유받은 게스트 코드를 입력하면 바로 임시 작업공간으로 이동합니다.'
-              : '관리자가 게스트 체험을 활성화하면 이곳에서 코드를 입력할 수 있습니다.'}
-          </p>
-          <label htmlFor="guest-code">게스트 코드</label>
-          <input
-            id="guest-code"
-            name="accessCode"
-            type="password"
-            autoComplete="off"
-            minLength={6}
-            maxLength={128}
-            disabled={!guestEnabled || checking}
-            required
-          />
-          {guestError && <p className="form-error">{guestError}</p>}
-          <button
-            type="submit"
-            disabled={!guestEnabled || checking || submitting}
-          >
-            {submitting ? '공간 만드는 중…' : '게스트로 체험하기'}
-          </button>
-          <small>
-            대화 내용은 외부 AI 제공자에게 전송될 수 있으며 민감한 정보는
-            입력하지 마세요.
-          </small>
-        </form>
-      </section>
+          <form className="guest-demo-card" onSubmit={joinGuest}>
+            <p className="card-label">GUEST ACCESS</p>
+            <h3>{guestEnabled ? '게스트 채팅 시작' : '현재 체험 준비 중'}</h3>
+            <p>
+              {guestEnabled
+                ? '공유받은 게스트 코드를 입력하면 바로 임시 작업공간으로 이동합니다.'
+                : '관리자가 게스트 체험을 활성화하면 이곳에서 코드를 입력할 수 있습니다.'}
+            </p>
+            <label htmlFor="guest-code">게스트 코드</label>
+            <input
+              id="guest-code"
+              name="accessCode"
+              type="password"
+              autoComplete="off"
+              minLength={6}
+              maxLength={128}
+              disabled={!guestEnabled || checking}
+              required
+            />
+            {guestError && (
+              <p className="form-error" role="alert">
+                {guestError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={!guestEnabled || checking || submitting}
+            >
+              {submitting ? '공간 만드는 중…' : '게스트로 체험하기'}
+            </button>
+            <small>
+              대화 내용은 외부 AI 제공자에게 전송될 수 있으며 민감한 정보는
+              입력하지 마세요.
+            </small>
+          </form>
+        </section>
+      )}
     </main>
   );
 }

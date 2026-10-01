@@ -1,0 +1,24 @@
+# Use with COMPOSE_FILE=compose.yaml:deploy/compose.production.yaml in .env.
+services:
+  api:
+    cpus: 1.5
+    mem_limit: 1024m
+  web:
+    cpus: 0.5
+    mem_limit: 512m
+  postgres:
+    cpus: 0.75
+    mem_limit: 512m
+  gateway:
+    cpus: 0.25
+    mem_limit: 128m
+  migrate:
+    cpus: 0.5
+    mem_limit: 256m
+  admin-tool:
+    cpus: 0.5
+    mem_limit: 256m
+networks:
+  frontend:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-modelnaru}_frontend

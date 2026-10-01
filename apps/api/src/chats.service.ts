@@ -1,14 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 
 import { AttachmentLifecycleService } from './attachment-lifecycle.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
 import {
   ChatsRepository,
+  ConversationBusyError,
   ConversationNotFoundError,
+  ConversationSettingsConflictError,
   type CreateConversationInput,
   type MessagePageInput,
   type UpdateConversationInput,
 } from './chats.repository.js';
+import type { ConversationFilter } from './conversation-cursor.js';
 import { RequestTraceService } from './request-trace.service.js';
 
 export type ChatErrorCode = 'CHAT_INPUT_INVALID' | 'CHAT_NOT_FOUND';
@@ -38,6 +41,9 @@ export class ChatsService {
   list(principal: AuthenticatedPrincipal) {
     return this.repository.list(this.chatPrincipal(principal));
   }
+  listPage(principal: AuthenticatedPrincipal, filter: ConversationFilter) {
+    return this.repository.listPage(this.chatPrincipal(principal), filter);
+  }
 
   create(principal: AuthenticatedPrincipal, input: CreateConversationInput) {
     return this.repository.create(this.chatPrincipal(principal), input);
@@ -47,12 +53,14 @@ export class ChatsService {
     principal: AuthenticatedPrincipal,
     conversationId: string,
     branchId: string,
+    settingsRevision?: string,
   ) {
     try {
       return await this.repository.activateBranch(
         this.chatPrincipal(principal),
         conversationId,
         branchId,
+        settingsRevision,
       );
     } catch (error) {
       this.mapError(error);
@@ -129,6 +137,30 @@ export class ChatsService {
   }
 
   private mapError(error: unknown): never {
+    if (error instanceof ConversationSettingsConflictError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_SETTINGS_CONFLICT',
+            message: 'Conversation settings changed.',
+            conversation: error.conversation,
+            settingsRevision: error.conversation.settingsRevision,
+          },
+        },
+        409,
+      );
+    }
+    if (error instanceof ConversationBusyError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_CONVERSATION_BUSY',
+            message: 'Conversation has an active job.',
+          },
+        },
+        409,
+      );
+    }
     if (error instanceof ConversationNotFoundError) {
       throw new ChatError('CHAT_NOT_FOUND', 404, 'Conversation not found.');
     }

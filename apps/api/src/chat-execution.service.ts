@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { contextBudget } from './context-budget.js';
 
 import { AccessError, AccessService } from './access.service.js';
 import type { AuthenticatedPrincipal } from './auth.service.js';
@@ -10,6 +11,7 @@ import {
 import {
   ChatProviderService,
   ChatProviderUnavailableError,
+  runtimeProviderFetch,
 } from './chat-provider.service.js';
 import {
   type ChatEvent,
@@ -58,6 +60,7 @@ export interface ExecuteChatInput {
   providerModelId: string;
   regenerateAssistantMessageId?: string;
   sessionId?: string;
+  maximumGeneratedTextBytes?: number;
 }
 
 export type RegenerateChatInput = Omit<
@@ -92,23 +95,18 @@ export class ChatExecutionService {
     const principal = this.chatPrincipal(input.principal);
     let assistantMessageId: string | undefined;
     let content = '';
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
     let traceId: string | null = null;
     try {
       await this.messages.assertConversation(principal, input.conversationId);
       await this.access.assertModelAllowed(principal, input.providerModelId);
       const runtime = await this.providers.resolve(input.providerModelId);
-      const parameters = normalizeProviderParameters(
+      let parameters = normalizeProviderParameters(
         runtime.template,
         runtime.modelId,
         input.parameters,
       );
-      if (
-        parameters.maxOutputTokens !== undefined &&
-        runtime.maxOutputTokens !== null &&
-        parameters.maxOutputTokens > runtime.maxOutputTokens
-      ) {
-        throw new ChatParameterPolicyError();
-      }
       const turn = input.regenerateAssistantMessageId
         ? await this.messages.beginRegeneration(principal, {
             assistantMessageId: input.regenerateAssistantMessageId,
@@ -138,10 +136,26 @@ export class ChatExecutionService {
       ) {
         throw new ChatWebSearchModelUnsupportedError();
       }
-      const effectiveContextLimit = Math.min(
+      const budget = contextBudget(
+        runtime,
         turn.contextTokenLimit,
-        runtime.contextWindow ?? turn.contextTokenLimit,
+        parameters.maxOutputTokens,
+        turn.imageAttachments.length,
       );
+      const effectiveContextLimit = budget.input;
+      parameters = { ...parameters, maxOutputTokens: budget.output };
+      let reserved = false;
+      const beforeProviderSend = async () => {
+        externalSignal?.throwIfAborted();
+        await this.access.assertModelAllowed(principal, input.providerModelId);
+        if (!reserved) {
+          await this.access.reserveDailyRequest(
+            principal,
+            input.providerModelId,
+          );
+          reserved = true;
+        }
+      };
       let context = turn.context;
       if (
         estimateContextSize(turn.systemPrompt, context) > effectiveContextLimit
@@ -153,6 +167,7 @@ export class ChatExecutionService {
           conversationId: input.conversationId,
           ...(externalSignal ? { signal: externalSignal } : {}),
           systemPrompt: turn.systemPrompt,
+          beforeProviderSend,
         });
       }
       if (turn.imageAttachments.length > 0) {
@@ -168,7 +183,11 @@ export class ChatExecutionService {
           index === targetIndex ? { ...message, images } : message,
         );
       }
-      await this.access.reserveDailyRequest(principal, input.providerModelId);
+      if (
+        estimateContextSize(turn.systemPrompt, context) > effectiveContextLimit
+      )
+        throw new ContextSummarizationUnavailableError();
+      await beforeProviderSend();
       const providerInput = {
         apiKey: runtime.apiKey,
         baseUrl: runtime.baseUrl,
@@ -220,17 +239,21 @@ export class ChatExecutionService {
         principalKey: this.principalKey(principal),
       });
       const startedAt = Date.now();
-      let inputTokens: number | null = null;
-      let outputTokens: number | null = null;
       let stopReason: string | undefined;
       try {
         await this.messages.markStreaming(turn.assistantMessageId);
-        for await (const event of streamProviderRequest({
-          idleTimeoutMs: turn.responseTimeoutSeconds * 1_000,
-          onRawEvent: (document) => this.traces.appendRaw(traceId, document),
-          request: providerRequest,
-          signal: controller.signal,
-        })) {
+        for await (const event of streamProviderRequest(
+          {
+            idleTimeoutMs: turn.responseTimeoutSeconds * 1_000,
+            ...(input.maximumGeneratedTextBytes !== undefined
+              ? { maximumGeneratedTextBytes: input.maximumGeneratedTextBytes }
+              : {}),
+            onRawEvent: (document) => this.traces.appendRaw(traceId, document),
+            request: providerRequest,
+            signal: controller.signal,
+          },
+          runtimeProviderFetch(runtime),
+        )) {
           if (event.type === 'text_delta') {
             content += event.text;
             await emit(event);
@@ -289,6 +312,8 @@ export class ChatExecutionService {
           await this.messages.finishIncomplete(assistantMessageId, {
             content,
             errorCode: normalized.code,
+            inputTokens,
+            outputTokens,
             status: cancelled ? 'cancelled' : 'failed',
           });
         } catch (persistenceError) {
@@ -339,6 +364,9 @@ export class ChatExecutionService {
         providerModelId: input.providerModelId,
         regenerateAssistantMessageId: input.assistantMessageId,
         ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+        ...(input.maximumGeneratedTextBytes !== undefined
+          ? { maximumGeneratedTextBytes: input.maximumGeneratedTextBytes }
+          : {}),
       },
       emit,
       externalSignal,
@@ -390,6 +418,16 @@ export class ChatExecutionService {
     message: string;
     retryable: boolean;
   } {
+    if (
+      error instanceof Error &&
+      error.message === 'CHAT_IMAGE_BUDGET_UNKNOWN'
+    ) {
+      return {
+        code: 'CHAT_IMAGE_BUDGET_UNKNOWN',
+        message: 'The selected model has no verified image input budget.',
+        retryable: false,
+      };
+    }
     if (error instanceof AccessError) {
       return { code: error.code, message: error.message, retryable: false };
     }

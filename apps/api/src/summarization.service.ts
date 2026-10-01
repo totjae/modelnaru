@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { contextBudget, estimateInput } from './context-budget.js';
 
 import type { ChatTurnRecord } from './chat-messages.repository.js';
-import { ChatProviderService } from './chat-provider.service.js';
+import {
+  ChatProviderService,
+  runtimeProviderFetch,
+} from './chat-provider.service.js';
 import { streamProvider } from './chat-streaming.js';
 import { providerTemplateById } from './provider-catalog.js';
 import {
@@ -23,9 +27,7 @@ export function estimateContextSize(
   systemPrompt: string,
   context: Array<Pick<ContextMessage, 'content'>>,
 ): number {
-  return Array.from(
-    `${systemPrompt}\n${context.map((message) => message.content).join('\n')}`,
-  ).length;
+  return estimateInput(systemPrompt, context);
 }
 
 @Injectable()
@@ -116,6 +118,8 @@ export class SummarizationService {
   }
 
   async fitContext(input: {
+    jobId?: string;
+    beforeProviderSend?: () => Promise<void>;
     branchId: string;
     context: ContextMessage[];
     contextLimit: number;
@@ -123,6 +127,12 @@ export class SummarizationService {
     signal?: AbortSignal;
     systemPrompt: string;
   }): Promise<ContextMessage[]> {
+    if (
+      !input.context.length ||
+      estimateContextSize(input.systemPrompt, input.context.slice(-1)) >
+        input.contextLimit
+    )
+      throw new ContextSummarizationUnavailableError();
     const settings = await this.repository.getSettings();
     if (!settings.providerModelId) {
       throw new ContextSummarizationUnavailableError();
@@ -147,6 +157,8 @@ export class SummarizationService {
         ...input.context.slice(lastIndex + 1),
       ];
       if (
+        lastIndex + 1 === reused.coveredMessageCount &&
+        input.context[0]?.id === reused.firstMessageId &&
         estimateContextSize(input.systemPrompt, fitted) <= input.contextLimit
       ) {
         return fitted;
@@ -161,61 +173,155 @@ export class SummarizationService {
     if (prefix.length === 0) {
       throw new ContextSummarizationUnavailableError();
     }
-    const transcript = prefix
-      .map(
-        (message) =>
-          `${message.role === 'user' ? '사용자' : 'AI'}: ${message.content}`,
-      )
-      .join('\n\n');
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    input.signal?.addEventListener('abort', abort, { once: true });
-    if (input.signal?.aborted) abort();
+    const budget = contextBudget(
+      runtime,
+      runtime.contextWindow ?? 16_384,
+      Math.min(settings.maxOutputTokens, 1_024),
+    );
+    const transcript = (messages: ContextMessage[], previous = '') =>
+      (previous ? `[이전 요약]\n${previous}\n\n` : '') +
+      messages
+        .map(
+          (message) =>
+            `${message.role === 'user' ? '사용자' : 'AI'}: ${message.content}`,
+        )
+        .join('\n\n');
+    const fits = (text: string) =>
+      Array.from(text).length <= 12_000 &&
+      estimateInput(settings.prompt, [{ content: text, role: 'user' }]) <=
+        budget.input;
+    if (prefix.some((message) => !fits(transcript([message]))))
+      throw new ContextSummarizationUnavailableError();
     let summary = '';
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
     const startedAt = Date.now();
-    try {
-      for await (const event of streamProvider({
-        apiKey: runtime.apiKey,
-        baseUrl: runtime.baseUrl,
-        messages: [{ content: transcript, role: 'user' }],
-        modelId: runtime.modelId,
-        parameters: normalizeProviderParameters(
-          runtime.template,
-          runtime.modelId,
+    let offset = 0;
+    for (let attempt = 1; offset < prefix.length; attempt++) {
+      if (attempt > 4 || input.signal?.aborted)
+        throw new ContextSummarizationUnavailableError();
+      let end = offset;
+      while (
+        end < prefix.length &&
+        fits(transcript(prefix.slice(offset, end + 1), summary))
+      )
+        end++;
+      if (end === offset) throw new ContextSummarizationUnavailableError();
+      const text = transcript(prefix.slice(offset, end), summary);
+      const controller = new AbortController();
+      const signal = AbortSignal.any([
+        controller.signal,
+        AbortSignal.timeout(60_000),
+        ...(input.signal ? [input.signal] : []),
+      ]);
+      const usageId = await this.repository.beginAttempt({
+        conversationId: input.conversationId,
+        jobId: input.jobId,
+        attempt,
+        runtime,
+      });
+      let status: 'completed' | 'failed' | 'cancelled' = 'failed';
+      let next = '';
+      inputTokens = null;
+      outputTokens = null;
+      let checking = false;
+      const timer = setInterval(() => {
+        if (checking) return;
+        checking = true;
+        void this.providers
+          .resolve(settings.providerModelId!)
+          .catch(() => controller.abort())
+          .finally(() => {
+            checking = false;
+          });
+      }, 15_000);
+      timer.unref();
+      try {
+        const currentRuntime = await this.providers.resolve(
+          settings.providerModelId,
+        );
+        const currentBudget = contextBudget(
+          currentRuntime,
+          currentRuntime.contextWindow ?? 16_384,
+          Math.min(settings.maxOutputTokens, 1_024),
+        );
+        if (
+          estimateInput(settings.prompt, [{ content: text, role: 'user' }]) >
+          currentBudget.input
+        )
+          throw new ContextSummarizationUnavailableError();
+        await input.beforeProviderSend?.();
+        signal.throwIfAborted();
+        await this.repository.markAttemptSent(usageId);
+        for await (const event of streamProvider(
           {
-            maxOutputTokens: Math.min(
-              settings.maxOutputTokens,
-              runtime.maxOutputTokens ?? settings.maxOutputTokens,
+            apiKey: currentRuntime.apiKey,
+            baseUrl: currentRuntime.baseUrl,
+            messages: [{ content: text, role: 'user' }],
+            modelId: currentRuntime.modelId,
+            parameters: normalizeProviderParameters(
+              currentRuntime.template,
+              currentRuntime.modelId,
+              {
+                ...settings.providerParameters,
+                maxOutputTokens: currentBudget.output,
+                ...(settings.temperature !== null
+                  ? { temperature: settings.temperature }
+                  : {}),
+                ...(settings.topP !== null ? { topP: settings.topP } : {}),
+              },
             ),
-            ...(settings.temperature !== null
-              ? { temperature: settings.temperature }
-              : {}),
-            ...(settings.topP !== null ? { topP: settings.topP } : {}),
-            ...settings.providerParameters,
+            signal,
+            maximumGeneratedTextBytes: 16_384,
+            systemPrompt: settings.prompt,
+            template: currentRuntime.template,
           },
-        ),
-        signal: controller.signal,
-        systemPrompt: settings.prompt,
-        template: runtime.template,
-      })) {
-        if (event.type === 'text_delta') summary += event.text;
-        if (event.type === 'usage') {
-          inputTokens = event.inputTokens ?? inputTokens;
-          outputTokens = event.outputTokens ?? outputTokens;
+          runtimeProviderFetch(currentRuntime),
+        )) {
+          if (event.type === 'text_delta') next += event.text;
+          if (event.type === 'usage') {
+            inputTokens = event.inputTokens ?? inputTokens;
+            outputTokens = event.outputTokens ?? outputTokens;
+            await this.repository.recordAttemptTokens(
+              usageId,
+              inputTokens,
+              outputTokens,
+            );
+          }
         }
+        signal.throwIfAborted();
+        summary = next.trim();
+        if (!summary) throw new ContextSummarizationUnavailableError();
+        status = 'completed';
+      } catch {
+        status = input.signal?.aborted ? 'cancelled' : 'failed';
+        throw new ContextSummarizationUnavailableError();
+      } finally {
+        clearInterval(timer);
+        await this.repository.finishAttempt(
+          usageId,
+          status,
+          inputTokens,
+          outputTokens,
+        );
       }
-    } catch {
-      throw new ContextSummarizationUnavailableError();
-    } finally {
-      input.signal?.removeEventListener('abort', abort);
+      offset = end;
     }
     summary = summary.trim();
     if (!summary) throw new ContextSummarizationUnavailableError();
     const first = prefix[0]!;
     const last = prefix.at(-1)!;
+    const fitted = [
+      this.summaryMessage(`summary:${last.id}`, summary),
+      ...input.context.slice(prefix.length),
+    ];
+    if (
+      input.signal?.aborted ||
+      estimateContextSize(input.systemPrompt, fitted) > input.contextLimit
+    )
+      throw new ContextSummarizationUnavailableError();
     await this.repository.save({
+      ...(input.jobId ? { jobId: input.jobId } : {}),
       branchId: input.branchId,
       conversationId: input.conversationId,
       coveredMessageCount: prefix.length,
@@ -230,13 +336,6 @@ export class SummarizationService {
       summary,
       templateId: runtime.template.id,
     });
-    const fitted = [
-      this.summaryMessage(`summary:${last.id}`, summary),
-      ...input.context.slice(prefix.length),
-    ];
-    if (estimateContextSize(input.systemPrompt, fitted) > input.contextLimit) {
-      throw new ContextSummarizationUnavailableError();
-    }
     return fitted;
   }
 

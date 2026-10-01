@@ -144,77 +144,85 @@ export function ServerSettings() {
       {error && <p className="error-banner">{error}</p>}
       {notice && <p className="success-banner">{notice}</p>}
 
-      <div className="file-settings-grid">
-        <form className="settings-card" onSubmit={save}>
-          <div>
-            <p className="card-label">RETENTION</p>
-            <h3>원본 파일 보관 기간</h3>
-            <p className="field-help">
-              만료되면 원본과 추출 내용은 삭제하고 파일명·크기·페이지·해상도
-              정보만 대화에 남깁니다.
-            </p>
-          </div>
-          <label>
-            보관 일수
-            <input
-              disabled={busy}
-              max={3650}
-              min={1}
-              onChange={(event) => setRetentionDays(event.target.value)}
-              required
-              type="number"
-              value={retentionDays}
-            />
-          </label>
-          <button className="primary-button" disabled={busy} type="submit">
-            보관 기간 저장
-          </button>
-        </form>
+      {!settings ? (
+        <p role="status">
+          {busy
+            ? '파일 보관 설정을 불러오는 중…'
+            : '설정을 불러오지 못했습니다. 새로고침하세요.'}
+        </p>
+      ) : (
+        <div className="file-settings-grid">
+          <form className="settings-card" onSubmit={save}>
+            <div>
+              <p className="card-label">RETENTION</p>
+              <h3>원본 파일 보관 기간</h3>
+              <p className="field-help">
+                만료되면 원본과 추출 내용은 삭제하고 파일명·크기·페이지·해상도
+                정보만 대화에 남깁니다.
+              </p>
+            </div>
+            <label>
+              보관 일수
+              <input
+                disabled={busy}
+                max={3650}
+                min={1}
+                onChange={(event) => setRetentionDays(event.target.value)}
+                required
+                type="number"
+                value={retentionDays}
+              />
+            </label>
+            <button className="primary-button" disabled={busy} type="submit">
+              보관 기간 저장
+            </button>
+          </form>
 
-        <div className="settings-card">
-          <div>
-            <p className="card-label">CLEANUP</p>
-            <h3>자동 정리 상태</h3>
-            <p className="field-help">
-              서버 시작 1분 후와 이후 1시간마다 자동으로 정리합니다.
-            </p>
+          <div className="settings-card">
+            <div>
+              <p className="card-label">CLEANUP</p>
+              <h3>자동 정리 상태</h3>
+              <p className="field-help">
+                서버 시작 1분 후와 이후 1시간마다 자동으로 정리합니다.
+              </p>
+            </div>
+            <dl className="file-settings-stats">
+              <div>
+                <dt>보관 중</dt>
+                <dd>
+                  {settings?.storedFileCount ?? 0}개 ·{' '}
+                  {sizeLabel(settings?.storedBytes ?? 0)}
+                </dd>
+              </div>
+              <div>
+                <dt>삭제 대기</dt>
+                <dd>{settings?.queuedFileCount ?? 0}개</dd>
+              </div>
+              <div>
+                <dt>최근 정리</dt>
+                <dd>{dateLabel(settings?.lastCleanupAt ?? null)}</dd>
+              </div>
+              <div>
+                <dt>최근 결과</dt>
+                <dd>
+                  만료 {settings?.lastCleanupExpiredCount ?? 0} · 삭제{' '}
+                  {settings?.lastCleanupDeletedCount ?? 0} · 게스트{' '}
+                  {settings?.lastCleanupGuestCount ?? 0} · 실패{' '}
+                  {settings?.lastCleanupFailedCount ?? 0}
+                </dd>
+              </div>
+            </dl>
+            <button
+              className="quiet-button cleanup-now-button"
+              disabled={busy}
+              onClick={() => void cleanup()}
+              type="button"
+            >
+              지금 정리
+            </button>
           </div>
-          <dl className="file-settings-stats">
-            <div>
-              <dt>보관 중</dt>
-              <dd>
-                {settings?.storedFileCount ?? 0}개 ·{' '}
-                {sizeLabel(settings?.storedBytes ?? 0)}
-              </dd>
-            </div>
-            <div>
-              <dt>삭제 대기</dt>
-              <dd>{settings?.queuedFileCount ?? 0}개</dd>
-            </div>
-            <div>
-              <dt>최근 정리</dt>
-              <dd>{dateLabel(settings?.lastCleanupAt ?? null)}</dd>
-            </div>
-            <div>
-              <dt>최근 결과</dt>
-              <dd>
-                만료 {settings?.lastCleanupExpiredCount ?? 0} · 삭제{' '}
-                {settings?.lastCleanupDeletedCount ?? 0} · 게스트{' '}
-                {settings?.lastCleanupGuestCount ?? 0} · 실패{' '}
-                {settings?.lastCleanupFailedCount ?? 0}
-              </dd>
-            </div>
-          </dl>
-          <button
-            className="quiet-button cleanup-now-button"
-            disabled={busy}
-            onClick={() => void cleanup()}
-            type="button"
-          >
-            지금 정리
-          </button>
         </div>
-      </div>
+      )}
     </section>
   );
 }

@@ -23,6 +23,10 @@ import {
 import { AttachmentLimitError } from './attachments.repository.js';
 import { AttachmentNotFoundError } from './attachments.repository.js';
 import {
+  AttachmentBusyError,
+  AttachmentExpiredError,
+} from './attachments.repository.js';
+import {
   AttachmentsService,
   FileInputError,
   FileImageDimensionsError,
@@ -76,6 +80,50 @@ export class AttachmentsController {
           conversationId,
         ),
       };
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
+  @Get('conversations/:conversationId/:attachmentId')
+  @UseGuards(AuthenticatedSessionGuard)
+  async metadata(
+    @Param('conversationId') conversationId: string,
+    @Param('attachmentId') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(conversationId) || !UUID.test(id))
+      this.error('FILE_INPUT_INVALID', 'File input is invalid.', 400);
+    try {
+      return await this.attachments.metadata(
+        request.authenticatedSession!.principal,
+        conversationId,
+        id,
+      );
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+  @Post('conversations/:conversationId/:attachmentId/retry')
+  @HttpCode(200)
+  @UseGuards(AuthenticatedMutationGuard)
+  async retry(
+    @Param('conversationId') conversationId: string,
+    @Param('attachmentId') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(conversationId) || !UUID.test(id))
+      this.error('FILE_INPUT_INVALID', 'File input is invalid.', 400);
+    try {
+      return await this.attachments.retry(
+        request.authenticatedSession!.principal,
+        conversationId,
+        id,
+      );
     } catch (error) {
       this.mapError(error);
     }
@@ -184,6 +232,14 @@ export class AttachmentsController {
   }
 
   private mapError(error: unknown): never {
+    if (error instanceof AttachmentBusyError)
+      this.error(
+        'FILE_PROCESSING_BUSY',
+        'File is already processing or in use.',
+        409,
+      );
+    if (error instanceof AttachmentExpiredError)
+      this.error('FILE_EXPIRED', 'File has expired.', 410);
     if (
       error instanceof ConversationNotFoundError ||
       error instanceof AttachmentNotFoundError

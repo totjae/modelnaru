@@ -1,5 +1,34 @@
 # 서버 시작 설정 명세
 
+## N12 패키징 설정 (2026-10-01, 구현·격리 인수 완료)
+
+render-env는 config의 shutdownGraceSeconds에 10초를 더한 APICHAT_STOP_GRACE_SECONDS를 생성하며 Compose API stop_grace_period에 사용한다(기본 40초, 최대 310초). shutdown은 DB close 이전 hook에서 접수를 차단하고 upstream 중단·최종 저장·제목 정리를 기다린다. grace 초과 작업은 다음 시작에서 재시작 실패로 정리한다. Docker JSON 로그는 서비스별 10 MiB×3으로 순환한다. 출력/구독 한도는 N02 설정 원장을 그대로 사용한다.
+
+## N02 새 release 설정·proxy·복구 계약 (2026-09-30, 확정·미구현)
+
+새 버전은 `config.yaml`의 `version: 2`를 요구한다. N04에서 v2 loader schema·`config.example.yaml`·관리자 CLI `init` 기본값을 구현하고 경계값 단위 시험을 통과했다(TEST_PLAN.md 최신 N04 절). 이 문서 3절의 `version: 1` 예시는 이전 설치 기록이며 새 runtime의 입력이 아니다. N12에서 CLI `validate/render-env`, README와 실제 배포 시험을 함께 정렬한다. v1 파일을 v2 runtime에 자동 보정해 시작하지 않는다. 이번 전환은 이전 설치의 config/data를 보존한 새 배포 디렉터리에서 `init`으로 v2를 생성한다(DEPLOYMENT_RUNBOOK.md N02). 이후 v2 업데이트에서 설정과 migration의 호환을 별도 판정한다.
+
+| v2 항목 | 기본값·범위 | 의미 |
+| --- | --- | --- |
+| `limits.maximumGlobalAiGenerations` | 3, 1~20 | 이름은 유지하되 실제 본 대화·요약·제목 Provider network call 전체 슬롯. 코드에서 반드시 소비 |
+| `limits.maximumAiGenerationsPerUser` | 1, v2에서는 정확히 1 | user/guest 주체별 활성 chat job 상한. DB partial unique와 같은 값이며 2는 거부 |
+| `limits.maximumGeneratedTextBytes` | 2097152, 65536~8388608 | 작업별 UTF-8 누적 assistant 생성 본문 상한. 생성·checkpoint·최종 message·GET 복원에 같은 설정값 적용. DB의 절대 8 MiB byte 제약은 DATABASE_SCHEMA.md N01 참조 |
+| `limits.maximumSseSubscribersPerJob` | 3, 1~10 | job별 동시 구독 상한 |
+| `limits.maximumGlobalSseSubscribers` | 30, 1~100 | 프로세스 전체 구독 상한 |
+| `limits.maximumSsePendingBytes` | 262144, 65536~1048576 | 구독자 하나의 미전송 **직렬화된 SSE frame byte** 상한. JSON·`id/event/data` 줄·구분자 포함; 분할 규칙은 AI_INTEGRATION_SPEC.md N02 참조 |
+| `server.shutdownGraceSeconds` | 기존 30, 1~300 | 새 요청 접수 중지·활성 작업 중단·최종 checkpoint 최대 대기 |
+
+나머지 고정 안전 상한(Provider 요청 32 MiB, upstream 응답 64 MiB, upstream event 1 MiB, 총 30분, header/연결, context fallback)은 AI_INTEGRATION_SPEC.md N02 절에 단일 기준으로 둔다. 설정값이 필요한 운영 조정은 N13 측정 근거와 함께 schema·예제·문서를 변경한다. `maximumGlobalAiGenerations`가 3보다 작아도 보조 호출은 대기열을 만들지 않고 chat 호출에 우선권을 둔다. PDF/OCR/이미지/파일 상한은 현재 값과 별개다.
+
+새 구독 URL `/api/conversations/:id/jobs/:jobId/events`는 host Nginx와 내부 gateway 양쪽에서 SSE proxy buffering/cache를 끄고 `proxy_read_timeout`을 heartbeat 15초보다 길게 둔다(기본 600초). 기존 `/messages` SSE 예외는 새 Web이 더는 호출하지 않지만 전환 중에는 기존 API 경로를 임의 제거하지 않는다. `location`과 실제 endpoint의 검증은 N12에서 함께 수행한다. `X-Accel-Buffering: no`, `Content-Type: text/event-stream`, `Cache-Control: no-store`를 확인한다. log에는 URL query나 인증 header가 나타나지 않아야 한다.
+
+관리자 MFA 복구는 SECURITY_SPEC.md N02의 기존 CLI `reset-totp` 정책으로 확정한다. CLI는 일회용 복구 코드를 만들거나 저장하지 않는다. `reset-totp` 뒤 `validate`와 restart, 새 secret 로그인, 이전 관리자 session 거부를 N12에서 시험한다. `README.md`와 runbook에 실제 명령의 실행 위치·사전 조건을 맞춘다.
+
+## 2026-09-30 새 버전 감사 당시 보완 대기 (N02 계약 확정 전 기록)
+
+- 현 config의 AI 동시성은 API 실행 경로에 연결되지 않은 것으로 정적 확인했다. 새 버전은 CHAT_STATE_SPEC.md의 동시성·전체 실행 상한을 실제 admission/Provider 실행에 연결하고 schema·예시·README를 함께 갱신해야 한다(AUD-02).
+- 출력 전체 byte·구독 버퍼/개수·보조 호출 예산·로그 보관 상한과 TOTP 복구 정책은 구현 전 구체화한다(AUD-08·12·14). 기존 복구 code 설명은 구현 완료 증거가 아니다.
+
 ## 1. 목적
 
 애플리케이션의 port, 관리자 계정과 서버 구동에 필요한 값을 하나의 시작 설정 파일에서 관리한다. 설정은 서버 시작 시 한 번 읽고 검증하며 파일 변경만으로 실행 중 설정을 즉시 바꾸지 않는다. 변경 사항은 애플리케이션 재시작 후 적용한다.
@@ -124,7 +153,7 @@ providerSecrets:
 
 명령 이름은 구현 시 변경될 수 있지만 평문 비밀번호를 shell argument에 직접 넣지 않고 숨김 입력으로 받는다. 관리자 ID, password hash 또는 TOTP secret이 변경되면 다음 서버 시작 시 기존 관리자 session을 모두 만료한다.
 
-TOTP 복구 code는 일회용으로 생성하고 hash만 DB에 저장한다. 원본 복구 code는 설정 파일과 같은 서버 disk에 보관하지 않는다.
+새 버전은 일회용 TOTP 복구 code를 제공하지 않는다. 관리자 host shell에서 `reset-totp`로 secret을 다시 발급하는 정책은 이 문서의 N02 절을 따른다.
 
 ## 4.1 계정 설정 도구
 
@@ -137,7 +166,7 @@ TOTP 복구 code는 일회용으로 생성하고 hash만 DB에 저장한다. 원
 | `init`         | 기본 `config.yaml`, secret과 data 폴더 생성 및 최초 관리자 설정 |
 | `set-username` | 고정 관리자 ID 변경                                             |
 | `set-password` | 숨김 입력으로 새 비밀번호를 두 번 받고 Argon2id hash 저장       |
-| `reset-totp`   | 새 TOTP secret·QR과 일회용 복구 code 생성                       |
+| `reset-totp`   | 대화형 terminal에 새 TOTP secret·QR을 표시하고 설정을 갱신      |
 | `validate`     | config schema, 권한, 경로, secret 존재 여부 검사                |
 | `show`         | 민감값을 마스킹한 현재 시작 설정 표시                           |
 
@@ -152,7 +181,7 @@ docker compose run --rm admin-tool validate
 
 계정 설정 도구에는 다음 안전장치를 적용한다.
 
-- 비밀번호와 TOTP secret을 command argument, shell history와 stdout에 출력하지 않음
+- 비밀번호와 TOTP secret을 command argument·shell history·일반 log에 출력하지 않음. `init/reset-totp`의 대화형 terminal에는 새 TOTP secret·QR을 한 번 표시하므로 출력 캡처·공유 금지
 - 비밀번호 입력은 terminal echo를 끄고 확인 입력을 한 번 더 받음
 - Argon2id parameter는 서버의 보안 기본값을 사용하고 hash 문자열에 parameter를 포함
 - `config.yaml`이 symbolic link이면 수정을 거부
@@ -201,7 +230,7 @@ server {
         proxy_send_timeout 600s;
     }
 
-    location ~ ^/api/conversations/[^/]+/messages(?:$|/) {
+    location ~ ^/api/conversations/[^/]+/(?:jobs/[^/]+/events|messages)(?:$|/) {
         proxy_pass http://apichat_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -227,7 +256,7 @@ server {
 }
 ```
 
-실제 endpoint 경로가 상세 API 명세에서 바뀌면 Nginx location도 같이 변경한다. 현재 스트리밍 endpoint인 `/api/conversations/:id/messages`와 취소 하위 경로에는 `proxy_buffering off`를 적용한다. 내부 gateway와 host Nginx 양쪽에 같은 기준을 적용한다.
+실제 endpoint 경로가 상세 API 명세에서 바뀌면 Nginx location도 같이 변경한다. 새 `/api/conversations/:id/jobs/:jobId/events`와 기존 `/messages`를 포함한 대화 경로에는 `proxy_buffering off`를 적용한다. 내부 gateway와 host Nginx 양쪽에 같은 기준을 적용한다.
 
 파일은 한 요청에 하나씩 최대 10MB를 업로드하고 성공한 attachment ID를 메시지에 최대 10개 연결한다. 따라서 Nginx의 단일 요청 허용 크기는 12MB로 충분하다. 브라우저는 여러 파일을 최대 2개씩 병렬 업로드한다.
 

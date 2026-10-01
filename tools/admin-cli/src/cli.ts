@@ -141,7 +141,7 @@ async function init(): Promise<void> {
   const encodedDatabasePassword = encodeURIComponent(databasePassword);
 
   const config = modelNaruConfigSchema.parse({
-    version: 1,
+    version: 2,
     server: {
       host: '127.0.0.1',
       port: 32432,
@@ -171,7 +171,7 @@ async function init(): Promise<void> {
     },
     limits: {
       maximumGlobalAiGenerations: 3,
-      maximumAiGenerationsPerUser: 2,
+      maximumAiGenerationsPerUser: 1,
       maximumPdfWorkers: 1,
       maximumOcrWorkers: 1,
       maximumPdfQueueSize: 4,
@@ -197,7 +197,6 @@ async function init(): Promise<void> {
     'data/temp',
     'data/logs',
     'data/postgres',
-    'data/valkey',
   ]) {
     await mkdir(resolve(deploymentRoot, directory), { recursive: true });
   }
@@ -300,6 +299,7 @@ async function renderEnv(): Promise<void> {
       loaded.config.server.port,
       process.env.APICHAT_UID,
       process.env.APICHAT_GID,
+      loaded.config.server.shutdownGraceSeconds,
     ),
   );
   await rename(temporaryPath, targetPath);

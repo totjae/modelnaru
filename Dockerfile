@@ -32,10 +32,14 @@ CMD ["node", "--enable-source-maps", "dist/main.js"]
 
 FROM dependencies AS web
 ENV NODE_ENV=production
-COPY --from=build /workspace/apps/web/.next /workspace/apps/web/.next
+COPY --from=build /workspace/apps/web/.next/standalone /workspace
+COPY --from=build /workspace/apps/web/.next/static /workspace/apps/web/.next/static
+COPY --from=build /workspace/apps/web/public /workspace/apps/web/public
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 WORKDIR /workspace/apps/web
 USER node
-CMD ["node", "node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["node", "server.js"]
 
 FROM dependencies AS admin
 ENV NODE_ENV=production

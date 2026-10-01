@@ -49,6 +49,7 @@ export function createRuntimeEnvironment(
   port: number,
   uid = '1000',
   gid = '1000',
+  shutdownGraceSeconds = 30,
 ): string {
   if (!/^\d+$/.test(uid) || !/^\d+$/.test(gid)) {
     throw new Error('APICHAT_UID and APICHAT_GID must be numeric');
@@ -60,6 +61,7 @@ export function createRuntimeEnvironment(
     `APICHAT_PORT=${port}`,
     `APICHAT_UID=${uid}`,
     `APICHAT_GID=${gid}`,
+    `APICHAT_STOP_GRACE_SECONDS=${shutdownGraceSeconds + 10}`,
     '',
   ].join('\n');
 }

@@ -79,12 +79,13 @@ describe('ChatsController', () => {
     expect(chats.create).toHaveBeenCalledWith(principal, {
       contextTokenLimit: 100_000,
       defaultProviderModelId: null,
-      generationParameters: { temperature: 1 },
+      generationParameters: {},
       historyMessageLimit: 0,
       requestTraceLimit: 3,
       responseTimeoutSeconds: 120,
       systemPrompt: '',
       title: '새 대화',
+      titleSource: 'default',
       webSearchEnabled: false,
     });
   });
@@ -103,6 +104,7 @@ describe('ChatsController', () => {
         id,
         {
           defaultProviderModelId: modelId,
+          settingsRevision: '1',
           generationParameters: {
             temperature: 0.4,
             topP: 0.8,
@@ -114,6 +116,7 @@ describe('ChatsController', () => {
       ),
     ).resolves.toEqual({ id: 'updated' });
     expect(chats.update).toHaveBeenCalledWith(principal, id, {
+      settingsRevision: '1',
       defaultProviderModelId: modelId,
       generationParameters: {
         temperature: 0.4,

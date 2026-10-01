@@ -7,6 +7,7 @@ import {
   providerDiscoveryHeaders,
   staticProviderModels,
 } from '../src/provider-discovery.js';
+import { ProviderDestinationError } from '../src/provider-destination.js';
 
 describe('provider model discovery', () => {
   it('builds provider-specific authentication headers', () => {
@@ -117,6 +118,20 @@ describe('provider model discovery', () => {
       ),
     ).rejects.toMatchObject({ code: 'PROVIDER_AUTH_FAILED' });
     expect(fetchImplementation).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a blocked custom destination instead of reporting a network failure', async () => {
+    await expect(
+      discoverProviderModels(
+        providerTemplateById('custom-openai')!,
+        '',
+        () =>
+          Promise.reject(
+            new ProviderDestinationError('Provider redirects are not allowed.'),
+          ),
+        'http://192.168.1.10:11434/v1',
+      ),
+    ).rejects.toBeInstanceOf(ProviderDestinationError);
   });
 
   it('reads split model responses as a bounded stream', async () => {

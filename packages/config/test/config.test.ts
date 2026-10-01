@@ -20,7 +20,7 @@ const repositoryRoot = resolve(
 );
 
 const validConfig = {
-  version: 1,
+  version: 2,
   server: {
     host: '127.0.0.1',
     port: 32432,
@@ -55,7 +55,7 @@ const validConfig = {
   },
   limits: {
     maximumGlobalAiGenerations: 3,
-    maximumAiGenerationsPerUser: 2,
+    maximumAiGenerationsPerUser: 1,
     maximumPdfWorkers: 1,
     maximumOcrWorkers: 1,
     maximumPdfQueueSize: 4,
@@ -106,6 +106,42 @@ describe('ModelNaru config', () => {
     ).toThrow();
   });
 
+  it('requires version 2 and one active chat job per principal', () => {
+    expect(() =>
+      modelNaruConfigSchema.parse({ ...validConfig, version: 1 }),
+    ).toThrow();
+    expect(() =>
+      modelNaruConfigSchema.parse({
+        ...validConfig,
+        limits: { ...validConfig.limits, maximumAiGenerationsPerUser: 2 },
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    ['maximumGeneratedTextBytes', 65_536, 8_388_608],
+    ['maximumSseSubscribersPerJob', 1, 10],
+    ['maximumGlobalSseSubscribers', 1, 100],
+    ['maximumSsePendingBytes', 65_536, 1_048_576],
+  ] as const)('checks %s boundaries', (key, minimum, maximum) => {
+    for (const value of [minimum, maximum]) {
+      expect(
+        modelNaruConfigSchema.parse({
+          ...validConfig,
+          limits: { ...validConfig.limits, [key]: value },
+        }).limits[key],
+      ).toBe(value);
+    }
+    for (const value of [minimum - 1, maximum + 1]) {
+      expect(() =>
+        modelNaruConfigSchema.parse({
+          ...validConfig,
+          limits: { ...validConfig.limits, [key]: value },
+        }),
+      ).toThrow();
+    }
+  });
+
   it('redacts administrator secrets', () => {
     const parsed = modelNaruConfigSchema.parse(validConfig);
     const redacted = redactConfig(parsed) as {
@@ -121,7 +157,7 @@ describe('ModelNaru config', () => {
     const loaded = await loadConfig(
       join(repositoryRoot, 'config.example.yaml'),
     );
-    expect(loaded.config.version).toBe(1);
+    expect(loaded.config.version).toBe(2);
   });
 
   it('validates runtime secret contents', async () => {

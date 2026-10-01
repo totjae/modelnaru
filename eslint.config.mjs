@@ -5,6 +5,8 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     ignores: [
+      'tmp/**',
+      '.codex-remote-attachments/**',
       '**/.next/**',
       '**/coverage/**',
       '**/dist/**',
@@ -38,5 +40,17 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
     },
+  },
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: [
+      'apps/web/test/n10-browser.mjs',
+      'apps/web/test/n11-browser.mjs',
+      'apps/web/test/n13-integration.mjs',
+      'apps/web/test/n13-server-acceptance.mjs',
+      'apps/api/test/n13-ocr.mjs',
+      'scripts/n13-mobile-provider.cjs',
+    ],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
 );

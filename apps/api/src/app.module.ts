@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import {
   AdminAccessController,
   PrincipalAccessController,
+  ModelFavoritesController,
 } from './access.controller.js';
 import { AccessRepository } from './access.repository.js';
 import { AccessService } from './access.service.js';
@@ -18,10 +19,12 @@ import { AuthRateLimiter } from './auth.rate-limiter.js';
 import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
 import { DatabaseService } from './database.service.js';
-import { ChatsController } from './chats.controller.js';
+import { ChatJobsController, ChatsController } from './chats.controller.js';
 import { ChatExecutionService } from './chat-execution.service.js';
 import { ChatMessagesRepository } from './chat-messages.repository.js';
 import { ChatProviderService } from './chat-provider.service.js';
+import { ChatJobsRepository } from './chat-jobs.repository.js';
+import { ChatJobsService } from './chat-jobs.service.js';
 import { ChatsRepository } from './chats.repository.js';
 import { ChatsService } from './chats.service.js';
 import { HealthController } from './health.controller.js';
@@ -50,6 +53,9 @@ import { AdminLogsController } from './admin-logs.controller.js';
 import { AdminLogsRepository } from './admin-logs.repository.js';
 import { AdminLogsService } from './admin-logs.service.js';
 import { RequestTraceService } from './request-trace.service.js';
+import { TitleGenerationRepository } from './title-generation.repository.js';
+import { TitleGenerationService } from './title-generation.service.js';
+import { TitleGenerationController } from './title-generation.controller.js';
 
 @Module({
   controllers: [
@@ -59,8 +65,11 @@ import { RequestTraceService } from './request-trace.service.js';
     ProvidersController,
     AdminAccessController,
     PrincipalAccessController,
+    ModelFavoritesController,
     ChatsController,
+    ChatJobsController,
     SummarizationController,
+    TitleGenerationController,
     UsageController,
     AttachmentsController,
     AttachmentLifecycleController,
@@ -89,8 +98,12 @@ import { RequestTraceService } from './request-trace.service.js';
     ChatMessagesRepository,
     ChatProviderService,
     ChatExecutionService,
+    ChatJobsRepository,
+    ChatJobsService,
     SummarizationRepository,
     SummarizationService,
+    TitleGenerationRepository,
+    TitleGenerationService,
     UsageRepository,
     UsageService,
     AdminLogsRepository,

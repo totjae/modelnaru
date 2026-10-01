@@ -35,6 +35,7 @@ interface RawConversationState {
   history_message_limit: number;
   request_trace_limit: number;
   response_timeout_seconds: number;
+  settings_revision: string;
   system_prompt: string;
   web_search_enabled: boolean;
 }
@@ -63,6 +64,7 @@ interface RawAttachment {
 export class ChatMessageStateError extends Error {}
 export class ChatRegenerationTargetError extends Error {}
 export class ChatAttachmentError extends Error {}
+export class ChatSettingsConflictError extends Error {}
 
 function requestParameters(parameters: ChatParameters): JSONValue {
   return { ...parameters };
@@ -193,15 +195,19 @@ export class ChatMessagesRepository {
       modelId: string;
       parameters: ChatParameters;
       providerModelId: string;
+      settingsRevision?: string;
       templateId: string;
     },
+    existingTransaction?: DatabaseTransaction,
   ): Promise<ChatTurnRecord> {
     const storedParameters = requestParameters(input.parameters);
-    return this.database.getClient().begin(async (transaction) => {
+    const work = async (
+      transaction: DatabaseTransaction,
+    ): Promise<ChatTurnRecord> => {
       const conversationRows =
         principal.type === 'user'
           ? await transaction<RawConversationState[]>`
-              SELECT active_branch_id, history_message_limit,
+              SELECT active_branch_id, settings_revision, history_message_limit,
                 context_token_limit, request_trace_limit,
                 response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
@@ -209,7 +215,7 @@ export class ChatMessagesRepository {
               FOR UPDATE
             `
           : await transaction<RawConversationState[]>`
-              SELECT active_branch_id, history_message_limit,
+              SELECT active_branch_id, settings_revision, history_message_limit,
                 context_token_limit, request_trace_limit,
                 response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
@@ -218,6 +224,12 @@ export class ChatMessagesRepository {
             `;
       const conversation = conversationRows[0];
       if (!conversation) throw new ConversationNotFoundError();
+      if (
+        input.settingsRevision !== undefined &&
+        conversation.settings_revision !== input.settingsRevision
+      ) {
+        throw new ChatSettingsConflictError();
+      }
       const previous = await this.activeContext(
         transaction,
         input.conversationId,
@@ -254,6 +266,7 @@ export class ChatMessagesRepository {
           AND message_id IS NOT NULL
           AND status = 'ready'
           AND expires_at > now()
+        FOR UPDATE
       `;
       const last = previous.at(-1);
       const userMessageId = randomUUID();
@@ -360,7 +373,10 @@ export class ChatMessagesRepository {
         userMessageId,
         webSearchEnabled: conversation.web_search_enabled,
       };
-    });
+    };
+    return existingTransaction
+      ? work(existingTransaction)
+      : this.database.getClient().begin(work);
   }
 
   async beginRegeneration(
@@ -371,15 +387,19 @@ export class ChatMessagesRepository {
       modelId: string;
       parameters: ChatParameters;
       providerModelId: string;
+      settingsRevision?: string;
       templateId: string;
     },
+    existingTransaction?: DatabaseTransaction,
   ): Promise<ChatTurnRecord> {
     const storedParameters = requestParameters(input.parameters);
-    return this.database.getClient().begin(async (transaction) => {
+    const work = async (
+      transaction: DatabaseTransaction,
+    ): Promise<ChatTurnRecord> => {
       const conversationRows =
         principal.type === 'user'
           ? await transaction<RawConversationState[]>`
-              SELECT active_branch_id, history_message_limit,
+              SELECT active_branch_id, settings_revision, history_message_limit,
                 context_token_limit, request_trace_limit,
                 response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
@@ -387,7 +407,7 @@ export class ChatMessagesRepository {
               FOR UPDATE
             `
           : await transaction<RawConversationState[]>`
-              SELECT active_branch_id, history_message_limit,
+              SELECT active_branch_id, settings_revision, history_message_limit,
                 context_token_limit, request_trace_limit,
                 response_timeout_seconds, system_prompt, web_search_enabled
               FROM conversations
@@ -396,6 +416,12 @@ export class ChatMessagesRepository {
             `;
       const conversation = conversationRows[0];
       if (!conversation) throw new ConversationNotFoundError();
+      if (
+        input.settingsRevision !== undefined &&
+        conversation.settings_revision !== input.settingsRevision
+      ) {
+        throw new ChatSettingsConflictError();
+      }
 
       const activeMessages = await this.activeContext(
         transaction,
@@ -505,7 +531,10 @@ export class ChatMessagesRepository {
         userMessageId: null,
         webSearchEnabled: conversation.web_search_enabled,
       };
-    });
+    };
+    return existingTransaction
+      ? work(existingTransaction)
+      : this.database.getClient().begin(work);
   }
 
   async markStreaming(assistantMessageId: string): Promise<void> {
@@ -550,6 +579,7 @@ export class ChatMessagesRepository {
         SET status = 'completed',
           input_tokens = ${input.inputTokens},
           output_tokens = ${input.outputTokens},
+          usage_known = ${input.inputTokens !== null || input.outputTokens !== null},
           duration_ms = GREATEST(
             0,
             floor(extract(epoch FROM (now() - started_at)) * 1000)::integer
@@ -574,6 +604,8 @@ export class ChatMessagesRepository {
     input: {
       content: string;
       errorCode: string;
+      inputTokens: number | null;
+      outputTokens: number | null;
       status: 'cancelled' | 'failed';
     },
   ): Promise<void> {
@@ -581,6 +613,8 @@ export class ChatMessagesRepository {
       await transaction`
         UPDATE messages
         SET status = ${input.status}, content = ${input.content},
+          input_tokens = ${input.inputTokens},
+          output_tokens = ${input.outputTokens},
           error_code = ${input.errorCode}, completed_at = NULL
         WHERE id = ${assistantMessageId}
           AND role = 'assistant'
@@ -589,6 +623,9 @@ export class ChatMessagesRepository {
       await transaction`
         UPDATE usage_events
         SET status = ${input.status},
+          input_tokens = ${input.inputTokens},
+          output_tokens = ${input.outputTokens},
+          usage_known = ${input.inputTokens !== null || input.outputTokens !== null},
           duration_ms = GREATEST(
             0,
             floor(extract(epoch FROM (now() - started_at)) * 1000)::integer

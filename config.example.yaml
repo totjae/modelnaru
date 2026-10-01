@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 server:
   host: 127.0.0.1
@@ -40,7 +40,11 @@ sessions:
 
 limits:
   maximumGlobalAiGenerations: 3
-  maximumAiGenerationsPerUser: 2
+  maximumAiGenerationsPerUser: 1
+  maximumGeneratedTextBytes: 2097152
+  maximumSseSubscribersPerJob: 3
+  maximumGlobalSseSubscribers: 30
+  maximumSsePendingBytes: 262144
   maximumPdfWorkers: 1
   maximumOcrWorkers: 1
   maximumPdfQueueSize: 4

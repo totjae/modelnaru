@@ -21,6 +21,109 @@ const principal: AuthenticatedPrincipal = {
 };
 
 describe('ChatExecutionService', () => {
+  it('keeps partial usage when the provider reaches its output limit', async () => {
+    const access = {
+      assertModelAllowed: vi.fn(() => Promise.resolve()),
+      reserveDailyRequest: vi.fn(() => Promise.resolve()),
+    };
+    const messages = {
+      assertConversation: vi.fn(() => Promise.resolve()),
+      beginTurn: vi.fn(() =>
+        Promise.resolve({
+          activateBranchOnComplete: false,
+          assistantMessageId: '30000000-0000-4000-8000-000000000001',
+          branchId: '60000000-0000-4000-8000-000000000001',
+          context: [
+            {
+              content: 'hello',
+              id: '40000000-0000-4000-8000-000000000001',
+              role: 'user',
+            },
+          ],
+          contextTokenLimit: 100_000,
+          imageAttachments: [],
+          previousActiveBranchId: '60000000-0000-4000-8000-000000000001',
+          requestTraceLimit: 0,
+          responseTimeoutSeconds: 120,
+          systemPrompt: '',
+          userMessageId: '40000000-0000-4000-8000-000000000001',
+          webSearchEnabled: false,
+        }),
+      ),
+      markStreaming: vi.fn(() => Promise.resolve()),
+      complete: vi.fn(() => Promise.resolve()),
+      finishIncomplete: vi.fn(() => Promise.resolve()),
+    };
+    const providers = {
+      resolve: vi.fn(() =>
+        Promise.resolve({
+          apiKey: 'secret',
+          baseUrl: 'https://api.openai.com/v1',
+          contextWindow: null,
+          maxOutputTokens: null,
+          modelId: 'gpt-test',
+          providerModelId: '20000000-0000-4000-8000-000000000001',
+          supportsImageInput: false,
+          supportsWebSearch: false,
+          template: providerTemplateById('openai')!,
+        }),
+      ),
+    };
+    const providerBody = [
+      { choices: [{ delta: { content: '가' }, finish_reason: null }] },
+      {
+        choices: [{ delta: {}, finish_reason: 'length' }],
+        usage: { prompt_tokens: 3, completion_tokens: 7 },
+      },
+    ]
+      .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+      .join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(providerBody))),
+    );
+    try {
+      const service = new ChatExecutionService(
+        access as unknown as AccessService,
+        {} as AttachmentsService,
+        providers as unknown as ChatProviderService,
+        messages as unknown as ChatMessagesRepository,
+        {} as SummarizationService,
+      );
+      const events: Array<{ type: string; code?: string }> = [];
+      await service.execute(
+        {
+          attachmentIds: [],
+          content: 'hello',
+          conversationId: '50000000-0000-4000-8000-000000000001',
+          maximumGeneratedTextBytes: 65_536,
+          parameters: {},
+          principal,
+          providerModelId: '20000000-0000-4000-8000-000000000001',
+        },
+        (event) => {
+          events.push(event);
+        },
+      );
+      expect(messages.finishIncomplete).toHaveBeenCalledWith(
+        '30000000-0000-4000-8000-000000000001',
+        expect.objectContaining({
+          content: '가',
+          errorCode: 'CHAT_OUTPUT_LIMIT',
+          inputTokens: 3,
+          outputTokens: 7,
+          status: 'failed',
+        }),
+      );
+      expect(messages.complete).not.toHaveBeenCalled();
+      expect(events.at(-1)).toMatchObject({
+        code: 'CHAT_OUTPUT_LIMIT',
+        type: 'error',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('rejects image attachments before quota use when the model capability is disabled', async () => {
     const access = {
       assertModelAllowed: vi.fn(() => Promise.resolve()),
@@ -159,6 +262,7 @@ describe('ChatExecutionService', () => {
             modelId: 'gpt-test',
             providerModelId: '20000000-0000-4000-8000-000000000001',
             supportsImageInput: true,
+            imageTokenEstimate: 1_024,
             supportsWebSearch: false,
             template: providerTemplateById('openai')!,
           }),

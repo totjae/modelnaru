@@ -22,7 +22,7 @@ const httpsUrl = z
 
 export const modelNaruConfigSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     server: z
       .object({
         host: z
@@ -118,7 +118,13 @@ export const modelNaruConfigSchema = z
     limits: z
       .object({
         maximumGlobalAiGenerations: integer(1, 20).default(3),
-        maximumAiGenerationsPerUser: integer(1, 10).default(2),
+        maximumAiGenerationsPerUser: z.literal(1).default(1),
+        maximumGeneratedTextBytes: integer(65_536, 8_388_608).default(
+          2_097_152,
+        ),
+        maximumSseSubscribersPerJob: integer(1, 10).default(3),
+        maximumGlobalSseSubscribers: integer(1, 100).default(30),
+        maximumSsePendingBytes: integer(65_536, 1_048_576).default(262_144),
         maximumPdfWorkers: integer(1, 4).default(1),
         maximumOcrWorkers: integer(1, 4).default(1),
         maximumPdfQueueSize: integer(0, 100).default(4),

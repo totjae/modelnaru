@@ -238,11 +238,14 @@ export function AccessManager({
   }
 
   return (
-    <section className="access-management" aria-labelledby="access-heading">
+    <section
+      className="access-management"
+      aria-labelledby={`access-heading-${scope}`}
+    >
       <div className="section-heading">
         <div>
           <p className="card-label">ACCESS & DAILY LIMITS</p>
-          <h2 id="access-heading">
+          <h2 id={`access-heading-${scope}`}>
             {scope === 'users'
               ? '사용자 모델 권한'
               : scope === 'guest'
@@ -433,9 +436,8 @@ export function AccessManager({
                     name="fileUploadEnabled"
                     type="checkbox"
                     defaultChecked={state.guest.fileUploadEnabled}
-                    disabled
                   />{' '}
-                  게스트 파일 첨부(파일 기능 구현 후 활성화)
+                  게스트 파일 첨부 허용
                 </label>
                 <p className="guest-session-notice">
                   설정을 저장하면 현재 게스트 세션이 모두 종료됩니다.

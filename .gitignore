@@ -49,3 +49,8 @@ Desktop.ini
 *.key
 *.p12
 *.pfx
+
+# Local agent attachments and deployment overrides
+.codex-remote-attachments/
+compose.override.yaml
+deployment-state.json

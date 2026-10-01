@@ -133,6 +133,7 @@ export class AttachmentLifecycleRepository {
         FROM attachments
         WHERE expires_at <= now()
           AND status IN ('ready', 'failed')
+          AND NOT EXISTS (SELECT 1 FROM chat_jobs j WHERE j.id=attachments.in_use_job_id AND j.status IN ('pending','streaming'))
         ORDER BY expires_at, id
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED

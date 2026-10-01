@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 
+import { ChatDialog } from './chat-dialog';
 import { csrfToken } from './client-auth';
 
 interface UserRecord {
@@ -348,7 +349,7 @@ export function UserManager() {
       )}
 
       {editing && (
-        <div className="modal-backdrop" role="presentation">
+        <ChatDialog label="사용자 정보 변경" onClose={() => setEditing(null)}>
           <form className="modal-card" onSubmit={updateUser}>
             <p className="card-label">EDIT ACCOUNT</p>
             <h3>사용자 정보 변경</h3>
@@ -376,6 +377,11 @@ export function UserManager() {
               />{' '}
               계정 활성화
             </label>
+            {error && (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            )}
             <div className="modal-actions">
               <button
                 className="quiet-button"
@@ -389,11 +395,14 @@ export function UserManager() {
               </button>
             </div>
           </form>
-        </div>
+        </ChatDialog>
       )}
 
       {passwordTarget && (
-        <div className="modal-backdrop" role="presentation">
+        <ChatDialog
+          label="비밀번호 변경"
+          onClose={() => setPasswordTarget(null)}
+        >
           <form className="modal-card" onSubmit={changePassword}>
             <p className="card-label">RESET PASSWORD</p>
             <h3>{passwordTarget.username} 비밀번호 변경</h3>
@@ -418,6 +427,11 @@ export function UserManager() {
               autoComplete="new-password"
               required
             />
+            {error && (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            )}
             <div className="modal-actions">
               <button
                 className="quiet-button"
@@ -431,7 +445,7 @@ export function UserManager() {
               </button>
             </div>
           </form>
-        </div>
+        </ChatDialog>
       )}
     </section>
   );

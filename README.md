@@ -1,5 +1,76 @@
 # ModelNaru
 
+## Git 기반 설치·운영 (2026-10-02, 전환 준비 중)
+
+새 배포는 `codex/refactor-v2`의 Git checkout이다. 대상은 `/home/totquf4171/modelnaru-git`, project `modelnaru-git`, 공인 주소 `https://chat.mihoservice.xyz`, loopback32432다. 실제 상태는 IMPLEMENTATION_STATUS.md GIT-RESET을 따른다. 아래 N14 archive 설명은 이전 기록이다.
+
+사용자 요청으로 DB·업로드·Provider 키·관리자 비밀번호/TOTP를 새로 생성한다. 이전 계정/대화/Provider를 이전하지 않는다. 이번 자동 초기화의 관리자 정보는 서버 `secrets/bootstrap-admin.json`에서 본인이 확인해 인증 앱에 등록하고 안전하게 보관한 뒤 임시 파일을 삭제한다. 비밀값을 Git/채팅에 붙여넣지 않는다. config.yaml·secrets/·data/·.env·.runtime.env·deployment-state.json은 Git 제외다.
+
+Git/Docker Engine/Compose plugin, Docker 실행 권한, host Nginx/공인 인증서를 준비한 서버 계정에서 최초 설치한다. 이미 생성된 root에서는 init/clone을 재실행하지 않는다.
+
+```bash
+cd /home/totquf4171
+git clone --branch codex/refactor-v2 --single-branch https://github.com/totjae/modelnaru.git modelnaru-git
+cd modelnaru-git
+cat > .env <<'ENV'
+COMPOSE_PROJECT_NAME=modelnaru-git
+COMPOSE_FILE=compose.yaml:deploy/compose.production.yaml
+ENV
+docker network create modelnaru-git_frontend
+docker compose build admin-tool api web migrate
+./bin/apichat-admin init
+docker network inspect --format '{{(index .IPAM.Config 0).Subnet}}' modelnaru-git_frontend
+```
+
+init에서 관리자 ID·HTTPS 주소·비밀번호를 입력하고 TOTP를 등록한다. 조회한 정확한 frontend subnet을 config.yaml의 server.trustProxy.addresses에 설정하고 파일0600/secrets 디렉터리0700을 유지한다. 광범위한 주소 신뢰는 사용하지 않는다. server.port는32432이며 기존 서비스와 병행 검증할 때는32433이다. port32432가 기존 설치에서 사용 중이면 RUNBOOK의 Git 전환 절차를 먼저 따른다.
+
+```bash
+./bin/apichat-admin validate
+./bin/apichat-admin render-env
+./bin/modelnaru start
+./bin/modelnaru status
+./bin/modelnaru health
+./bin/modelnaru logs
+```
+
+설치 후 명령은 `/home/totquf4171/modelnaru-git`에서 실행한다. 중지/시작/재시작은 필요할 때 `./bin/modelnaru stop`, `./bin/modelnaru start`, `./bin/modelnaru restart` 중 하나를 실행한다. 다음 업데이트는 로컬 검증·커밋·push 후 서버 tracked 변경이 없고 대상 release와 DB 호환성을 확인했을 때 실행한다.
+
+```bash
+cd /home/totquf4171/modelnaru-git
+git status --short
+git fetch origin
+git log --oneline HEAD..origin/codex/refactor-v2
+git pull --ff-only origin codex/refactor-v2
+./bin/modelnaru update
+git rev-parse HEAD
+./bin/modelnaru health
+curl --fail --resolve chat.mihoservice.xyz:443:127.0.0.1 https://chat.mihoservice.xyz/api/health/ready
+```
+
+update는 소스를 내려받지 않으며 build/validate/migration/health를 수행한다. 외부 PC에서도 실제 DNS/HTTPS 로그인을 확인한다. 데이터 초기화/reset --hard는 통상 업데이트 절차가 아니다. source commit/image·실행 상태는 TEST_PLAN.md, old 자원 제거와 복구 제한은 DEPLOYMENT_RUNBOOK.md Git 절을 따른다.
+
+## 현재 운영 릴리스: N14 v2 (2026-10-02 전환 완료)
+
+- 주소: https://chat.mihoservice.xyz . 서버 mihoservice_server의 /home/totquf4171/modelnaru-v2-20261002가 현재 배포 폴더다. Compose project는 modelnaru-v2이며 전용 compose.override.yaml의 name에도 고정했다. Host Nginx·기존 인증서·127.0.0.1:32432 연결을 유지했다.
+- 관리자 ID·비밀번호·TOTP는 기존과 같다. 관리자 항목만 서버 내부에서 보존하고 새 DB/암호화 키/파일 경로를 생성했다. 일반 사용자·대화·Provider 연결은 빈 상태로 시작하므로 관리자 화면에서 사용자와 Provider를 새로 등록한다. 시험 계정/mock/키를 운영 설정으로 남기지 않았다.
+- 기존 /home/totquf4171/modelnaru와 그 config/data/secrets 및 modelnaru project의 컨테이너는 중지 상태로 보존했다. 이 폴더에서 운영 start/update를 실행하면 포트가 충돌한다. 현재 운영 명령은 반드시 새 배포 폴더에서 실행한다.
+
+서버의 Docker 실행 권한이 있는 기존 SSH 계정으로:
+
+```bash
+cd /home/totquf4171/modelnaru-v2-20261002
+./bin/modelnaru status
+./bin/modelnaru health
+./bin/modelnaru logs
+```
+
+시작/중지/재시작/현재 소스 반영은 필요할 때 해당 명령 하나를 실행한다: ./bin/modelnaru start, ./bin/modelnaru stop, ./bin/modelnaru restart, ./bin/modelnaru update. start/restart/update는 build·validate·migration·health를 포함하며 update는 소스를 내려받는 명령이 아니다. 현재 배포물은 검토한 작업 폴더의 code-only archive이며 서버 Git checkout이 아니다. 다음 업데이트는 검토된 소스와 schema 호환성 확인 후 수행한다. 비밀번호 변경/TOTP 복구는 같은 폴더의 ./bin/apichat-admin 명령과 아래 기존 절차를 따른다.
+
+API CPU1.5/RAM1024MiB, Web0.5/512MiB, PostgreSQL0.75/512MiB, Gateway0.25/128MiB로 제한하며 restart unless-stopped·Docker log10MiB×3을 사용한다. 새 기본 구성에는 Valkey가 없다. 설치 당시 builder CPU1.5/RAM3GiB를 사용했고 작업 종료 후 제거했다.
+
+릴리스 식별·실행 근거는 TEST_PLAN.md 최신 N14 절, 복구 절차는 DEPLOYMENT_RUNBOOK.md 최신 N14 절을 따른다. 아래 N13 시험 환경 주소/계정/경로는 종료된 시험의 이력이다.
+
+
 여러 모델로 건너가는 하나의 대화 공간.
 
 ModelNaru(모델나루)는 여러 AI 제공자와 모델을 한곳에 등록하고, 관리자가 허용한 사용자와 게스트가 서로 분리된 공간에서 이용할 수 있게 만든 셀프호스팅 AI 채팅 웹 서비스입니다.
@@ -243,7 +314,6 @@ flowchart LR
     G --> A["NestJS API"]
     A --> P[("PostgreSQL<br/>계정·대화·권한·사용량·로그")]
     A --> F[("Local Storage<br/>원본 첨부·추출 데이터")]
-    A --> V[("Valkey<br/>내부 임시 상태 기반")]
     A --> L["외부 AI Provider"]
     M["One-shot Migration"] --> P
     C["Admin CLI"] --> Y["config.yaml·secrets"]
@@ -261,10 +331,9 @@ flowchart LR
 | Application API  | NestJS, TypeScript         | 인증·권한, 대화 상태, Provider 변환, 파일 처리, Usage와 로그    |
 | 영구 데이터      | PostgreSQL                 | 사용자·세션·Provider·대화·분기·첨부 Metadata·사용량의 기준 원장 |
 | 파일 저장        | Local Filesystem           | 원본 첨부와 임시 처리 결과, 보관·만료·삭제                      |
-| 내부 보조 서비스 | Valkey                     | 향후 Cache·Queue 등 임시 상태 확장을 위한 내부 전용 기반        |
-| 배포             | Docker Compose             | Gateway·Web·API·Migration·PostgreSQL·Valkey 역할 분리           |
+| 배포             | Docker Compose             | Gateway·Web·API·Migration·PostgreSQL 역할 분리           |
 
-PostgreSQL과 Valkey는 Host Port로 공개하지 않고 내부 Docker Network에서만 통신합니다. 현재 영구 업무 데이터의 기준 원장은 PostgreSQL이며 Valkey에만 의존하는 영구 기능은 두지 않습니다.
+PostgreSQL은 Host Port로 공개하지 않고 내부 Docker Network에서만 통신합니다. 새 단일 API 구성은 미사용 Valkey를 포함하지 않습니다. 기존 v1 Valkey 데이터는 이전 설치와 함께 보존합니다.
 
 ## 기술 스택
 
@@ -274,7 +343,6 @@ PostgreSQL과 Valkey는 Host Port로 공개하지 않고 내부 Docker Network�
 - Next.js 16, React 19
 - NestJS 11
 - PostgreSQL 17, `postgres.js`, Versioned SQL Migration
-- Valkey 8
 - Docker Compose
 - Nginx
 - Argon2id, TOTP, AES-256-GCM
@@ -306,40 +374,69 @@ provider-manager-v1.10.0.js
 
 ## 설치와 실행
 
-정식 운영 절차는 [DEPLOYMENT_RUNBOOK.md](./DEPLOYMENT_RUNBOOK.md)를 따릅니다. 아래는 Ubuntu와 Docker Compose가 준비된 새 배포 폴더에서의 기본 흐름입니다.
+적용 대상은 **config v2 + migration 0001~0020**의 새 설치입니다. Ubuntu의 Docker Engine·up --wait를 지원하는 Compose, Git, Docker 실행 권한과 대화형 터미널이 필요합니다. 호스트에 Node/pnpm을 설치할 필요는 없습니다. 이미지는 Node 24.14 계열과 packageManager에 고정된 pnpm 11.9.0으로 빌드하며 런타임은 registry 접속 없이 node로 실행합니다. 운영 전환 승인은 N13/N14이며 검증 결과는 [TEST_PLAN.md](./TEST_PLAN.md)를 확인하세요.
+
+기존 v1 폴더·설정·DB를 덮어쓰지 않는 **빈 새 배포 폴더**에서 실행합니다. 저장소 URL과 검토한 release commit을 실제 값으로 지정합니다.
 
 ```bash
-git clone <repository-url> modelnaru
-cd modelnaru
-
+git clone <repository-url> modelnaru-v2
+cd modelnaru-v2
+git checkout --detach <reviewed-release-commit>
 chmod +x bin/apichat-admin bin/modelnaru
-
+docker compose build admin-tool
 ./bin/apichat-admin init
 ./bin/apichat-admin validate
 ./bin/modelnaru start
 ./bin/modelnaru status
+./bin/modelnaru health
 ```
 
-`init`은 숨김 입력으로 관리자 비밀번호와 TOTP를 설정하고, `config.yaml` 및 필요한 Secret 파일을 생성합니다. 실제 비밀번호를 설정 파일에 평문으로 기록하지 않습니다.
+init에서 관리자 ID·공개 HTTPS 주소·숨김 비밀번호를 입력합니다. 표시된 TOTP QR/secret은 인증 앱과 안전한 오프라인 보관소에 등록합니다. 터미널 녹화·로그·문서에는 저장하지 않습니다. config.yaml과 secrets 파일은 0600으로 생성되며 최초 생성 후 init 재실행은 거부됩니다. 기본 진입점은 127.0.0.1:32432이며 config.yaml의 server.port로 바꿉니다. 같은 서버에 여러 설치를 둘 때는 각 터미널에서 서로 다른 COMPOSE_PROJECT_NAME을 export하고 port와 폴더도 분리합니다.
 
-서비스 확인:
+start는 소스를 빌드·설정 검증한 뒤 앱을 중지하고 migration·컨테이너를 다시 생성하여 health를 기다립니다. DB/업로드는 해당 폴더 data/에 보존합니다. migrate는 exit 0, gateway/web/api/postgres는 healthy가 정상입니다. 설치 중단 시 먼저 logs에서 원인을 확인합니다.
 
-```bash
-curl --fail http://<configured-bind-address>/api/health/live
-curl --fail http://<configured-bind-address>/api/health/ready
-```
-
-운영 명령:
+모든 운영 명령은 해당 배포 폴더에서 실행합니다.
 
 ```bash
+./bin/modelnaru health
+curl --fail http://127.0.0.1:32432/api/health/live
+curl --fail http://127.0.0.1:32432/api/health/ready
+./bin/modelnaru logs  # 최근 200줄 및 추적, Ctrl-C로 추적만 종료
+./bin/modelnaru stop # 컨테이너/네트워크 중지·제거, data/ 보존
 ./bin/modelnaru start
-./bin/modelnaru stop
-./bin/modelnaru restart
-./bin/modelnaru status
-./bin/modelnaru logs
+./bin/modelnaru restart # 설정 변경 반영, 잠시 접속 중단
 ```
 
-외부 공개 시에는 애플리케이션을 Loopback에 Bind하고 기존 Nginx가 HTTPS를 종료하도록 구성합니다. 실제 Domain, 인증서 경로와 서버 사양은 저장소 문서 예시에 기록하지 않고 각 배포 환경에서 별도로 관리합니다.
+host Nginx는 HTTPS를 종료하고 이 loopback 진입점으로 전달합니다. 공개 DNS·인증서와 [SERVER_CONFIG_SPEC.md 6절](./SERVER_CONFIG_SPEC.md)의 proxy 설정이 먼저 필요합니다. 새 /api/conversations/:id/jobs/:jobId/events 경로는 두 proxy 모두 buffering/cache를 끕니다. 15초 heartbeat·600초 read/send timeout을 사용합니다. API/Web/PostgreSQL 포트를 직접 공개하지 않습니다.
+
+### 관리자 TOTP 복구
+
+Docker 권한이 있는 서버 SSH 세션에서 배포 폴더로 이동합니다. 비밀번호도 잊었다면 set-password를 먼저 실행할 수 있습니다.
+
+```bash
+./bin/apichat-admin reset-totp
+./bin/apichat-admin validate
+./bin/modelnaru restart
+```
+
+새 QR/secret을 인증 앱에 등록한 뒤 새 코드로 로그인합니다. 재시작 후 기존 관리자 세션과 이전 TOTP 코드는 거부됩니다. 복구 중 config와 secrets의 권한을 완화하지 않습니다. 서버 shell과 오프라인 secret을 모두 잃으면 Web 복구 수단은 없습니다.
+
+### v2 업데이트
+
+검토한 release, config version 2 지원, 적용 migration의 checksum 및 기존 DB와의 호환성을 먼저 확인합니다. 현재 commit·이미지 식별자와 복구용 config/DB/업로드 사본을 접근 제한된 위치에 보존합니다. 같은 디스크 사본은 디스크 고장 복구를 보장하지 않습니다. 작업 파일이 변경된 checkout에서는 변경을 먼저 보존합니다.
+
+```bash
+git status --short
+git rev-parse HEAD
+git fetch origin
+git checkout --detach <reviewed-compatible-release-commit>
+./bin/modelnaru update
+./bin/modelnaru health
+./bin/modelnaru status
+```
+
+update는 빌드·validate 성공 뒤 앱을 중지하고 migration을 재실행합니다. checksum 불일치·누락·SQL 실패면 새 API 시작을 차단합니다. 실패 시 자동 rollback하지 않습니다. 이전 이미지에 현재 DB를 붙이는 rollback은 schema 호환 검증이 있을 때만 허용하며, 그 외에는 보존한 이전 설치의 이미지+설정+DB+업로드 전체를 사용합니다. v1→v2는 빈 새 DB 설치만 지원합니다. 상세 절차는 [DEPLOYMENT_RUNBOOK.md](./DEPLOYMENT_RUNBOOK.md)를 따릅니다.
+
 
 ## 개발
 
@@ -379,7 +476,7 @@ Git에서 제외하는 주요 항목:
 다음 값은 Source, 문서, Fixture, Screenshot 또는 Log에 기록하지 않습니다.
 
 - 관리자·사용자·게스트의 실제 비밀번호와 코드
-- TOTP Secret과 복구 Code
+- TOTP Secret과 인증 앱의 현재 Code
 - Provider API Key와 암호화 Master Key
 - Session Token, Cookie와 CSRF Token
 - Database URL과 Private Key
@@ -400,6 +497,8 @@ Git에서 제외하는 주요 항목:
 세부 상태는 [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)를 기준으로 확인합니다.
 
 ## 문서 안내
+
+새 버전 개발을 이어받는 에이전트는 [인계 문서](./HANDOFF.md)에서 전체 문서 지도와 읽기 순서를 확인하고 [실행 계획](./IMPLEMENTATION_PLAN.md)을 따릅니다. 새 버전 계획과 현재 배포 기능은 구분해 기록합니다.
 
 ### 요구사항과 진행 상태
 
@@ -435,7 +534,7 @@ Git에서 제외하는 주요 항목:
 
 | 문서                                             | 내용                                     |
 | ------------------------------------------------ | ---------------------------------------- |
-| [WEB_UI_SPEC.md](./WEB_UI_SPEC.md)               | Theme, 7색 역할, 화면 구조와 반응형 동작 |
+| [WEB_UI_SPEC.md](./WEB_UI_SPEC.md)               | 새 버전 매트 디자인·화면 구성과 현행 UI 기록 |
 | [TECH_STACK_OPTIONS.md](./TECH_STACK_OPTIONS.md) | 기술 선택 근거와 영역별 대체안           |
 | [SERVER_CONFIG_SPEC.md](./SERVER_CONFIG_SPEC.md) | 시작 설정, Admin CLI, Bind와 Proxy 기준  |
 | [DEPLOYMENT_PROFILE.md](./DEPLOYMENT_PROFILE.md) | 운영 환경과 자원 정책                    |
@@ -448,13 +547,54 @@ Git에서 제외하는 주요 항목:
 | ---------------------------------------------------- | -------------------------------------------- |
 | [AGENTS.md](./AGENTS.md)                             | 개발 Agent가 따라야 할 문서 색인과 갱신 규칙 |
 | [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md) | 개발 전·중·후 문서화 절차와 완료 조건        |
+| [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | 새 버전 단계별 순서·의존관계·작업 인계 계약 |
+| [HANDOFF.md](./HANDOFF.md) | 다음 에이전트용 전체 문서 지도·현재 위치·첫 작업 |
 
 ## 프로젝트 상태
 
-핵심 서비스 흐름인 인증, 사용자 관리, Provider 등록, 모델 권한, 대화·분기·자동 요약, 첨부·OCR, Usage·로그와 Docker Compose 배포는 구현되어 있습니다. 현재 작업은 전용 인증이 필요한 Provider 확대, 남은 실제 자격증명 계약 시험, 브라우저 E2E 범위 확정과 운영 보완에 집중합니다.
+기존 운영 배포와 새 작업 트리는 구분합니다. 새 버전은 N00~N11의 계약·DB·지속 생성 API·커스텀/로컬 Provider·컨텍스트 예산·자동 제목·탐색/설정/즐겨찾기/첨부 API 및 새 UI를 구현했습니다. N12는 새 Docker 이미지와 격리 PostgreSQL·mock Provider로 설치·복구를 검증합니다. 외부 HTTPS·실제 Provider·전체 브라우저 통합 인수는 N13, 운영 전환은 N14입니다. 실제 결과와 제한은 [구현 진행 현황](./IMPLEMENTATION_STATUS.md)을 따릅니다.
+
+커스텀 연결은 관리자 세션에서 `POST /api/admin/provider-connections/custom`으로 저장합니다. OpenAI Chat Completions 호환 서버의 API prefix까지 `baseUrl`에 넣고, 무인증 로컬 서버는 `authMode: none`, `destinationKind: local`, URL과 같은 사설 `approvedLocalIp`·`approvedLocalPort`를 지정합니다. 모델 목록은 `POST /api/admin/provider-connections/:id/models/sync`로 조회하고 목록 API가 없다면 `POST .../:id/models/manual`에 모델 ID를 등록합니다. `POST .../:id/test`의 `network`·`models`·`chat` 단계는 각각 명시적으로 실행하며 chat은 실제 생성 요청입니다. 키는 `authMode: bearer`에서만 입력합니다. 관리자 세션·CSRF, 전체 요청·응답·오류 및 서버/컨테이너 주소 해석은 [API 명세](./API_SPEC.md)의 N02 절과 [배포 실행서](./DEPLOYMENT_RUNBOOK.md)의 로컬 Provider 절을 따릅니다. 새 관리자 UI는 N11 fixture로 검증했고 운영 배포의 실제 연결 인수는 N13/N14에 남습니다.
 
 기능을 변경할 때는 코드만 수정하지 않고 관련 API·DB·보안·시험 문서와 [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)를 같은 변경에서 갱신합니다.
+
+### 자동 제목 설정 (N08 작업 트리, 운영 미배포)
+
+N08 API가 실행되고 `0020` migration이 적용된 환경에서 관리자 로그인 후 새 관리자 화면의 자동 제목 설정을 사용합니다. API는 `GET /api/admin/title-generation`으로 조회하고 같은 origin의 인증 cookie와 CSRF header로 `PUT /api/admin/title-generation`에 `{"providerModelId":"선택한 활성 모델 UUID"}`를 보내면 모델을 지정하며 `{"providerModelId":null}`이면 끕니다. CSRF 전달 방법은 [API 명세](./API_SPEC.md)를 따릅니다.
+
+설정 변경 자체는 Provider를 호출하지 않습니다. 모델이 지정된 후 새 job API에서 첫 정상 답변이 완료되면 1회 시도하므로 유료 Provider에서는 비용이 발생할 수 있습니다. 수동 제목이 우선하고 실패·재시작에는 재시도하지 않습니다. 동작 계약은 [채팅 상태 명세](./CHAT_STATE_SPEC.md)의 N01/N08, 운용 확인은 [배포 실행서](./DEPLOYMENT_RUNBOOK.md)의 N08 절을 따릅니다.
+
+### 대화 탐색·설정·첨부 (N09 작업 트리, 운영 미배포)
+
+일반 사용자/게스트 session으로 `GET /api/conversations?query=제목&limit=50`에서 대화를 검색하고 응답 nextCursor로 다음 페이지를 조회합니다. 조건을 바꾸면 cursor를 지웁니다. 고정과 설정은 대화 응답의 settingsRevision을 포함한 PATCH로 저장하며 409 충돌이면 응답의 최신 설정을 다시 확인합니다. branch 전환에도 revision을 제출합니다. 모델 변경 응답의 removedParameters는 제거된 이전 설정입니다.
+
+모델 검색은 `GET /api/access/models`, 즐겨찾기는 `/api/model-favorites`의 GET 및 `/:modelId` PUT/DELETE를 사용합니다. 첨부 상태는 pending 목록 또는 개별 GET으로 확인하고 failed 파일은 `POST /api/files/conversations/:conversationId/:attachmentId/retry`로 명시적으로 재처리합니다. 모든 mutation은 같은 origin의 인증 cookie와 CSRF를 요구합니다. 새 UI는 N10/N11에서 이 revision 계약과 연결했습니다. 전체 필드·오류·동작 한계는 [API 명세](./API_SPEC.md) N09와 [파일 명세](./FILE_PROCESSING_SPEC.md) N09를 따릅니다.
 
 ## 라이선스
 
 아직 프로젝트 라이선스를 결정하지 않았습니다. 현재 저장소의 코드와 문서는 별도 허가 없이 재사용 가능한 공개 라이선스로 배포되지 않습니다.
+
+## N13 전용 서버 시험 환경 (2026-10-02, 운영 전환 아님)
+
+현재 시험 URL은 https://test-chat.mihoservice.xyz 이며 PC·휴대폰의 같은 반응형 Web이다. 모델 주소 https://api.llmgateway.io/v1과 구분한다. 실제 실행 결과·남은 이미지/실기기 인수는 TEST_PLAN.md 최상단, 상태는 IMPLEMENTATION_STATUS.md가 기준이다.
+
+- 준비 스크립트 scripts/prepare-n13-server.py는 mihoservice_server에서 code-only 소스를 이미 풀어둔 새로운 /tmp/modelnaru-n13-server-* 디렉터리에서만 실행한다. 기존 state/private/data가 있으면 거부한다. 기존 Linux API dependency 이미지와 현재 pnpm-lock.yaml 해시가 일치해야 하며 Docker·Node24 runtime·Poppler/Tesseract kor+eng·기존 Web base image가 필요하다. 일반 신규 서버 설치를 대신하는 명령이 아니다. 소스 준비에 .env/키/사용자 파일/.git/node_modules를 포함하지 않는다.
+- 실제 실행 위치 /tmp/modelnaru-n13-server-naRXQ0에서 python3 scripts/prepare-n13-server.py를 사용했다. 현재 환경에 재실행하지 않는다. 전용 state.json에는 컨테이너/network/image·loopbackPort·시험 root가 있고 private는0700/파일0600이다.
+- HTTPS는 같은 root의 enable-https.sh 복사본을 검토 후 사용자가 서버 터미널에서 sudo bash /tmp/modelnaru-n13-server-naRXQ0/enable-https.sh /tmp/modelnaru-n13-server-naRXQ0로 실행했다. DNS가 이 서버를 가리키고 host Nginx·Certbot·기존 ACME 계정/80·443 접근이 필요하다. 새 site/cert가 이미 있으면 거부한다. 기존 운영 site를 덮어쓰지 않는다. 인증서 만료2026-12-30, 단기 인수 환경이며 지속 운영 전환/갱신 후 reload 운영 구성 인수가 아니다.
+- 상태: 서버 docker ps 및 해당 API/Web/PostgreSQL의 health 상태, 브라우저 URL 로그인, 시험 state.json을 확인한다. 로그는 docker logs modelnaru-n13-server-narxq0-api 등 정확한 시험 컨테이너만 읽고 원문/비밀값을 공유하지 않는다.
+- 휴대폰 시험 계정 n13acceptance의 비밀번호는 서버에서 cat /tmp/modelnaru-n13-server-naRXQ0/private/mobile-credentials.json으로 본인만 확인한다. 무료 n13-mobile-fixture를 선택한다. 실제 Gemini 모델 disabled·전역 제목 null을 유지한다. 유료2회 승인은 소진됐으므로 기본 server-acceptance/title-only 모드를 새 승인 없이 반복하지 않는다.
+- 실기기 결과 수집을 위해 현재 전용 환경을 유지한다. 시험 종료 후 아래 정리 절차를 따른다. 운영 컨테이너/site/volume 삭제 금지.
+
+상세 자원 소유권·종료 후 Nginx/인증서/Docker/시험 저장소 정리는 [DEPLOYMENT_RUNBOOK.md](./DEPLOYMENT_RUNBOOK.md)의 N13 전용 서버 시험 환경 절을 따른다.
+
+### N13 완료 후 시험 환경 정리 명령 (2026-10-02, 실행 대기)
+
+안전 결과는 PC tmp/n13/image-retest-result.json 및 image-retest-safe-audit.json에 보존했다. scripts/cleanup-n13-server.sh는 현재 단일 root/state와 정확한 시험 site/loopbackPort를 확인한 뒤 시험 site 비활성화→nginx -t/reload→시험 Certbot 인증서/ACME→자체5개 container/2개 network/2개 image→정확한 시험 root만 제거한다. 운영 project/base image/site/data는 대상이 아니다. 구문과 현재 이름/포트를 대조했으며 실제 삭제는 아직 미실행이다.
+
+사용자 서버 터미널 실행: sudo bash /tmp/modelnaru-n13-server-naRXQ0/cleanup-n13-server.sh /tmp/modelnaru-n13-server-naRXQ0
+
+현재 계정은 sudo 비밀번호를 요구하므로 사용자 실행 결과가 필요하다. 비밀번호는 채팅에 보내지 않는다. 성공 뒤 시험 자원0·운영 healthy를 확인하고 원장에 정리 완료를 기록한다. N14 운영 전환은 별도 작업이다.
+
+### N13 시험 환경 종료 확인 (2026-10-02)
+
+사용자 sudo 실행 및 SSH 재확인으로 시험 containers/networks/images0·시험 root/site/cert/renewal/ACME 제거 완료. 운영5개 healthy 유지. 위 시험 URL·계정·현재 root용 sudo 명령은 종료된 환경의 실행 이력이며 다시 실행하지 않는다. 안전 결과는 TEST_PLAN.md 최신 절 및 tmp/n13/server-cleanup-result.json 참조. N14 실제 운영 전환은 별도 작업이며 아직 실행하지 않았다.

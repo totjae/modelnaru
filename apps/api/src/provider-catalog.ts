@@ -71,6 +71,19 @@ function registryTemplate(input: RegistryTemplateInput): ProviderTemplate {
 
 const builtInTemplates: ProviderTemplate[] = [
   {
+    authType: 'bearer-optional',
+    canRegister: false,
+    category: 'advanced',
+    defaultFormat: 'openai',
+    formats: { openai: '/chat/completions' },
+    id: 'custom-openai',
+    modelListPath: '/models',
+    modelResponseType: 'openai',
+    name: 'Custom OpenAI Compatible',
+    parameterProfile: 'openai',
+    supportLevel: 'experimental',
+  },
+  {
     authType: 'bearer',
     baseUrl: 'https://api.openai.com/v1',
     canRegister: true,

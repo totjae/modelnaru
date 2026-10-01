@@ -139,6 +139,33 @@ export class AccessService {
     };
   }
 
+  async favorites(principal: AuthenticatedPrincipal) {
+    if (principal.type === 'admin')
+      throw new AccessError(
+        'ACCESS_MODEL_FORBIDDEN',
+        404,
+        'No user model workspace is available.',
+      );
+    return { favorites: await this.repository.favorites(principal) };
+  }
+  async setFavorite(
+    principal: AuthenticatedPrincipal,
+    modelId: string,
+    enabled: boolean,
+  ) {
+    if (principal.type === 'admin')
+      throw new AccessError(
+        'ACCESS_MODEL_FORBIDDEN',
+        404,
+        'No user model workspace is available.',
+      );
+    try {
+      await this.repository.setFavorite(principal, modelId, enabled);
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
   async reserveDailyRequest(
     principal: AuthenticatedPrincipal,
     providerModelId: string,

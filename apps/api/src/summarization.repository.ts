@@ -4,6 +4,7 @@ import type { DatabaseTransaction, JSONValue } from '@modelnaru/database';
 import type { ProviderGenerationParameters } from './provider-parameter-policy.js';
 
 import { DatabaseService } from './database.service.js';
+import type { ChatProviderRuntime } from './chat-provider.service.js';
 
 export interface SummaryModelOption {
   connectionName: string;
@@ -165,6 +166,7 @@ export class SummarizationRepository {
   }
 
   async save(input: {
+    jobId?: string;
     branchId: string;
     conversationId: string;
     coveredMessageCount: number;
@@ -180,6 +182,15 @@ export class SummarizationRepository {
     templateId: string;
   }): Promise<void> {
     await this.database.getClient().begin(async (transaction) => {
+      if (input.jobId) {
+        const active = await transaction<
+          { id: string }[]
+        >`SELECT id FROM chat_jobs
+          WHERE id = ${input.jobId} AND status IN ('pending', 'streaming')
+            AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = started_session_id AND s.revoked_at IS NULL
+              AND s.idle_expires_at > now() AND s.absolute_expires_at > now()) FOR UPDATE`;
+        if (!active[0]) throw new Error('Summary job is no longer active');
+      }
       const inserted = await transaction<{ id: string }[]>`
         INSERT INTO context_summaries (
           conversation_id, branch_id, first_message_id, last_message_id,
@@ -194,42 +205,60 @@ export class SummarizationRepository {
         RETURNING id
       `;
       if (!inserted[0]) return;
-      const owners = await transaction<
-        Array<{
-          guest_id: string | null;
-          user_id: string | null;
-          username: string | null;
-        }>
-      >`
-        SELECT c.user_id, c.guest_id, u.username
-        FROM conversations c
-        LEFT JOIN users u ON u.id = c.user_id
-        WHERE c.id = ${input.conversationId}
-      `;
-      const owner = owners[0];
-      const principalId = owner?.user_id ?? owner?.guest_id;
-      const principalType = owner?.user_id ? 'user' : 'guest';
-      const principalLabel =
-        owner?.username ??
-        (owner?.guest_id ? `게스트 ${owner.guest_id.slice(0, 8)}` : null);
-      if (!principalId || !principalLabel) {
-        throw new Error('Summarization owner is missing');
-      }
-      await transaction`
-        INSERT INTO usage_events (
-          principal_type, principal_id, principal_label, provider_model_id,
-          provider_template_id_snapshot, model_id_snapshot, operation_type,
-          status, input_tokens, output_tokens, duration_ms,
-          started_at, completed_at
-        ) VALUES (
-          ${principalType}, ${principalId}, ${principalLabel},
-          ${input.providerModelId}, ${input.templateId}, ${input.modelId},
-          'summary', 'completed', ${input.inputTokens}, ${input.outputTokens},
-          ${input.durationMs},
-          now() - (${input.durationMs} * interval '1 millisecond'), now()
-        )
-      `;
     });
+  }
+
+  async beginAttempt(input: {
+    conversationId: string;
+    jobId: string | undefined;
+    attempt: number;
+    runtime: ChatProviderRuntime;
+  }): Promise<string> {
+    return this.database.getClient().begin(async (tx) => {
+      if (input.jobId) {
+        const active = await tx<{ id: string }[]>`SELECT id FROM chat_jobs
+          WHERE id = ${input.jobId} AND conversation_id = ${input.conversationId}
+            AND status IN ('pending', 'streaming') FOR UPDATE`;
+        if (!active[0]) throw new Error('Summary job is no longer active');
+      }
+      const rows = await tx<{ id: string }[]>`INSERT INTO usage_events (
+        principal_type, principal_id, principal_label, provider_model_id,
+        provider_template_id_snapshot, model_id_snapshot, operation_type,
+        status, conversation_id, job_id, attempt_number)
+        SELECT CASE WHEN c.user_id IS NOT NULL THEN 'user' ELSE 'guest' END,
+          COALESCE(c.user_id,c.guest_id), COALESCE(u.username, 'Guest'),
+          ${input.runtime.providerModelId}, ${input.runtime.template.id}, ${input.runtime.modelId},
+          'summary', 'pending', c.id, ${input.jobId ?? null}, ${input.attempt}
+        FROM conversations c LEFT JOIN users u ON u.id = c.user_id
+        WHERE c.id = ${input.conversationId} RETURNING id`;
+      if (!rows[0]) throw new Error('Summary owner is missing');
+      return rows[0].id;
+    });
+  }
+
+  async markAttemptSent(id: string): Promise<void> {
+    await this.database.getClient()`UPDATE usage_events SET sent_at = now() WHERE id = ${id} AND status = 'pending'`;
+  }
+
+  async recordAttemptTokens(
+    id: string,
+    inputTokens: number | null,
+    outputTokens: number | null,
+  ): Promise<void> {
+    await this.database.getClient()`UPDATE usage_events SET input_tokens = ${inputTokens}, output_tokens = ${outputTokens},
+      usage_known = ${inputTokens !== null || outputTokens !== null} WHERE id = ${id} AND status = 'pending'`;
+  }
+
+  async finishAttempt(
+    id: string,
+    status: 'completed' | 'failed' | 'cancelled',
+    inputTokens: number | null,
+    outputTokens: number | null,
+  ): Promise<void> {
+    await this.database.getClient()`UPDATE usage_events SET status = ${status},
+      input_tokens = ${inputTokens}, output_tokens = ${outputTokens}, usage_known = ${inputTokens !== null || outputTokens !== null},
+      duration_ms = GREATEST(0, floor(extract(epoch FROM (now()-started_at))*1000)::integer), completed_at = now()
+      WHERE id = ${id} AND status = 'pending'`;
   }
 
   private async audit(

@@ -28,6 +28,7 @@ describe('ProvidersService', () => {
       ),
     };
     const discovery = {
+      discoverCustom: vi.fn(),
       discover: vi.fn(() =>
         Promise.resolve([
           {

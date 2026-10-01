@@ -1,5 +1,108 @@
 # ModelNaru Database 상세 명세
 
+## N09 저장소 구현 (2026-10-01, migration 추가 없음)
+
+- `0020`의 is_pinned/settings_revision/model_favorites/in_use_job_id 및 기존 attachments processing/failed/ready/expired를 사용한다. 별도 queue/schema/의존성은 추가하지 않았다.
+- 설정/branch는 owner conversation 행을 잠근 뒤 revision 및 active job을 검사한다. job 시작의 같은 행 잠금과 직렬화되며 수동 title·pin 변경은 생성 중에도 허용한다. stale snapshot의 모델 권한·파라미터 갱신을 실행하지 않는다.
+- keyset cursor는 API_SPEC.md N09 tuple을 사용한다. PostgreSQL 마이크로초 정밀도로 시각을 저장하고 드라이버의 Date 직렬화로 잘리지 않도록 cursor 시각은 text로 bind한 뒤 DB에서 timestamptz로 cast한다. 동일 시각 행은 UUID 내림차순으로 이어진다.
+- 즐겨찾기는 주체·모델 partial unique로 멱등 INSERT하며 현재 허용 모델 조회와 별도로 저장 ID/selectable을 계산한다. 권한 회수는 선택을 차단하고 게스트/모델 hard delete는 기존 FK로 제거한다.
+- 첨부 원본 수신 후 processing을 저장하고 ready/failed 종료는 processing·미전송·미참조 조건부 UPDATE다. 재처리는 행 잠금 아래 failed→processing으로 바뀌며 TTL을 연장하지 않는다. 늦은 완료가 삭제된 행을 다시 생성하지 않는다.
+- job 시작은 첨부 행 잠금과 실제 이미지 참조 고정, 만료 cleanup은 FOR UPDATE SKIP LOCKED와 active job 제외 조건을 사용한다. terminal 후 참조 해제 시 다음 cleanup에서 만료 처리한다. 재시작은 남은 processing을 failed로 정리한다.
+
+검증 결과는 `TEST_PLAN.md` N09에 기록한다. 운영 DB/migration에는 이번 작업을 적용하지 않았다.
+
+## N08 저장소 구현 (2026-10-01, 기존 0020 사용)
+
+새 migration 없이 N04의 `title_generation_settings`, `conversation_title_tasks`, conversation title source/status 및 usage의 job/summary attempt/title task/sent/known 필드를 소비한다.
+
+- 본 job 완료 transaction은 첫 성공 답변인지·default 제목인지 검사하고 설정 모델의 title task를 unique하게 삽입한 뒤 conversation을 pending으로 바꾼다. 사용량은 task당 unique 레코드로 중복 전송을 막는다.
+- 수동 제목 변경은 conversation 잠금 뒤 manual/none·pending task/usage cancelled를 함께 commit한다. 자동 결과도 같은 conversation 잠금 순서와 task pending/source default/session 유효 조건 아래 저장하므로 수동 입력을 덮어쓰지 않는다.
+- 요약 저장은 job 행을 잠그고 활성 상태·시작 session을 재검사한다. summary usage는 각 호출의 attempt로 분리하며 저장 성공에 종속되지 않는다. token은 중간 수신 시 보존하고 실패/취소·프로세스 재시작의 terminal 정리에서도 유지한다.
+- 삭제 후 task FK가 null이 된 사용량은 usage ID로 종료한다. 재시작 정리는 pending title task·summary/title usage를 failed로 만들고 원문/Provider 호출을 복구하지 않는다.
+
+격리 PostgreSQL 17에서 검증했다(`TEST_PLAN.md` N08). 운영 migration 적용·데이터 전환은 N12/N13 범위이며 이번 작업에서 운영 DB는 사용하지 않았다.
+
+## N04 구현 현황 (2026-09-30, 격리 DB 검증 완료)
+
+`packages/database/migrations/0020_n04_foundation.sql`에 아래 N01·N02 목표의 테이블·제약·인덱스를 추가했다. `0001`~`0019`는 유지한다. `mihoservice_server`의 운영 DB와 분리한 PostgreSQL 17 테스트 DB에서 신규 설치·재실행·제약/경합을 검증했다(`TEST_PLAN.md` N04 절). `packages/database/test/n04-postgres.test.ts`는 `MODELNARU_TEST_DATABASE_URL`에 로컬 `*_test` DB를 지정한 경우에만 실제 migration을 실행한다. Job transaction과 작업별 checkpoint 상한은 아래 N06 기록을 따른다. N07은 Provider custom 필드를 사용하며 N08~N09 저장소 소비도 구현하고 격리 DB/HTTP로 검증했다.
+
+N06에서 기존 message·usage event의 실패/취소 부분 token과 `usage_known` 기록, 메시지·일일 quota·`chat_jobs`·`chat_quota_reservations`의 단일 시작 transaction, checkpoint revision, 본문·usage·상태의 단일 terminal transaction을 구현했다. 격리 PostgreSQL에서 동시 시작·종료 경합, 미전송 quota 해제, 8 MiB 본문과 7일 보존 정리를 검증했다(`TEST_PLAN.md` 최신 N06 절). `0020` migration은 N06에서 수정하지 않았다.
+
+## N02 커스텀 Provider 저장 계약 (2026-09-30 확정, N04 schema·N07 저장소 구현)
+
+N04의 새 migration에서 기존 `provider_connections`에 `kind`(`builtin|custom`), nullable `protocol`, `auth_mode`(`bearer|none`), `destination_kind`(`public|local`), nullable `approved_local_ip inet`, nullable `approved_local_port integer`, `diagnostic_network/models/chat_status`와 각 `checked_at`·안전한 `error_code`를 추가한다. custom은 고정 `template_id='custom-openai'`와 `protocol='openai-chat-completions'`를 요구한다. builtin은 `protocol=null`로 두고 기존 template에서 protocol·고정 URL·인증 규칙을 해석한다. `kind`·`template_id`·`protocol`의 조합은 CHECK로 제한한다. `base_url`의 현행 HTTPS CHECK를 `public→HTTPS`, `local→HTTP+정확한 승인 IP literal/port` 조건부 CHECK로 교체한다. URL parser·DNS·실접속 검증은 DB CHECK가 아니라 SECURITY_SPEC.md N02의 outbound 경계에서 수행한다.
+
+`auth_mode=none`은 credential ciphertext/nonce/tag/hint가 모두 null이어야 한다. `bearer`는 기존 AES-256-GCM 필드와 nonce 12 byte/tag 16 byte를 요구한다. 따라서 현행 NOT NULL credential 제약을 완화하고 all-or-none CHECK를 둔다. `local`만 승인 IP/port를 요구하고 `public`은 두 값을 null로 둔다. destination·URL·auth 변경은 진단 상태/시각을 transaction에서 초기화하고 감사 snapshot에는 비밀·전체 내부 주소를 넣지 않는다. 기존 내장 연결은 migration에서 `kind=builtin`·현재 template에 맞는 auth/destination으로 채운 뒤 제약을 적용한다.
+
+`provider_models`에는 `source`(`discovered|manual`, default discovered)와 nullable `image_token_estimate integer CHECK >=1024`를 추가했다. `(provider_connection_id, model_id)` unique는 유지한다. 수동 모델도 연결 삭제/비활성·사용자 권한 제약을 따른다. 모델 조회 실패는 저장 모델을 삭제하지 않는다. `supports_image_input=true`만으로 estimate가 생기지 않으며 null이면 새 버전 이미지 입력은 거부한다. N04 migration과 N07 저장소를 격리 DB에서 검증했다. 진단 결과는 읽은 연결의 DB 행 버전이 유지될 때만 저장하여 변경 뒤 늦게 도착한 시험 결과를 폐기한다.
+
+## N01 새 버전 저장 계약 (2026-09-30, 확정·미구현)
+
+이 절은 N04 migration의 목표 schema다. 현재 `0001`~`0019`에는 없다. 배포된 migration은 수정하지 않으며 신규 설치 기준선/증분 선택은 N02에서 확정한다. 상태·quota·제목 정책은 CHAT_STATE_SPEC.md N01 절을 따르고 여기서는 DB 관계·제약·transaction만 정한다.
+
+### `chat_jobs`
+
+| Column | Type·제약 | 의미 |
+| --- | --- | --- |
+| `id` | uuid PK | 공개 job ID |
+| `conversation_id` | uuid not null FK `conversations(id)` ON DELETE CASCADE | 대화 |
+| `user_id`, `guest_id` | 각각 nullable FK ON DELETE CASCADE, 정확히 하나 not null | 작업 소유 주체 |
+| `started_session_id` | uuid not null | 시작 session 식별. session hard delete 뒤에도 취소·감사용 값 보존. 조회 권한 근거로 사용하지 않음 |
+| `kind` | varchar(16) check `turn`,`regenerate` | 요청 종류 |
+| `idempotency_key` | uuid not null | 클라이언트 UUID v4. 주체별 unique |
+| `request_fingerprint` | bytea not null, 32 bytes | 정규화 입력 SHA-256. 본문 원문 중복 저장 금지 |
+| `settings_revision` | bigint not null, >=1 | 시작 시 설정 버전 |
+| `maximum_generated_text_bytes` | integer not null CHECK 65536~8388608 | 시작 시 `config.yaml` 생성 본문 byte 상한 snapshot. 이후 설정 변경·재시작 뒤에도 해당 job의 복원 상한 유지 |
+| `branch_id` | uuid not null, 대화 범위 FK | 실제 답변 분기 |
+| `user_message_id` | nullable uuid, 대화 범위 FK | turn일 때 필요, regenerate는 null |
+| `assistant_message_id` | uuid not null unique, 대화 범위 FK | 기존 messages 1:1 |
+| `provider_model_id` | nullable uuid FK ON DELETE SET NULL | 시작 시 선택 모델; 삭제 후 snapshot은 message에 남음 |
+| `status` | varchar(16) check `pending`,`streaming`,`completed`,`failed`,`cancelled` | 단조 상태 |
+| `revision` | bigint not null default 1, >=1 | checkpoint·terminal commit마다 +1 |
+| `checkpoint_content` | text not null default '', `octet_length <= 8388608` CHECK | 재접속 부분 본문과 terminal 최종 본문. runtime에서는 `maximum_generated_text_bytes` 이하로 제한 |
+| `quota_state` | varchar(16) check `reserved`,`charged`,`released` | 예약 상태 요약. 예약 원장은 아래 table |
+| `error_code`, `input_tokens`, `output_tokens` | nullable 안전 code·nonnegative integer | 실패·제공된 usage; unknown은 null |
+| `created_at`, `updated_at`, `finished_at` | timestamptz, terminal에서 finished 필수 | 수명·재시작 정리 |
+
+`(user_id, idempotency_key) WHERE user_id IS NOT NULL`와 `(guest_id, idempotency_key) WHERE guest_id IS NOT NULL` unique index를 둔다. `(conversation_id) WHERE status IN ('pending','streaming')`, `(user_id) WHERE user_id IS NOT NULL AND status IN (...)`, `(guest_id) WHERE guest_id IS NOT NULL AND status IN (...)` 각각 partial unique로 대화·주체 활성 작업 하나를 DB에서도 강제한다. `(status, created_at) WHERE status IN (...)`은 startup 정리에 사용한다. `(finished_at) WHERE status NOT IN (...)`은 7일 terminal 보존 정리에 사용한다. 작업의 owner는 conversation owner와 같아야 하므로 transaction에서 conversation row를 잠그고 검증하며, 대화 소유자 변경을 허용하지 않는다. branch/message는 `(id, conversation_id)` 복합 FK로 다른 대화 참조를 금지한다. 대화 상세/목록의 `activeJob`은 활성 partial index로 조회하며 message `jobId`는 `assistant_message_id` unique join에서 계산한다. 메시지에 중복 job ID column을 추가하지 않는다. terminal 정리 뒤 nullable `jobId`는 null이다. N04 새 migration은 기존 `messages_content_check`를 assistant만 `octet_length(content) <= 8388608`, user/summary는 종전 `char_length(content) <= 2000000`으로 교체한다. runtime은 assistant message와 `checkpoint_content` 모두 job의 `maximum_generated_text_bytes` 이하로 검증한 뒤 기록한다. 상태 전이는 `WHERE status IN ('pending','streaming')` 조건부 UPDATE의 반환 행으로 승자를 결정하며 terminal에서 최종 `checkpoint_content`, assistant message 본문·상태, job status·error·usage·finished_at, quota/usage 원장, 첨부 사용 해제, 성공 시 branch 활성화/제목 task 생성을 하나의 transaction에 넣는다. 이 transaction이 commit되지 않으면 모두 이전 checkpoint/상태로 남고 다음 시작의 재시작 정리에서 실패 처리한다. 중복 usage·분기 활성화는 금지한다.
+
+### `chat_quota_reservations`와 `usage_events`
+
+`chat_quota_reservations`: `job_id` uuid PK/FK `chat_jobs(id)` ON DELETE CASCADE, `usage_date` date not null, `counter_keys` text[] not null(1~3개·중복 없음), `state` varchar check `reserved`,`charged`,`released`, `reserved_at`, nullable `first_sent_at`, nullable `released_at`. 시작 transaction에서 기존 `daily_usage_counters`의 해당 날짜·범위를 같은 transaction으로 증가시킨 뒤 예약 row를 만든다. 첫 Provider 전송 직전 `first_sent_at`과 `charged`를 원자적으로 기록한다. 실제 전송 전에 실패한 경우 `reserved → released` 조건부 전이와 각 counter 감소를 한 transaction으로 실행한다. 전송 여부가 불확실하면 `charged`로 보수 처리하며 중복 감소를 금지한다. terminal job 7일 정리 뒤에도 일일 counter와 집계 `usage_events`는 각 보존 정책을 따른다.
+
+현행 `usage_events`에는 `operation_type='title'`을 추가하고 `job_id` nullable FK ON DELETE SET NULL, `conversation_id` nullable FK ON DELETE SET NULL, `attempt_number` positive integer, `sent_at` nullable, `usage_known` boolean not null을 추가한다. `(job_id, operation_type, attempt_number)`의 job_id not null partial unique로 chat/summary 중복 기록을 막는다. 제목은 아래 task의 ID를 `title_task_id` nullable FK ON DELETE SET NULL로 연결하고 `(title_task_id)` unique다. `chat`은 job당 1건, `summary`는 job당 최대 4건, `title`은 대화당 자동 시도 1건이다. `status`는 기존 pending/completed/failed/cancelled를 사용한다. upstream이 사용량을 주지 않은 경우 token nullable·`usage_known=false`; 0 token과 구별한다. Provider 전송 뒤 실패·취소도 event를 terminal로 닫으며 본문·prompt·credential은 `safe_metadata`에 저장하지 않는다.
+
+### 기존 대화·제목·탐색 구조
+
+- `conversations`: `settings_revision bigint NOT NULL DEFAULT 1 CHECK >=1`, `is_pinned boolean NOT NULL DEFAULT false`, `title_source varchar(16) NOT NULL DEFAULT 'default' CHECK default/auto/manual`, `title_status varchar(16) NOT NULL DEFAULT 'none' CHECK none/pending/completed/failed`를 추가한다. 모델·파라미터·시스템 문맥·context·응답 timeout 변경은 `WHERE settings_revision = :expected AND NOT EXISTS(active chat_jobs)`로 갱신하고 revision을 1 증가시킨다. 수동 제목은 `title_source='manual'`, `title_status='none'`, pending 제목 task 취소, revision 증가를 같은 transaction에서 처리한다. 활성 branch 변경도 active job이 없을 때만 허용한다.
+- `conversation_title_tasks`: `id` uuid PK, `conversation_id` uuid not null unique FK ON DELETE CASCADE, `started_session_id` uuid not null, `provider_model_id` nullable FK ON DELETE SET NULL, `settings_version` bigint not null, `status` check pending/completed/failed/cancelled, `created_at`, `finished_at`. 첫 정상 chat terminal transaction에서 `title_source='default'`와 설정 활성 상태일 때만 한 행을 만들고 `title_status='pending'`으로 바꾼다. 재시작에서 pending은 failed로 정리한다. 결과 저장은 대화 존재·`title_source='default'`·task pending·시작 session 유효를 조건으로 한 transaction에서 수행한다. 수동 제목·삭제와 경합하면 결과를 폐기한다.
+- `title_generation_settings`: singleton row(`id=1`), nullable `provider_model_id` FK ON DELETE SET NULL, `version bigint >=1`, `updated_at`. null은 꺼짐이다. 관리자 변경 시 version 증가. 이전 job/title task는 시작 시 snapshot을 유지한다.
+- `principal_last_models`: `user_id` 또는 `guest_id` 정확히 하나 FK ON DELETE CASCADE, `provider_model_id` FK ON DELETE CASCADE, `updated_at`; 주체당 unique partial index. 권한 회수·모델 비활성화 시 행을 자동으로 신뢰하지 않고 조회 시 허용 여부를 다시 검사한다.
+- `model_favorites`: `user_id` 또는 `guest_id` 정확히 하나 FK ON DELETE CASCADE, `provider_model_id` FK ON DELETE CASCADE, `created_at`; 주체+모델 복합 unique partial index. 즐겨찾기 조회도 현재 모델 권한을 join해 선택 가능 여부를 계산한다.
+- 대화 목록 index: `(user_id, is_pinned DESC, updated_at DESC, id DESC)`와 guest 대응 index. 제목 검색은 소유자 필터 후 정규화 제목에 trigram 없이 우선 `ILIKE`를 적용한다. 소규모 운영을 전제로 하며 검색 성능이 실측에서 부족할 때만 추가 index를 결정한다. cursor는 owner/query/filter fingerprint와 정렬 tuple을 담고 API가 매 조회에서 다시 검증한다.
+- 첨부: `attachments.in_use_job_id` nullable FK `chat_jobs(id)` ON DELETE SET NULL을 추가한다. 시작 transaction에서 선택 첨부를 job에 고정하며 cleanup은 활성 job 참조가 있으면 원본을 건너뛴다. terminal transaction에서 참조를 해제한다. 대화/주체 hard delete는 job 취소·실행 종료 신호를 먼저 기록하고 기존 cleanup queue로 원본 삭제를 이어간다.
+
+N04 검증은 격리 PostgreSQL에서 동일 key 동시 INSERT, 활성 partial unique, owner/branch FK, 예약 해제의 한 번만 감소, checkpoint/terminal 경합, 제목 수동 우선, cascade와 7일 정리, cursor 정렬을 다룬다. 실제 migration 파일·테이블은 아직 작성하지 않았다.
+
+## 새 버전 예정 저장 구조: 지속 생성·즐겨찾기 (2026-09-30)
+
+- 생성 작업 ID·시작 주체/session·상태·요청 snapshot·idempotency key/입력 식별·부분 본문 checkpoint·revision·종료 사유를 저장하도록 설계한다.
+- 주체별 시작 key의 유일성, 대화당 활성 작업 하나, 원자적 종료와 usage 중복 방지 및 재시작 시 남은 작업 정리를 보장한다.
+- 주체와 Provider model UUID별 즐겨찾기, 대화 고정 정보를 저장한다. 게스트 만료·주체 및 모델 삭제 정책과 소유권 제약을 함께 설계한다.
+- 현재 schema·migration은 변경하지 않았다. 작업 단위·보존 기간·column·index와 구체적 제약은 구현 전 확정한다. 동작 원장은 CHAT_STATE_SPEC.md다.
+
+## 새 버전 예정 변경: 커스텀 Provider (2026-09-30)
+
+- 내장/커스텀 구분, 프로토콜·기본 URL, 선택적 암호화 자격증명, 승인 목적지 및 수동 모델 ID 저장을 설계한다.
+- 기존 Provider 연결·모델·권한 구조와 통합한다. 현재 DB 변경은 없으며 구체적 column·제약·migration은 구현 전 확정한다.
+
+## 새 버전 예정 변경: 자동 제목 (2026-09-30)
+
+- [채팅 상태 명세](./CHAT_STATE_SPEC.md)의 자동 제목 기능을 위한 제목 출처·수동 변경 감지·중복 작업 방지·보조 모델 설정 및 사용량 구분 저장을 설계할 예정이다.
+- 현재 schema에는 이 기능이 구현되지 않았다. 구체적 table·column·제약·작업 복구 방식은 구현 전에 확정한다.
+- 제목 모델 지정은 관리자 전역 설정으로 설계하며 사용자별 제목 모델 설정은 두지 않는다.
+- 자동 제목의 늦은 결과가 수동 제목을 덮어쓰거나 삭제된 대화를 복원하지 않도록 원자적 갱신 조건을 설계한다.
+
 ## 1. 목적
 
 PostgreSQL table, 관계, index, migration 실행 규칙과 삭제 정책을 실제 구현 기준으로 정의한다.

@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
-import type { DatabaseTransaction, JSONValue } from '@modelnaru/database';
+import type {
+  DatabaseClient,
+  DatabaseTransaction,
+  JSONValue,
+} from '@modelnaru/database';
 
 import type { AuthenticatedPrincipal } from './auth.service.js';
 import { DatabaseService } from './database.service.js';
@@ -126,7 +130,10 @@ export class AccessSubjectNotFoundError extends Error {}
 export class AccessModelNotAllowedError extends Error {}
 export class AccessGuestCodeRequiredError extends Error {}
 export class AccessDailyLimitError extends Error {
-  constructor(readonly scope: string) {
+  constructor(
+    readonly scope: string,
+    readonly resetAt?: Date,
+  ) {
     super('Daily request limit reached');
   }
 }
@@ -163,11 +170,44 @@ async function writeAudit(
 export class AccessRepository {
   constructor(private readonly database: DatabaseService) {}
 
+  async favorites(
+    principal: Extract<AuthenticatedPrincipal, { type: 'user' | 'guest' }>,
+  ) {
+    const sql = this.database.getClient();
+    const rows = await sql<
+      { providerModelId: string }[]
+    >`SELECT provider_model_id AS "providerModelId" FROM model_favorites
+      WHERE user_id IS NOT DISTINCT FROM ${principal.type === 'user' ? principal.id : null}::uuid
+        AND guest_id IS NOT DISTINCT FROM ${principal.type === 'guest' ? principal.id : null}::uuid ORDER BY created_at,provider_model_id`;
+    const allowed = new Set(
+      (await this.allowedModels(principal)).map((m) => m.id),
+    );
+    return rows.map((row) => ({
+      ...row,
+      selectable: allowed.has(row.providerModelId),
+    }));
+  }
+  async setFavorite(
+    principal: Extract<AuthenticatedPrincipal, { type: 'user' | 'guest' }>,
+    modelId: string,
+    enabled: boolean,
+  ) {
+    await this.database.getClient().begin(async (sql) => {
+      if (enabled) {
+        await this.assertModelAllowed(principal, modelId, sql);
+        await sql`INSERT INTO model_favorites(user_id,guest_id,provider_model_id) VALUES
+          (${principal.type === 'user' ? principal.id : null},${principal.type === 'guest' ? principal.id : null},${modelId}) ON CONFLICT DO NOTHING`;
+      } else
+        await sql`DELETE FROM model_favorites WHERE provider_model_id=${modelId}
+        AND user_id IS NOT DISTINCT FROM ${principal.type === 'user' ? principal.id : null}::uuid AND guest_id IS NOT DISTINCT FROM ${principal.type === 'guest' ? principal.id : null}::uuid`;
+    });
+  }
+
   async assertModelAllowed(
     principal: Extract<AuthenticatedPrincipal, { type: 'guest' | 'user' }>,
     providerModelId: string,
+    sql: DatabaseClient | DatabaseTransaction = this.database.getClient(),
   ): Promise<void> {
-    const sql = this.database.getClient();
     const rows =
       principal.type === 'user'
         ? await sql<{ id: string }[]>`
@@ -180,7 +220,7 @@ export class AccessRepository {
               AND p.provider_model_id = ${providerModelId}
               AND p.is_allowed = true AND u.is_enabled = true
               AND m.is_enabled = true AND m.is_available = true
-              AND c.is_enabled = true
+              AND c.is_enabled = true AND c.status = 'ready'
             LIMIT 1
           `
         : await sql<{ id: string }[]>`
@@ -195,7 +235,7 @@ export class AccessRepository {
               AND gp.deleted_at IS NULL AND gp.idle_expires_at > now()
               AND gp.absolute_expires_at > now()
               AND m.is_enabled = true AND m.is_available = true
-              AND c.is_enabled = true
+              AND c.is_enabled = true AND c.status = 'ready'
             LIMIT 1
           `;
     if (!rows[0]) throw new AccessModelNotAllowedError();
@@ -420,7 +460,7 @@ export class AccessRepository {
             JOIN provider_connections c ON c.id = m.provider_connection_id
             WHERE p.user_id = ${principal.id} AND p.is_allowed = true
               AND m.is_enabled = true AND m.is_available = true
-              AND c.is_enabled = true
+              AND c.is_enabled = true AND c.status = 'ready'
             ORDER BY lower(c.name), m.model_id
           `
         : await sql<RawAccessModelRow[]>`
@@ -432,7 +472,7 @@ export class AccessRepository {
             JOIN provider_models m ON m.id = p.provider_model_id
             JOIN provider_connections c ON c.id = m.provider_connection_id
             WHERE p.is_allowed = true AND m.is_enabled = true
-              AND m.is_available = true AND c.is_enabled = true
+              AND m.is_available = true AND c.is_enabled = true AND c.status = 'ready'
             ORDER BY lower(c.name), m.model_id
           `;
     return rows.map((row) => ({
@@ -452,13 +492,18 @@ export class AccessRepository {
   async reserveDailyRequest(
     principal: Extract<AuthenticatedPrincipal, { type: 'guest' | 'user' }>,
     providerModelId: string,
-  ): Promise<void> {
-    await this.database.getClient().begin(async (transaction) => {
-      const dateRows = await transaction<[{ usage_date: string }]>`
-        SELECT (now() AT TIME ZONE reset_timezone)::date::text AS usage_date
+    existingTransaction?: DatabaseTransaction,
+  ): Promise<{ usageDate: string; counterKeys: string[] }> {
+    const work = async (transaction: DatabaseTransaction) => {
+      const dateRows = await transaction<
+        [{ usage_date: string; reset_at: Date }]
+      >`
+        SELECT (now() AT TIME ZONE reset_timezone)::date::text AS usage_date,
+          (((now() AT TIME ZONE reset_timezone)::date + 1)::timestamp AT TIME ZONE reset_timezone) AS reset_at
         FROM guest_settings WHERE singleton = true
       `;
       const usageDate = dateRows[0]?.usage_date;
+      const resetAt = dateRows[0]?.reset_at;
       if (!usageDate) throw new Error('Usage timezone is unavailable');
       await transaction`
         SELECT pg_advisory_xact_lock(
@@ -476,7 +521,7 @@ export class AccessRepository {
           WHERE u.id = ${principal.id} AND u.is_enabled = true
             AND p.provider_model_id = ${providerModelId}
             AND p.is_allowed = true AND m.is_enabled = true
-            AND m.is_available = true AND c.is_enabled = true
+            AND m.is_available = true AND c.is_enabled = true AND c.status = 'ready'
         `;
         const quota = rows[0];
         if (!quota) throw new AccessModelNotAllowedError();
@@ -487,6 +532,7 @@ export class AccessRepository {
           scope: 'user',
           subjectId: principal.id,
           usageDate,
+          resetAt,
         });
         await this.incrementCounter(transaction, {
           counterKey: `user-model:${principal.id}:${providerModelId}`,
@@ -495,8 +541,15 @@ export class AccessRepository {
           scope: 'user_model',
           subjectId: principal.id,
           usageDate,
+          resetAt,
         });
-        return;
+        return {
+          usageDate,
+          counterKeys: [
+            `user:${principal.id}`,
+            `user-model:${principal.id}:${providerModelId}`,
+          ],
+        };
       }
       const rows = await transaction<RawQuotaRow[]>`
         SELECT g.session_daily_request_limit AS account_limit,
@@ -511,7 +564,7 @@ export class AccessRepository {
           AND gp.absolute_expires_at > now()
           AND p.provider_model_id = ${providerModelId}
           AND m.is_enabled = true AND m.is_available = true
-          AND c.is_enabled = true
+          AND c.is_enabled = true AND c.status = 'ready'
       `;
       const quota = rows[0];
       if (!quota) throw new AccessModelNotAllowedError();
@@ -528,6 +581,7 @@ export class AccessRepository {
         scope: 'guest_global',
         subjectId: null,
         usageDate,
+        resetAt,
       });
       await this.incrementCounter(transaction, {
         counterKey: `guest-session:${principal.id}`,
@@ -536,6 +590,7 @@ export class AccessRepository {
         scope: 'guest_session',
         subjectId: principal.id,
         usageDate,
+        resetAt,
       });
       await this.incrementCounter(transaction, {
         counterKey: `guest-model:${principal.id}:${providerModelId}`,
@@ -544,8 +599,20 @@ export class AccessRepository {
         scope: 'guest_model',
         subjectId: principal.id,
         usageDate,
+        resetAt,
       });
-    });
+      return {
+        usageDate,
+        counterKeys: [
+          'guest-global',
+          `guest-session:${principal.id}`,
+          `guest-model:${principal.id}:${providerModelId}`,
+        ],
+      };
+    };
+    return existingTransaction
+      ? work(existingTransaction)
+      : this.database.getClient().begin(work);
   }
 
   private async assertModelsAssignable(
@@ -558,7 +625,7 @@ export class AccessRepository {
       FROM provider_models m
       JOIN provider_connections c ON c.id = m.provider_connection_id
       WHERE m.id IN ${transaction(ids)}
-        AND c.is_enabled = true
+        AND c.is_enabled = true AND c.status = 'ready'
         AND m.is_enabled = true
         AND m.is_available = true
     `;
@@ -576,6 +643,7 @@ export class AccessRepository {
       scope: string;
       subjectId: string | null;
       usageDate: string;
+      resetAt?: Date;
     },
   ): Promise<void> {
     const rows = await transaction<[{ request_count: number }]>`
@@ -592,6 +660,6 @@ export class AccessRepository {
         OR daily_usage_counters.request_count < ${input.limit}
       RETURNING request_count
     `;
-    if (!rows[0]) throw new AccessDailyLimitError(input.scope);
+    if (!rows[0]) throw new AccessDailyLimitError(input.scope, input.resetAt);
   }
 }

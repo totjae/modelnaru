@@ -1,5 +1,19 @@
 # 관리자 로그 및 감사 기록 명세
 
+## N13 Provider 응답 메타데이터 진단 (2026-10-01, 구현·로컬 fixture 검증 완료)
+
+공통 streamProviderRequest는 요청마다 종료 시 provider_response_diagnostic 한 건을 기본 API process 로그에 기록한다. 원본 trace opt-in/보존 한도와 독립적이며 DB·관리자 log API의 새로운 레코드는 아니다. 허용 필드는 무작위 진단 id, protocol, HTTP 상태, Content-Type 분류(text/event-stream·application/json·text/html·text/plain·other·missing), 요청/헤더/첫 byte/마지막 byte/종료 ISO 시각과 경과 ms, 수신 byte/chunk/frame/data event 수, outcome, 처리 단계, 고정 내부 원인 코드 및 기존 공개 오류 코드다. frame은 처리한 완성 SSE block(주석 포함), event는 크기 검사 후 처리한 비어 있지 않은 data block([DONE] 포함)이며 실패 JSON도 event 수에 포함한다. chunk/byte는 읽은 전체 수로, terminal 뒤 같은 chunk의 미처리 frame까지 event 수로 계산하지 않는다. 미수신 시각/상태는 null이고 0 byte chunk는 첫 byte 시각을 만들지 않는다.
+
+URL·credential·request/response header 전체·prompt·생성 본문·원본 event·Provider 오류 문구·임의 finish_reason·예외 message/stack은 제외한다. Content-Type은 매개변수를 제거하고 고정 allowlist로 분류해 임의 header 값을 보존하지 않는다. 실패 위치를 JSON parse/이벤트 검증/종료 검사/UTF-8/SSE framing/byte 상한/HTTP/timeout 등으로 구분하며 실패한 event 자체는 저장하지 않는다. 진단 callback 실패는 호출 결과를 바꾸지 않는다. 기존 process log rotation/접근 제한을 따른다. 실제 Gateway 재시험은 별도 승인·격리 DB·1회 전송 제한·원본 trace 비활성 조건이 필요하다. 검증 증거는 TEST_PLAN.md를 따른다.
+
+내부 원인 코드는 로컬 상수만 사용한다: HTTP_STATUS, BODY_MISSING, NETWORK_ERROR, DESTINATION_DENIED, HEADER_TIMEOUT, IDLE_TIMEOUT, TOTAL_TIMEOUT, CALLER_ABORT, CONSUMER_CLOSED, RESPONSE_BYTE_LIMIT, SSE_FRAME_BYTE_LIMIT, UTF8_INVALID, EMPTY_BODY, TRUNCATED_FRAME, JSON_INVALID, EVENT_SCHEMA_INVALID, UPSTREAM_ERROR_EVENT, EVENT_AFTER_TERMINAL, DONE_BEFORE_FINISH, MISSING_TERMINAL, INVALID_TERMINATION, EMPTY_TEXT, OUTPUT_TOKEN_LIMIT, OUTPUT_BYTE_LIMIT, PROVIDER_REFUSAL, STREAM_READ_ERROR, INTERNAL_ERROR. 정상 종료는 null이다. 공개 오류/상태 전이·usage/quota는 변경하지 않는다. process 강제 종료 이전의 미완료 호출은 종료 요약이 남지 않을 수 있으며 이 진단이 SIGKILL 복구 원장을 대신하지 않는다.
+
+## N01 생성·보조 호출 usage 계약 (2026-09-30, 확정·미구현)
+
+`usage_events`는 DB의 chat job/제목 task와 연결된 별도 호출 원장이다(DATABASE_SCHEMA.md N01). `operation_type`은 `chat`, `summary`, `title`이며 실제 Provider 전송 시도마다 event 하나를 둔다. chat은 job당 1회, summary는 job당 최대 4회, title은 대화당 자동 시도 1회다. 재구독·동일 idempotency key 응답·미전송 quota 해제에는 새 usage event가 없다. 전송 여부가 불확실한 호출은 `sent_at`과 안전한 결과 상태를 보존하고 0 token·0 비용으로 단정하지 않는다.
+
+완료·실패·취소 모두 terminal 시각, 모델/Provider snapshot, 알려진 input/output token, 오류 code, 처리 시간을 기록한다. Provider가 usage를 주지 않으면 token은 null·`usage_known=false`; 사용량 0을 제공한 경우만 0·true다. 자동 제목/요약 실패는 본 대화 사용량과 분리하고 본문·prompt·추출문·파일 원본·자격증명·내부 URL은 기본 로그와 CSV에서 제외한다. 삭제된 대화/주체의 집계는 개인정보 보존 정책에 따라 비식별 snapshot만 남긴다. 관리자 Usage 화면은 operation별 성공/실패/취소와 known/unknown을 구분한다. 실제 저장·화면/CSV 구현과 로그 마스킹 시험은 N08/N11/N13이다.
+
 ## 1. 목적
 
 고정 관리자가 서비스 운영, 보안 사고, AI 요청 실패와 파일 처리 문제를 관리자 웹 화면에서 조회할 수 있게 한다. 로그는 문제를 진단할 수 있을 만큼 상세해야 하지만 API 키, 비밀번호, 대화 본문과 첨부파일 내용은 기본적으로 기록하지 않는다.

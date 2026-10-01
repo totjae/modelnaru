@@ -1,5 +1,22 @@
 # ModelNaru 파일 처리 상세 명세
 
+## N09 첨부 처리 계약 (2026-10-01 구현·격리 검증 완료)
+
+- raw 업로드는 기존 POST를 유지한다. 원본 수신 완료 뒤 processing 행을 저장하고 서버의 기존 bounded PDF/OCR pool에서 추출한다. 수신 완료한 서버 처리와 명시 재처리는 응답 연결이 끊겨도 계속하며 삭제·프로세스 종료는 별도 처리한다. 정상 업로드 응답은 201 ready이며 그동안 GET pending/개별 status에서 processing을 확인할 수 있다. 브라우저 전송이 끝나기 전 재개는 보장하지 않는다. 추출 단계는 DB processing 하나로 표현하고 OCR/page metadata는 준비 완료 후 반환한다. 전송 중 상태는 클라이언트 상태다.
+- `GET /api/files/conversations/:conversationId/:attachmentId`는 소유권을 확인한 공개 metadata만 반환한다. pending 조회는 ready뿐 아니라 processing/failed/expired를 포함한다. ready가 아니거나 만료된 선택 첨부는 생성 시작에서 거부한다.
+- 수신 완료한 원본의 추출 실패는 failed로 보존하고 기존 안전 오류 HTTP 응답을 유지한다. 사용자 명시 `POST .../:attachmentId/retry`(인증+CSRF)는 failed·미전송·미만료 파일만 원자적으로 processing으로 바꾸어 기존 풀에서 재처리한다. processing/ready·전송된 파일·활성 job 참조는 `409 FILE_PROCESSING_BUSY`, 소유권 없음은 404, 만료는 `410 FILE_EXPIRED`다. 중복 재처리·자동 재시도는 없다. 원본은 원래 TTL과 개수/용량 제한을 유지한다.
+- 처리 중 행은 cleanup이 만료시키지 않는다. 성공/실패 저장은 processing·미전송 조건부 갱신으로 삭제/만료 뒤 늦은 결과를 거부한다. 재시작 뒤 남은 processing은 failed로 정리하고 자동 재처리하지 않는다. 처리 중 삭제는 허용하며 DB 삭제 및 기존 원본 cleanup queue를 사용한다.
+- cleanup은 활성 chat job의 in_use_job_id 참조를 가진 첨부를 건너뛴다. job 시작이 첨부 행을 잠그는 기존 transaction과 만료 cleanup의 행 잠금이 경합을 직렬화한다. terminal 뒤 참조가 해제되면 다음 cleanup에서 만료 처리한다. 사용자 파일 변경도 활성 참조가 있으면 busy다.
+- 검증은 원본 재처리/개수·상태 경합·소유권·삭제/TTL 보호를 격리 DB/실제 HTTP로 수행한다. 실제 OCR 엔진·브라우저 상태 표시는 N10/N13에서 인수한다. 새로운 queue/schema/의존성은 추가하지 않는다.
+- N09-R1 보완(2026-10-01 구현·fixture 검증): retry는 최초 upload와 동일한 안전 오류 매핑을 사용한다. OCR 불가 503, 페이지/추출문 상한 413, 암호/손상/OCR 실패 422, 처리 중 삭제 404 등 기존 code/status를 보존한다. 연결 종료를 처리 취소 사유로 분류하지 않으며 예상하지 못한 저장 오류도 지원하지 않는 형식(415)으로 바꾸지 않는다. 오류별 controller 검증과 실제 HTTP 정상 retry의 증거/한계는 TEST_PLAN.md 최신 보완 절을 따른다.
+
+## 새 버전 첨부 상태 개선 (2026-09-30, 계획)
+
+- 업로드·텍스트 추출·OCR·준비·실패를 구분해 표시한다. N09의 매핑은 위 구현 계약을 따른다. 업로드 중은 클라이언트 상태, 추출/OCR은 DB processing, 완료 뒤 OCR/page metadata로 구분한다.
+- 선택 첨부가 모두 준비돼야 메시지를 전송한다. 실패한 파일을 제거하면 나머지 준비된 파일로 전송할 수 있다.
+- 재처리는 명시적 동작으로 제공하고 중복 작업·저장 용량·동시 처리 상한을 검증한다. 첨부 대화 소유권·만료와 기존 파일 제한은 유지한다.
+- 처리 중 대화 전환 후 돌아왔을 때 서버 처리 상태를 다시 조회한다. 전송이 끝나지 않은 브라우저 업로드의 재개는 별도 보장하지 않는다.
+
 ## 1. 목적
 
 대화에 첨부하는 원본 파일과 추출 텍스트를 안전하게 저장하고, 현재 메시지 또는 후속 메시지의 AI 컨텍스트에 포함하는 기준을 정의한다.

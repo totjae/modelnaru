@@ -1,11 +1,20 @@
+import { randomUUID } from 'node:crypto';
+
+import { Logger } from '@nestjs/common';
+
 import type { ProviderTemplate } from './provider-catalog.js';
 import { providerDiscoveryHeaders } from './provider-discovery.js';
+import { ProviderDestinationError } from './provider-destination.js';
 import {
   normalizeProviderParameters,
   type ProviderGenerationParameters,
 } from './provider-parameter-policy.js';
 
 const MAXIMUM_SSE_BUFFER_BYTES = 1024 * 1024;
+const MAXIMUM_REQUEST_BYTES = 32 * 1024 * 1024;
+const MAXIMUM_RESPONSE_BYTES = 64 * 1024 * 1024;
+const DEFAULT_OUTPUT_BYTES = 2 * 1024 * 1024;
+const MAXIMUM_TOTAL_MS = 30 * 60 * 1000;
 export const DEFAULT_PROVIDER_IDLE_TIMEOUT_MS = 120_000;
 
 export interface ChatContextMessage {
@@ -37,6 +46,8 @@ export interface ProviderStreamInput {
   messages: ChatContextMessage[];
   modelId: string;
   onRawEvent?: (document: unknown) => void;
+  onDiagnostic?: (diagnostic: ProviderResponseDiagnostic) => void;
+  maximumGeneratedTextBytes?: number;
   parameters: ChatParameters;
   signal: AbortSignal;
   systemPrompt: string;
@@ -46,15 +57,62 @@ export interface ProviderStreamInput {
 
 export type ProviderProtocol = 'anthropic' | 'gemini' | 'openai';
 
+export interface ProviderResponseDiagnostic {
+  id: string;
+  protocol: ProviderProtocol;
+  httpStatus: number | null;
+  contentType:
+    | 'text/event-stream'
+    | 'application/json'
+    | 'text/html'
+    | 'text/plain'
+    | 'other'
+    | 'missing';
+  startedAt: string;
+  headersReceivedAt: string | null;
+  firstByteReceivedAt: string | null;
+  lastByteReceivedAt: string | null;
+  endedAt: string;
+  durationMs: number;
+  headersElapsedMs: number | null;
+  firstByteElapsedMs: number | null;
+  lastByteElapsedMs: number | null;
+  receivedBytes: number;
+  chunkCount: number;
+  frameCount: number;
+  eventCount: number;
+  outcome: 'completed' | 'failed' | 'cancelled';
+  stage:
+    | 'request_headers'
+    | 'http_status'
+    | 'response_body'
+    | 'sse_framing'
+    | 'sse_decode'
+    | 'json_parse'
+    | 'event_validation'
+    | 'termination'
+    | 'output_limit'
+    | 'completed';
+  internalCause: string | null;
+  errorCode: string | null;
+}
+
+const diagnosticLogger = new Logger('ProviderResponseDiagnostic');
+
 export class ChatUpstreamError extends Error {
   constructor(
     readonly code:
       | 'CHAT_PROVIDER_AUTH_FAILED'
       | 'CHAT_PROVIDER_NETWORK_ERROR'
+      | 'CHAT_PROVIDER_DESTINATION_DENIED'
       | 'CHAT_PROVIDER_RATE_LIMITED'
       | 'CHAT_PROVIDER_RESPONSE_INVALID'
       | 'CHAT_PROVIDER_TIMEOUT'
-      | 'CHAT_PROVIDER_UPSTREAM_ERROR',
+      | 'CHAT_PROVIDER_UPSTREAM_ERROR'
+      | 'CHAT_PROVIDER_INCOMPLETE'
+      | 'CHAT_PROVIDER_REFUSED'
+      | 'CHAT_OUTPUT_LIMIT'
+      | 'CHAT_EMPTY_RESPONSE',
     readonly retryable: boolean,
   ) {
     super('The AI provider could not complete the request.');
@@ -123,9 +181,13 @@ function providerRequest(
   protocol: ProviderProtocol,
   url: string,
 ): UpstreamRequest {
+  const serialized = JSON.stringify(body);
+  if (Buffer.byteLength(serialized, 'utf8') > MAXIMUM_REQUEST_BYTES) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
   return {
     init: {
-      body: JSON.stringify(body),
+      body: serialized,
       headers,
       method: 'POST',
       redirect: 'error',
@@ -295,9 +357,7 @@ export function buildProviderStreamRequest(
             : {}),
         },
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        ...(input.webSearchEnabled
-          ? { tools: [{ google_search: {} }] }
-          : {}),
+        ...(input.webSearchEnabled ? { tools: [{ google_search: {} }] } : {}),
       },
       headers,
       includeTraceBody,
@@ -399,27 +459,66 @@ export function normalizeProviderStreamEvent(
   const root = record(document);
   if (!root)
     throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  if (root.error || root.type === 'error') {
+    throw new ChatUpstreamError('CHAT_PROVIDER_UPSTREAM_ERROR', true);
+  }
   if (protocol === 'anthropic') {
+    if (
+      typeof root.type !== 'string' ||
+      ![
+        'message_start',
+        'content_block_start',
+        'content_block_delta',
+        'content_block_stop',
+        'message_delta',
+        'message_stop',
+        'ping',
+      ].includes(root.type)
+    ) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+    }
     const delta = record(root.delta);
+    if (root.type === 'content_block_delta' && !delta) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+    }
     const usage = record(root.usage) ?? record(record(root.message)?.usage);
     const events: ChatEvent[] = [];
-    if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+    if (
+      root.type === 'content_block_delta' &&
+      delta?.type === 'text_delta' &&
+      typeof delta.text === 'string'
+    ) {
       events.push({ text: delta.text, type: 'text_delta' });
+    }
+    if (
+      root.type === 'content_block_start' &&
+      record(root.content_block)?.type === 'tool_use'
+    ) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
     }
     const inputTokens = integer(usage?.input_tokens);
     const outputTokens = integer(usage?.output_tokens);
     if (inputTokens !== undefined || outputTokens !== undefined) {
       events.push(usageEvent(inputTokens, outputTokens));
     }
-    if (root.type === 'message_stop') {
-      events.push({ durationMs: 0, type: 'done' });
-    }
     return events;
   }
   if (protocol === 'gemini') {
+    if (!Array.isArray(root.candidates) && !record(root.promptFeedback)) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+    }
     const candidates = Array.isArray(root.candidates) ? root.candidates : [];
+    if (candidates.length > 1) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+    }
     const candidate = record(candidates[0]);
+    if (candidates.length === 1 && !candidate) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+    }
     const content = record(candidate?.content);
+    if (root.promptFeedback && record(root.promptFeedback)?.blockReason) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_REFUSED', false);
+    }
     const usage = record(root.usageMetadata);
     const events: ChatEvent[] = [];
     const text = textParts(content?.parts);
@@ -429,18 +528,29 @@ export function normalizeProviderStreamEvent(
     if (inputTokens !== undefined || outputTokens !== undefined) {
       events.push(usageEvent(inputTokens, outputTokens));
     }
-    if (typeof candidate?.finishReason === 'string') {
-      events.push({
-        durationMs: 0,
-        stopReason: candidate.finishReason,
-        type: 'done',
-      });
-    }
     return events;
   }
   const choices = Array.isArray(root.choices) ? root.choices : [];
+  if (!Array.isArray(root.choices)) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
   const choice = record(choices[0]);
+  if (choices.length === 1 && !choice) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
+  if (choices.length > 1) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
   const delta = record(choice?.delta);
+  if (choice && !delta && choice.finish_reason == null && !choice.message) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
+  if (delta?.refusal || record(choice?.message)?.refusal) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_REFUSED', false);
+  }
+  if (delta?.tool_calls || delta?.function_call || choice?.message) {
+    throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  }
   const usage = record(root.usage);
   const events: ChatEvent[] = [];
   if (typeof delta?.content === 'string' && delta.content) {
@@ -451,51 +561,81 @@ export function normalizeProviderStreamEvent(
   if (inputTokens !== undefined || outputTokens !== undefined) {
     events.push(usageEvent(inputTokens, outputTokens));
   }
-  if (typeof choice?.finish_reason === 'string') {
-    events.push({
-      durationMs: 0,
-      stopReason: choice.finish_reason,
-      type: 'done',
-    });
-  }
   return events;
 }
 
 async function* sseData(
   stream: ReadableStream<Uint8Array>,
+  diagnostic: ProviderResponseDiagnostic,
   onChunk?: () => void,
 ): AsyncGenerator<string> {
-  const decoder = new TextDecoder();
+  const invalid = (cause: string) => {
+    diagnostic.internalCause = cause;
+    return new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+  };
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   let buffer = '';
+  let pendingCarriageReturn = false;
+  let responseBytes = 0;
   for await (const chunk of stream) {
+    const now = new Date().toISOString();
+    if (chunk.byteLength > 0) {
+      diagnostic.firstByteReceivedAt ??= now;
+      diagnostic.lastByteReceivedAt = now;
+      diagnostic.firstByteElapsedMs ??=
+        Date.now() - Date.parse(diagnostic.startedAt);
+      diagnostic.lastByteElapsedMs =
+        Date.now() - Date.parse(diagnostic.startedAt);
+    }
+    diagnostic.chunkCount++;
+    diagnostic.receivedBytes += chunk.byteLength;
+    diagnostic.stage = 'sse_framing';
     onChunk?.();
-    buffer += decoder.decode(chunk, { stream: true }).replace(/\r\n/gu, '\n');
+    responseBytes += chunk.byteLength;
+    if (responseBytes > MAXIMUM_RESPONSE_BYTES) {
+      throw invalid('RESPONSE_BYTE_LIMIT');
+    }
+    diagnostic.stage = 'sse_decode';
+    let fragment = decoder.decode(chunk, { stream: true });
+    diagnostic.stage = 'sse_framing';
+    if (pendingCarriageReturn) fragment = `\r${fragment}`;
+    pendingCarriageReturn = fragment.endsWith('\r');
+    if (pendingCarriageReturn) fragment = fragment.slice(0, -1);
+    buffer += fragment.replace(/\r\n|\r/gu, '\n');
     let boundary = buffer.indexOf('\n\n');
     while (boundary >= 0) {
+      diagnostic.frameCount++;
       const block = buffer.slice(0, boundary);
       if (Buffer.byteLength(block, 'utf8') > MAXIMUM_SSE_BUFFER_BYTES) {
-        throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+        throw invalid('SSE_FRAME_BYTE_LIMIT');
       }
       buffer = buffer.slice(boundary + 2);
       const data = block
         .split('\n')
         .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
+        .map((line) => line.slice(5).replace(/^ /u, ''))
         .join('\n');
-      if (data) yield data;
+      if (data) {
+        diagnostic.eventCount++;
+        yield data;
+        diagnostic.stage = 'sse_framing';
+      }
       boundary = buffer.indexOf('\n\n');
     }
     if (Buffer.byteLength(buffer, 'utf8') > MAXIMUM_SSE_BUFFER_BYTES) {
-      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+      throw invalid('SSE_FRAME_BYTE_LIMIT');
     }
   }
+  diagnostic.stage = 'sse_decode';
   buffer += decoder.decode();
-  const data = buffer
-    .split('\n')
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trimStart())
-    .join('\n');
-  if (data) yield data;
+  diagnostic.stage = 'sse_framing';
+  if (pendingCarriageReturn) buffer += '\n';
+  if (responseBytes === 0) {
+    throw invalid('EMPTY_BODY');
+  }
+  if (buffer.trim()) {
+    throw invalid('TRUNCATED_FRAME');
+  }
 }
 
 function upstreamError(status: number): ChatUpstreamError {
@@ -513,24 +653,108 @@ function upstreamError(status: number): ChatUpstreamError {
   );
 }
 
+interface StreamRequestInput {
+  headerTimeoutMs?: number;
+  idleTimeoutMs?: number;
+  maximumGeneratedTextBytes?: number;
+  onRawEvent?: (document: unknown) => void;
+  onDiagnostic?: (diagnostic: ProviderResponseDiagnostic) => void;
+  request: UpstreamRequest;
+  signal: AbortSignal;
+  totalTimeoutMs?: number;
+}
+
 export async function* streamProviderRequest(
-  input: {
-    idleTimeoutMs?: number;
-    onRawEvent?: (document: unknown) => void;
-    request: UpstreamRequest;
-    signal: AbortSignal;
-  },
+  input: StreamRequestInput,
+  fetchImplementation: typeof fetch = fetch,
+): AsyncGenerator<ChatEvent> {
+  const started = Date.now();
+  const diagnostic: ProviderResponseDiagnostic = {
+    id: randomUUID(),
+    protocol: input.request.protocol,
+    httpStatus: null,
+    contentType: 'missing',
+    startedAt: new Date(started).toISOString(),
+    headersReceivedAt: null,
+    firstByteReceivedAt: null,
+    lastByteReceivedAt: null,
+    endedAt: '',
+    durationMs: 0,
+    headersElapsedMs: null,
+    firstByteElapsedMs: null,
+    lastByteElapsedMs: null,
+    receivedBytes: 0,
+    chunkCount: 0,
+    frameCount: 0,
+    eventCount: 0,
+    outcome: 'cancelled',
+    stage: 'request_headers',
+    internalCause: null,
+    errorCode: null,
+  };
+  try {
+    yield* streamProviderResponse(input, diagnostic, fetchImplementation);
+    diagnostic.outcome = 'completed';
+    diagnostic.stage = 'completed';
+  } catch (error) {
+    diagnostic.outcome = input.signal.aborted ? 'cancelled' : 'failed';
+    diagnostic.errorCode =
+      error instanceof ChatUpstreamError
+        ? error.code
+        : input.signal.aborted
+          ? 'CHAT_CANCELLED'
+          : 'CHAT_INTERNAL_ERROR';
+    diagnostic.internalCause ??= input.signal.aborted
+      ? 'CALLER_ABORT'
+      : diagnostic.stage === 'sse_decode'
+        ? 'UTF8_INVALID'
+        : diagnostic.stage === 'json_parse'
+          ? 'JSON_INVALID'
+          : diagnostic.stage === 'event_validation'
+            ? 'EVENT_SCHEMA_INVALID'
+            : diagnostic.stage === 'sse_framing'
+              ? 'STREAM_READ_ERROR'
+              : 'INTERNAL_ERROR';
+    throw error;
+  } finally {
+    diagnostic.endedAt = new Date().toISOString();
+    diagnostic.durationMs = Date.now() - started;
+    if (diagnostic.outcome === 'cancelled' && !diagnostic.internalCause)
+      diagnostic.internalCause = 'CONSUMER_CLOSED';
+    // Only locally constructed metadata is logged; never serialize the thrown error.
+    diagnosticLogger.log(
+      `provider_response_diagnostic ${JSON.stringify(diagnostic)}`,
+    );
+    try {
+      input.onDiagnostic?.({ ...diagnostic });
+    } catch {
+      /* Diagnostics must not change the Provider result. */
+    }
+  }
+}
+
+async function* streamProviderResponse(
+  input: StreamRequestInput,
+  diagnostic: ProviderResponseDiagnostic,
   fetchImplementation: typeof fetch = fetch,
 ): AsyncGenerator<ChatEvent> {
   const request = input.request;
-  const idleTimeoutMs = input.idleTimeoutMs ?? DEFAULT_PROVIDER_IDLE_TIMEOUT_MS;
+  const idleTimeoutMs = Math.min(
+    input.idleTimeoutMs ?? DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
+    MAXIMUM_TOTAL_MS,
+  );
+  const maximumGeneratedTextBytes = Math.min(
+    input.maximumGeneratedTextBytes ?? DEFAULT_OUTPUT_BYTES,
+    8 * 1024 * 1024,
+  );
   const upstreamController = new AbortController();
   const abortFromCaller = () => upstreamController.abort(input.signal.reason);
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let idleTimedOut = false;
+  let headerTimedOut = false;
+  let totalTimedOut = false;
   const resetIdleTimeout = () => {
     if (idleTimer) clearTimeout(idleTimer);
-    idleTimedOut = false;
     idleTimer = setTimeout(() => {
       idleTimedOut = true;
       upstreamController.abort(new Error('Provider response timed out.'));
@@ -540,8 +764,26 @@ export async function* streamProviderRequest(
   if (input.signal.aborted) abortFromCaller();
   else input.signal.addEventListener('abort', abortFromCaller, { once: true });
   resetIdleTimeout();
+  const totalTimer = setTimeout(
+    () => {
+      totalTimedOut = true;
+      upstreamController.abort(new Error('Provider total time exceeded.'));
+    },
+    Math.min(input.totalTimeoutMs ?? MAXIMUM_TOTAL_MS, MAXIMUM_TOTAL_MS),
+  );
+  totalTimer.unref();
+  const headerTimer = setTimeout(
+    () => {
+      headerTimedOut = true;
+      upstreamController.abort(new Error('Provider headers timed out.'));
+    },
+    Math.min(input.headerTimeoutMs ?? 30_000, 30_000),
+  );
+  headerTimer.unref();
   const cleanup = () => {
     if (idleTimer) clearTimeout(idleTimer);
+    clearTimeout(totalTimer);
+    clearTimeout(headerTimer);
     input.signal.removeEventListener('abort', abortFromCaller);
   };
   let response: Response;
@@ -552,52 +794,234 @@ export async function* streamProviderRequest(
     });
   } catch (error) {
     cleanup();
-    if (input.signal.aborted) throw error;
-    if (idleTimedOut) {
+    diagnostic.internalCause = input.signal.aborted
+      ? 'CALLER_ABORT'
+      : headerTimedOut
+        ? 'HEADER_TIMEOUT'
+        : totalTimedOut
+          ? 'TOTAL_TIMEOUT'
+          : idleTimedOut
+            ? 'IDLE_TIMEOUT'
+            : error instanceof ProviderDestinationError
+              ? 'DESTINATION_DENIED'
+              : 'NETWORK_ERROR';
+    if (input.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (error instanceof ProviderDestinationError)
+      throw new ChatUpstreamError('CHAT_PROVIDER_DESTINATION_DENIED', false);
+    if (idleTimedOut || totalTimedOut || headerTimedOut) {
       throw new ChatUpstreamError('CHAT_PROVIDER_TIMEOUT', true);
     }
     throw new ChatUpstreamError('CHAT_PROVIDER_NETWORK_ERROR', true);
   }
+  clearTimeout(headerTimer);
+  diagnostic.httpStatus = response.status;
+  diagnostic.headersReceivedAt = new Date().toISOString();
+  diagnostic.headersElapsedMs = Date.now() - Date.parse(diagnostic.startedAt);
+  const mediaType = response.headers
+    .get('content-type')
+    ?.split(';')[0]
+    ?.trim()
+    .toLowerCase();
+  diagnostic.contentType =
+    mediaType === undefined
+      ? 'missing'
+      : [
+            'text/event-stream',
+            'application/json',
+            'text/html',
+            'text/plain',
+          ].includes(mediaType)
+        ? (mediaType as ProviderResponseDiagnostic['contentType'])
+        : 'other';
+  diagnostic.stage = 'http_status';
   if (!response.ok) {
+    diagnostic.internalCause = 'HTTP_STATUS';
     cleanup();
+    upstreamController.abort();
     throw upstreamError(response.status);
   }
   if (!response.body) {
+    diagnostic.stage = 'response_body';
+    diagnostic.internalCause = 'BODY_MISSING';
     cleanup();
+    upstreamController.abort();
     throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
   }
-  let done = false;
+  let terminal = false;
+  let finished = false;
+  let stopReason: string | undefined;
+  let textBytes = 0;
   try {
-    for await (const data of sseData(response.body, resetIdleTimeout)) {
+    diagnostic.stage = 'sse_framing';
+    for await (const data of sseData(
+      response.body,
+      diagnostic,
+      resetIdleTimeout,
+    )) {
+      diagnostic.stage = 'termination';
       if (data === '[DONE]') {
-        done = true;
+        if (request.protocol !== 'openai' || !finished) {
+          diagnostic.internalCause = 'DONE_BEFORE_FINISH';
+          throw new ChatUpstreamError('CHAT_PROVIDER_INCOMPLETE', false);
+        }
+        terminal = true;
         break;
       }
       let document: unknown;
+      diagnostic.stage = 'json_parse';
       try {
         document = JSON.parse(data) as unknown;
       } catch {
         throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
       }
-      input.onRawEvent?.(document);
-      for (const event of normalizeProviderStreamEvent(
+      diagnostic.stage = 'event_validation';
+      const root = record(document);
+      if (!root) {
+        throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+      }
+      if (root.error || root.type === 'error') {
+        diagnostic.internalCause = 'UPSTREAM_ERROR_EVENT';
+        throw new ChatUpstreamError('CHAT_PROVIDER_UPSTREAM_ERROR', true);
+      }
+      if (terminal) {
+        diagnostic.internalCause = 'EVENT_AFTER_TERMINAL';
+        throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
+      }
+      const normalized = normalizeProviderStreamEvent(
         request.protocol,
         document,
-      )) {
-        if (event.type === 'done') done = true;
+      );
+      for (const event of normalized) {
+        if (event.type === 'usage') yield event;
+      }
+      diagnostic.stage = 'termination';
+      if (request.protocol === 'openai') {
+        const choices = Array.isArray(root.choices) ? root.choices : [];
+        const reason = record(choices[0])?.finish_reason;
+        if (typeof reason === 'string') {
+          if (reason === 'length')
+            throw new ChatUpstreamError('CHAT_OUTPUT_LIMIT', false);
+          if (reason === 'content_filter')
+            throw new ChatUpstreamError('CHAT_PROVIDER_REFUSED', false);
+          if (reason !== 'stop')
+            throw new ChatUpstreamError(
+              'CHAT_PROVIDER_RESPONSE_INVALID',
+              false,
+            );
+          finished = true;
+          stopReason = reason;
+        }
+      } else if (request.protocol === 'anthropic') {
+        if (root.type === 'message_delta') {
+          const reason = record(root.delta)?.stop_reason;
+          if (
+            reason === 'max_tokens' ||
+            reason === 'model_context_window_exceeded'
+          ) {
+            throw new ChatUpstreamError('CHAT_OUTPUT_LIMIT', false);
+          }
+          if (reason === 'refusal')
+            throw new ChatUpstreamError('CHAT_PROVIDER_REFUSED', false);
+          if (reason !== 'end_turn' && reason !== 'stop_sequence') {
+            throw new ChatUpstreamError(
+              'CHAT_PROVIDER_RESPONSE_INVALID',
+              false,
+            );
+          }
+          finished = true;
+          stopReason = reason;
+        } else if (root.type === 'message_stop') {
+          if (!finished)
+            throw new ChatUpstreamError('CHAT_PROVIDER_INCOMPLETE', false);
+          terminal = true;
+        }
+      } else {
+        const candidates = Array.isArray(root.candidates)
+          ? root.candidates
+          : [];
+        const reason = record(candidates[0])?.finishReason;
+        if (typeof reason === 'string') {
+          if (reason === 'MAX_TOKENS')
+            throw new ChatUpstreamError('CHAT_OUTPUT_LIMIT', false);
+          if (
+            [
+              'SAFETY',
+              'RECITATION',
+              'BLOCKLIST',
+              'PROHIBITED_CONTENT',
+              'SPII',
+              'IMAGE_SAFETY',
+            ].includes(reason)
+          ) {
+            throw new ChatUpstreamError('CHAT_PROVIDER_REFUSED', false);
+          }
+          if (reason !== 'STOP')
+            throw new ChatUpstreamError(
+              'CHAT_PROVIDER_RESPONSE_INVALID',
+              false,
+            );
+          terminal = true;
+          stopReason = reason;
+        }
+      }
+      input.onRawEvent?.(document);
+      diagnostic.stage = 'output_limit';
+      for (const event of normalized) {
+        if (event.type !== 'text_delta') continue;
+        textBytes += Buffer.byteLength(event.text, 'utf8');
+        if (textBytes > maximumGeneratedTextBytes) {
+          upstreamController.abort();
+          throw new ChatUpstreamError('CHAT_OUTPUT_LIMIT', false);
+        }
         yield event;
       }
     }
+    diagnostic.stage = 'termination';
+    if (!terminal) {
+      diagnostic.stage = 'termination';
+      diagnostic.internalCause = 'MISSING_TERMINAL';
+      throw new ChatUpstreamError('CHAT_PROVIDER_INCOMPLETE', false);
+    }
+    if (textBytes === 0) {
+      diagnostic.internalCause = 'EMPTY_TEXT';
+      throw new ChatUpstreamError('CHAT_EMPTY_RESPONSE', false);
+    }
+    yield {
+      durationMs: 0,
+      ...(stopReason ? { stopReason } : {}),
+      type: 'done',
+    };
   } catch (error) {
-    if (error instanceof ChatUpstreamError || input.signal.aborted) throw error;
-    if (idleTimedOut) {
+    if (input.signal.aborted) diagnostic.internalCause = 'CALLER_ABORT';
+    else if (totalTimedOut) diagnostic.internalCause = 'TOTAL_TIMEOUT';
+    else if (idleTimedOut) diagnostic.internalCause = 'IDLE_TIMEOUT';
+    else if (error instanceof ChatUpstreamError && !diagnostic.internalCause) {
+      diagnostic.internalCause =
+        error.code === 'CHAT_OUTPUT_LIMIT'
+          ? diagnostic.stage === 'output_limit'
+            ? 'OUTPUT_BYTE_LIMIT'
+            : 'OUTPUT_TOKEN_LIMIT'
+          : error.code === 'CHAT_PROVIDER_REFUSED'
+            ? 'PROVIDER_REFUSAL'
+            : diagnostic.stage === 'termination'
+              ? 'INVALID_TERMINATION'
+              : null;
+    }
+    if (input.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (error instanceof ChatUpstreamError) throw error;
+    if (error instanceof ProviderDestinationError)
+      throw new ChatUpstreamError('CHAT_PROVIDER_DESTINATION_DENIED', false);
+    if (idleTimedOut || totalTimedOut) {
       throw new ChatUpstreamError('CHAT_PROVIDER_TIMEOUT', true);
+    }
+    if (error instanceof TypeError) {
+      throw new ChatUpstreamError('CHAT_PROVIDER_RESPONSE_INVALID', false);
     }
     throw new ChatUpstreamError('CHAT_PROVIDER_NETWORK_ERROR', true);
   } finally {
     cleanup();
+    upstreamController.abort();
   }
-  if (!done) yield { durationMs: 0, type: 'done' };
 }
 
 export async function* streamProvider(
@@ -607,6 +1031,10 @@ export async function* streamProvider(
   yield* streamProviderRequest(
     {
       ...(input.onRawEvent ? { onRawEvent: input.onRawEvent } : {}),
+      ...(input.onDiagnostic ? { onDiagnostic: input.onDiagnostic } : {}),
+      ...(input.maximumGeneratedTextBytes !== undefined
+        ? { maximumGeneratedTextBytes: input.maximumGeneratedTextBytes }
+        : {}),
       request: buildProviderStreamRequest(input),
       signal: input.signal,
     },

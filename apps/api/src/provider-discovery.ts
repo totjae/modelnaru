@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
 import type { ProviderTemplate } from './provider-catalog.js';
+import {
+  ProviderDestinationError,
+  secureProviderFetch,
+  type CustomDestination,
+} from './provider-destination.js';
 
 export type ProviderConnectionErrorCode =
   | 'PROVIDER_AUTH_FAILED'
@@ -105,7 +110,11 @@ async function fetchProviderText(
     }
     return await readLimitedText(response, () => controller.abort());
   } catch (error) {
-    if (error instanceof ProviderConnectionError) throw error;
+    if (
+      error instanceof ProviderConnectionError ||
+      error instanceof ProviderDestinationError
+    )
+      throw error;
     throw new ProviderConnectionError('PROVIDER_NETWORK_ERROR');
   } finally {
     clearTimeout(timeout);
@@ -232,7 +241,7 @@ export async function discoverProviderModels(
   fetchImplementation: FetchImplementation = fetch,
   baseUrlOverride?: string,
 ): Promise<DiscoveredProviderModel[]> {
-  if (!template.baseUrl) {
+  if (!template.baseUrl && !baseUrlOverride) {
     throw new ProviderConnectionError('PROVIDER_RESPONSE_INVALID');
   }
   const staticModels = staticProviderModels(template);
@@ -242,7 +251,7 @@ export async function discoverProviderModels(
     }
     return staticModels;
   }
-  const baseUrl = (baseUrlOverride ?? template.baseUrl).replace(/\/$/u, '');
+  const baseUrl = (baseUrlOverride ?? template.baseUrl!).replace(/\/$/u, '');
   const headers = providerDiscoveryHeaders(template, apiKey);
   if (template.credentialValidationPath) {
     await fetchProviderText(
@@ -282,5 +291,18 @@ export class ProviderDiscoveryService {
     baseUrl?: string,
   ): Promise<DiscoveredProviderModel[]> {
     return discoverProviderModels(template, apiKey, fetch, baseUrl);
+  }
+
+  discoverCustom(
+    template: ProviderTemplate,
+    apiKey: string,
+    destination: CustomDestination,
+  ): Promise<DiscoveredProviderModel[]> {
+    return discoverProviderModels(
+      template,
+      apiKey,
+      (url, init) => secureProviderFetch(url, init, destination),
+      destination.baseUrl,
+    );
   }
 }

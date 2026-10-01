@@ -1,5 +1,8 @@
 import {
   Body,
+  Delete,
+  HttpCode,
+  Query,
   Controller,
   Get,
   HttpException,
@@ -16,6 +19,7 @@ import {
   AdminMutationGuard,
   AdminSessionGuard,
   AuthenticatedSessionGuard,
+  AuthenticatedMutationGuard,
   type AdminRequest,
   type AuthenticatedRequest,
 } from './auth.guard.js';
@@ -244,12 +248,70 @@ export class PrincipalAccessController {
   async models(
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: ResponseLike,
+    @Query() query: Record<string, string | undefined> = {},
   ) {
     response.setHeader('Cache-Control', 'no-store');
     try {
-      return await this.access.allowedModels(
+      if (
+        Object.keys(query).some(
+          (key) =>
+            ![
+              'query',
+              'provider',
+              'image',
+              'webSearch',
+              'favoriteOnly',
+            ].includes(key),
+        ) ||
+        Object.values(query).some((value) => typeof value !== 'string')
+      )
+        throw new AccessError(
+          'ACCESS_INPUT_INVALID',
+          400,
+          'Model filters are invalid.',
+        );
+      const state = await this.access.allowedModels(
         request.authenticatedSession!.principal,
       );
+      const text = (query.query ?? '')
+        .trim()
+        .normalize('NFC')
+        .toLocaleLowerCase();
+      if (
+        text.length > 200 ||
+        (query.provider?.length ?? 0) > 100 ||
+        ['image', 'webSearch', 'favoriteOnly'].some(
+          (key) =>
+            query[key] !== undefined && !['true', 'false'].includes(query[key]),
+        )
+      )
+        throw new AccessError(
+          'ACCESS_INPUT_INVALID',
+          400,
+          'Model filters are invalid.',
+        );
+      const favorites = await this.access.favorites(
+        request.authenticatedSession!.principal,
+      );
+      const ids = new Set(favorites.favorites.map((f) => f.providerModelId));
+      return {
+        models: state.models
+          .filter(
+            (model) =>
+              (!text ||
+                `${model.connectionName} ${model.displayName ?? ''} ${model.modelId}`
+                  .toLocaleLowerCase()
+                  .includes(text)) &&
+              (!query.provider || model.connectionName === query.provider) &&
+              (query.image === undefined ||
+                model.supportsImageInput === (query.image === 'true')) &&
+              (query.webSearch === undefined ||
+                model.supportsWebSearch === (query.webSearch === 'true')) &&
+              (query.favoriteOnly === undefined ||
+                ids.has(model.id) === (query.favoriteOnly === 'true')),
+          )
+          .map((model) => ({ ...model, isFavorite: ids.has(model.id) })),
+      };
     } catch (error) {
       if (error instanceof AccessError) {
         throw new HttpException(
@@ -257,6 +319,83 @@ export class PrincipalAccessController {
           error.status,
         );
       }
+      throw error;
+    }
+  }
+}
+
+@Controller('model-favorites')
+export class ModelFavoritesController {
+  constructor(private readonly access: AccessService) {}
+  @Get()
+  @UseGuards(AuthenticatedSessionGuard)
+  async list(
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    try {
+      return await this.access.favorites(
+        request.authenticatedSession!.principal,
+      );
+    } catch (error) {
+      if (error instanceof AccessError)
+        throw new HttpException(
+          { error: { code: error.code, message: error.message } },
+          error.status,
+        );
+      throw error;
+    }
+  }
+  @Put(':id')
+  @HttpCode(204)
+  @UseGuards(AuthenticatedMutationGuard)
+  async put(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    await this.mutate(id, request, response, true);
+  }
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(AuthenticatedMutationGuard)
+  async delete(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    await this.mutate(id, request, response, false);
+  }
+  private async mutate(
+    id: string,
+    request: AuthenticatedRequest,
+    response: ResponseLike,
+    enabled: boolean,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id))
+      throw new HttpException(
+        {
+          error: {
+            code: 'ACCESS_INPUT_INVALID',
+            message: 'Model ID is invalid.',
+          },
+        },
+        400,
+      );
+    try {
+      await this.access.setFavorite(
+        request.authenticatedSession!.principal,
+        id,
+        enabled,
+      );
+    } catch (error) {
+      if (error instanceof AccessError)
+        throw new HttpException(
+          { error: { code: error.code, message: error.message } },
+          error.status,
+        );
       throw error;
     }
   }

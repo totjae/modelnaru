@@ -1,5 +1,61 @@
 # AI 연동 및 모델 설정 명세
 
+## N13 응답 진단 보완 (2026-10-01, 구현·로컬 검증 완료)
+
+streamProviderRequest의 공통 종료/실패 경계에서 본문 없는 메타데이터 진단을 남긴다. JSON parse·구조 검증·finish 검사 이전의 실패도 기록하므로 기존 onRawEvent가 실행되지 않은 경우를 진단할 수 있다. 필드·마스킹·보존·원인 코드의 기준은 ADMIN_LOGGING_SPEC.md의 N13 Provider 응답 메타데이터 진단 절이다. 원본 trace 위치/opt-in과 공개 오류·protocol 종료·usage/quota 계약은 보존한다. 로컬 fixture 이후 진단 적용 실제 Gateway 재시험의 정상 생성·SSE·usage/quota 인수도 통과했다. 기존 실패 원인은 미확정이고 다른 Provider까지 실제 호환을 검증한 것은 아니다. TEST_PLAN.md 최상단 참조.
+
+## N08 구현 기록 (2026-10-01, 작업 트리)
+
+- `context-budget.ts`를 본 생성·요약·제목에서 공유한다. 아래 N02의 UTF-8 직렬화 추정·고정/message overhead·출력 예약·안전 여유·이미지 비용을 적용한다. 이는 실제 tokenizer 결과가 아니며 사용량은 Provider usage 또는 unknown으로 보존한다. 출력 요청은 사용자/모델/기본 상한의 최솟값으로 정규화하고 job 시작 snapshot에도 저장한다.
+- 요약은 메시지를 절단하지 않고 경계에서 분할하며 다음 호출에 직전 요약을 포함한다. 재사용은 동일 모델·prompt version 및 입력 prefix의 첫/마지막 message·개수 일치를 요구한다. 새 요약으로 바꾼 최종 본 요청이 budget을 통과해야 저장·전송한다. 최신 질문 하나도 맞지 않으면 유료 호출 없이 거부한다.
+- 호출·quota·제목 정책은 `CHAT_STATE_SPEC.md` N01이 원장이다. 요약은 호출 직전 모델 가용성/목적지를 재확인하고 진행 중 15초 간격으로 모델 가용성을 검사한다. 각 보조 호출의 부분 usage를 즉시 별도 기록하며 실패·취소·재시작에서도 보존한다. 원문은 감사 로그에 넣지 않는다.
+- 보조 응답의 방어적 생성 text byte 상한은 요약 16 KiB·제목 4 KiB다. token 출력 요청 상한을 대체하지 않는다. 초과·비정상 종료는 실패이고 자동 재시도하지 않는다.
+- 별도 HTTP API 프로세스→승인된 사설 IP mock Provider와 격리 PostgreSQL에서 제목을 검증했다. 요약 분할·usage·quota 경합은 실DB/fixture로 검증했다(`TEST_PLAN.md` N08). 실제 Provider·Docker→실모델·브라우저 UI는 N11~N13 인수로 남는다.
+
+## N02 Provider 종료·예산 계약 (2026-09-30, 확정·N05 parser 구현)
+
+이 절은 N05~N08에서 구현할 모든 본 대화·요약·제목 Provider 호출의 공통 계약이다. 작업/일일 quota 정책은 CHAT_STATE_SPEC.md N01 절, 목적지 정책은 SECURITY_SPEC.md N02 절을 따른다. 현행 parser가 비정상 EOF를 성공으로 바꾸는 동작은 새 버전에서 폐기한다.
+
+### 정상 종료와 오류
+
+| protocol | 정상 완료 신호 | 실패로 보존할 신호 |
+| --- | --- | --- |
+| OpenAI Chat Completions SSE(내장·커스텀) | 첫 choice의 `finish_reason=stop`를 확인하고 이어서 `[DONE]` 수신 | `[DONE]` 없음/선행 finish 없음→`CHAT_PROVIDER_INCOMPLETE`; `length`→`CHAT_OUTPUT_LIMIT`; `content_filter`/refusal→`CHAT_PROVIDER_REFUSED`; 지원하지 않는 tool call→`CHAT_PROVIDER_RESPONSE_INVALID` |
+| Anthropic Messages SSE | `message_delta.stop_reason=end_turn` 또는 `stop_sequence` 뒤 `message_stop` | `message_stop` 없음→incomplete; `max_tokens`/`model_context_window_exceeded`→output limit; `refusal`/error event→refused/Provider error |
+| Gemini GenerateContent SSE | 단일 candidate `finishReason=STOP` 수신 후 stream EOF | finishReason 없음→incomplete; `MAX_TOKENS`→output limit; SAFETY/RECITATION/BLOCKLIST/PROHIBITED_CONTENT/SPII/IMAGE_SAFETY→refused; 기타 비정상 reason→response invalid |
+
+Protocol 필드의 근거는 [OpenAI Chat API reference](https://developers.openai.com/api/reference/resources/chat), [Anthropic streaming](https://platform.claude.com/docs/en/build-with-claude/streaming), [Gemini GenerateContent reference](https://ai.google.dev/api/generate-content)다. 그 위에 적용하는 `CHAT_*` 결과 분류는 ModelNaru의 정책이다. OpenAI 호환 커스텀 서버도 같은 종료 신호를 내야 1차 지원 대상으로 판정한다.
+
+어느 protocol이든 HTTP 비2xx, HTTP 200 내부 `error`/`type:error`, 파싱 불가 JSON, 빈 body, 잘못된 event 구조, 끝나지 않은 UTF-8/SSE block, 명시적 정상 종료 전 EOF는 성공 `done`이 아니다. 정상 종료를 받았어도 텍스트가 비어 있으면 `CHAT_EMPTY_RESPONSE`로 실패한다. 예외적으로 사전에 구현·시험된 비텍스트 결과가 없으므로 빈 답변을 완료로 저장하지 않는다. Provider가 준 부분 token usage는 실패·취소에도 원장에 보존하고 누락 값은 null/unknown으로 둔다. `done`은 parser가 위 신호를 모두 확인한 뒤 한 번만 내보낸다. 시작된 job의 오류는 부분 본문을 `failed`와 함께 저장하며 자동 재호출하지 않는다. 비밀이 담긴 upstream 오류 본문은 사용자 응답·일반 로그에 넣지 않는다.
+
+### 입력·출력·시간 상한
+
+- 각 모델의 적용 context window는 관리자가 검증한 `context_window`와 사용자 설정의 작은 값이다. 모델 한도가 null이면 16,384 token으로 취급한다. 모델별 실제 tokenizer가 없으므로 text estimate는 모든 system/developer/user/assistant/파일 추출문·요약문을 직렬화한 UTF-8 byte 수 + 메시지당 64 + 요청 고정 1,024를 token의 보수적 근사치로 사용한다. 이것은 정확한 과금 token이 아니며 UI에서 추정값으로 표시한다.
+- 출력 예약은 선택 `maxOutputTokens`, 모델 상한, 서버 기본 4,096 중 가장 작은 값이다. 안전 여유는 `max(1,024, contextWindow의 10%)` token이다. `입력 추정 + 출력 예약 + 안전 여유 <= 적용 context window`가 아니면 요약을 시도하거나 `CHAT_CONTEXT_LIMIT_EXCEEDED`로 거부한다. 이미지 입력은 모델 `supportsImageInput=true`와 관리자가 검증한 `image_token_estimate`가 있을 때만 허용하고, 이미지마다 해당 값과 1,024 token 중 큰 값을 입력에 더한다. 미설정 이미지는 추측해 보내지 않고 `CHAT_IMAGE_BUDGET_UNKNOWN`으로 거부한다. 이미지 raw byte 합계는 기존 20 MiB 기본 상한을 함께 적용한다.
+- 요약은 요약 모델 자체의 window/출력 예약을 별도로 계산한다. CHAT_STATE_SPEC.md N01의 호출당 12,000자·1,024 출력 token·최대 4회·각 60초를 상한으로 하되, 실제 budget에 맞는 메시지 경계에서 더 작게 분할한다. 메시지 하나가 모델 budget을 넘으면 무단 절단하지 않고 context 오류로 중단한다. 제목은 같은 계산을 거쳐 N01의 입력 2,000자·64 출력 token·15초 상한을 적용한다.
+- serialized upstream 요청 body 최대 32 MiB, upstream SSE 개별 event 최대 1 MiB, upstream response 누적 최대 64 MiB, 작업 총 30분이다. **생성된 assistant 본문**은 `limits.maximumGeneratedTextBytes`의 UTF-8 byte 수(기본 2 MiB, 설정 가능 범위 64 KiB~8 MiB)를 생성·DB checkpoint·최종 message·GET 복원에 동일하게 적용한다. DB는 별도로 8 MiB 절대 상한을 둔다. chunk 처리 전에 누적 byte를 검사한다. Provider 응답 상한 또는 생성 본문 설정값을 넘으면 upstream을 취소하고 부분 출력·`CHAT_OUTPUT_LIMIT` 또는 `CHAT_PROVIDER_RESPONSE_INVALID`로 마친다. 64 MiB upstream 총량은 최대 8 MiB 본문의 JSON/SSE escaping 여유를 포함하되, 비정상적으로 많은 작은 event는 이 상한에서 먼저 중단될 수 있다. 사용자가 설정한 1~1,800초 idle timeout은 총 30분 상한을 연장하지 않는다. 연결 10초, 첫 header 30초, 모델 목록 전체 15초/5 MiB/10,000개 한도다.
+- 단일 API 프로세스에서 Provider 네트워크 호출 전체 기본 3개, 주체의 활성 chat job 1개다. 요약은 자신이 속한 chat job의 슬롯을 이어 사용하고, 제목은 본 호출이 끝난 뒤 빈 슬롯에서만 시작한다. 별도 무제한 queue는 없다. SSE 구독은 job당 최대 3개·프로세스 전체 최대 30개다. 첫 outbound SSE `snapshot`은 본문 없는 메타데이터이고 전체 저장 본문은 별도 GET job 응답으로 전송한다. 서버 구독자 미전송 buffer는 `limits.maximumSsePendingBytes`(기본 256 KiB, 64 KiB~1 MiB)이고 클라이언트의 GET 대기 event buffer는 256 KiB다. 양쪽 모두 **UTF-8로 인코딩된 완성 SSE frame** byte를 센다: `id:`·`event:`·`data:` 줄, `JSON.stringify` 결과, 줄바꿈과 빈 줄 포함이다. 한 frame 상한은 `min(1 MiB, floor(min(서버 pending 설정값, 256 KiB) / 2))` byte다. 따라서 서버 설정 최솟값에서는 frame 최대 32 KiB, 기본값에서는 128 KiB다. 본문을 Unicode scalar 경계에서 나누고 각 조각을 JSON/SSE frame으로 직렬화한 **뒤** byte 길이를 검사한다. 넘으면 더 작게 나눠 다시 직렬화한다. 일반 checkpoint 하나는 frame 하나·revision 하나에 대응하고, terminal metadata와 마지막 본문 조각도 함께 직렬화해 같은 frame 상한을 지킨다. 큰 Provider chunk는 일반 checkpoint 여러 건으로 먼저 저장하여 최종 terminal 조각을 맞춘다. 빈 buffer에는 한 frame이 반드시 들어가며 이미 대기 중인 frame을 합쳐 서버/클라이언트 buffer를 넘으면 해당 구독만 닫고 GET/재구독한다. heartbeat 15초는 revision을 올리지 않는다. `request_trace`의 기존 세션당/프로세스 byte 상한도 유지한다.
+
+이 수치는 8 GB 단일 서버의 최초 기본값이며 N13 부하 결과로 조정할 때 AI_INTEGRATION_SPEC·SERVER_CONFIG_SPEC·DEPLOYMENT_PROFILE·시험 결과를 함께 갱신한다. N05에서 `chat-streaming.ts`의 세 protocol 종료 판정, SSE/UTF-8·출력/요청/응답 byte 상한, header 30초·idle·총 30분 timeout을 구현했다. 본문 상한은 parser 입력의 `maximumGeneratedTextBytes`(미지정 시 2 MiB)로 받는다. N06/N08에서 job config snapshot·terminal transaction·부분 usage·context budget·전역 슬롯·구독 상한을 구현하고 격리 DB/HTTP로 검증했다(`TEST_PLAN.md` N06/N08). N05 fixture 통과는 실제 Provider 통신 검증을 뜻하지 않는다.
+
+## 새 버전 생성 수명 결정 (2026-09-30, 미구현)
+
+- 브라우저 연결 해제와 Provider 취소를 분리한다. 화면이 없어도 서버 작업은 계속 생성·저장하며 재구독은 새 Provider 요청을 만들지 않는다.
+- 명시적 중지·주체/session 종료·권한 회수·실행 상한은 upstream 취소로 전달한다. 브라우저 구독 속도가 생성과 영속 저장을 막지 않게 한다.
+- 재시작 후 자동 유료 재호출은 하지 않는다. 생성·요약·제목은 공통 Provider 동시성 상한을 지키며 정확한 정책은 CHAT_STATE_SPEC.md의 새 버전 절을 따른다.
+
+## 새 버전 커스텀 Provider 범위 (2026-09-30 확정, N07 기본 호출 구현)
+
+- 관리자 직접 주소·API 키 등록과 인증 없는 로컬 모델 연결을 새 버전에 포함한다. 기존 고정 HTTPS 전용 정책의 예외는 PROVIDER_REGISTRATION_SPEC.md와 SECURITY_SPEC.md의 새 버전 절을 따른다.
+- 1차 설계안은 OpenAI 호환 Chat Completions Adapter 재사용이며 모델 조회 미지원 시 수동 ID를 제공한다. 기타 프로토콜은 미확정이다.
+- 로컬 모델 추론 서버에 연결하는 기능이며 ModelNaru가 추론 엔진을 직접 설치·구동한다는 의미가 아니다. N07/N08에서 모델 조회·채팅·요약·제목은 같은 목적지 검증을 거치고 이미지 입력 budget을 적용했다. 실제 로컬 추론 엔진과 공인 HTTPS 연결은 N13에서 시험한다.
+
+## 새 버전 자동 제목 생성 (2026-10-01, N08 API 구현)
+
+- 지정 모델을 통한 대화 제목 자동 생성 기능을 새 버전에 포함한다.
+- 실행 시점·입력 범위·실패·수동 제목 우선·중복 방지와 사용량 분리는 [채팅 상태 명세](./CHAT_STATE_SPEC.md) N01이 확정 원장이다.
+- 공통 Provider parser/목적지 검증을 재사용하고 별도 제목 usage를 기록한다. 관리자 설정 API는 `API_SPEC.md` N08을 따른다. 관리자 UI는 N11에 남는다.
+
 ## 1. 목적과 참고 범위
 
 이 문서는 `provider-manager-v1.10.0.js`의 구조를 참고하여 본 서비스의 AI 공급자 연동, 모델 동기화, 요청 형식 변환, 스트리밍 응답 처리 및 사용자별 설정 방식을 정의한다. 제공자 등록 UI와 template 규격은 [PROVIDER_REGISTRATION_SPEC.md](./PROVIDER_REGISTRATION_SPEC.md)를 따른다.

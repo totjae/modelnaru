@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -16,7 +17,26 @@ import {
 } from '@nestjs/common';
 
 import { ChatExecutionService } from './chat-execution.service.js';
-import { ChatMessageStateError } from './chat-messages.repository.js';
+import {
+  ChatMessageStateError,
+  ChatSettingsConflictError,
+  ChatRegenerationTargetError,
+  ChatAttachmentError,
+} from './chat-messages.repository.js';
+import {
+  ChatJobConflictError,
+  type ChatJobRecord,
+} from './chat-jobs.repository.js';
+import { ChatJobsService } from './chat-jobs.service.js';
+import { serializeJobFrame, type JobCommitEvent } from './chat-job-events.js';
+import { AccessError } from './access.service.js';
+import {
+  AccessDailyLimitError,
+  AccessModelNotAllowedError,
+} from './access.repository.js';
+import { ChatProviderUnavailableError } from './chat-provider.service.js';
+import { ProviderDestinationError } from './provider-destination.js';
+import { ProviderParameterValidationError } from './provider-parameter-policy.js';
 import type { ChatEvent, ChatParameters } from './chat-streaming.js';
 import {
   AuthenticatedMutationGuard,
@@ -33,13 +53,38 @@ import {
 import { RequestTraceService } from './request-trace.service.js';
 
 interface ResponseLike {
+  writableLength?: number;
   end?(): void;
   flushHeaders?(): void;
   off?(event: 'close' | 'drain', listener: () => void): void;
-  on?(event: 'close', listener: () => void): void;
+  on?(event: 'close' | 'drain', listener: () => void): void;
   once?(event: 'close' | 'drain', listener: () => void): void;
   setHeader(name: string, value: string): void;
+  status?(code: number): ResponseLike;
   write?(chunk: string): boolean;
+}
+
+const REVISION = /^[1-9][0-9]{0,18}$/u;
+const IDEMPOTENCY_KEY =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function publicJob(job: ChatJobRecord) {
+  return {
+    id: job.id,
+    kind: job.kind,
+    status: job.status,
+    revision: job.revision,
+    conversationId: job.conversationId,
+    branchId: job.branchId,
+    userMessageId: job.userMessageId,
+    assistantMessageId: job.assistantMessageId,
+    content: job.content,
+    errorCode: job.errorCode,
+    inputTokens: job.inputTokens,
+    outputTokens: job.outputTokens,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+  };
 }
 
 function writeSseEvent(
@@ -150,7 +195,7 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
       : input.defaultProviderModelId;
   const generationParameters =
     input.generationParameters === undefined
-      ? ({ temperature: 1 } satisfies ChatParameters)
+      ? ({} satisfies ChatParameters)
       : parseParameters(input.generationParameters);
   if (
     parsedTitle === undefined ||
@@ -176,14 +221,43 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
     responseTimeoutSeconds,
     systemPrompt: parsedSystemPrompt,
     title: parsedTitle,
+    titleSource: input.title === undefined ? 'default' : 'manual',
     webSearchEnabled,
   };
 }
 
 function parseUpdate(body: unknown): UpdateConversationInput | undefined {
   const input = recordBody(body);
-  if (!input) return undefined;
-  const output: UpdateConversationInput = {};
+  if (
+    !input ||
+    typeof input.settingsRevision !== 'string' ||
+    !/^[1-9]\d{0,18}$/.test(input.settingsRevision) ||
+    BigInt(input.settingsRevision) > 9_223_372_036_854_775_807n ||
+    Object.keys(input).some(
+      (key) =>
+        ![
+          'settingsRevision',
+          'isPinned',
+          'title',
+          'systemPrompt',
+          'historyMessageLimit',
+          'contextTokenLimit',
+          'requestTraceLimit',
+          'responseTimeoutSeconds',
+          'defaultProviderModelId',
+          'generationParameters',
+          'webSearchEnabled',
+        ].includes(key),
+    )
+  )
+    return undefined;
+  const output: UpdateConversationInput = {
+    settingsRevision: input.settingsRevision,
+  };
+  if (input.isPinned !== undefined) {
+    if (typeof input.isPinned !== 'boolean') return undefined;
+    output.isPinned = input.isPinned;
+  }
   if (input.title !== undefined) {
     const value = title(input.title);
     if (value === undefined) return undefined;
@@ -233,7 +307,7 @@ function parseUpdate(body: unknown): UpdateConversationInput | undefined {
     if (typeof input.webSearchEnabled !== 'boolean') return undefined;
     output.webSearchEnabled = input.webSearchEnabled;
   }
-  return Object.keys(output).length > 0 ? output : undefined;
+  return Object.keys(output).length > 1 ? output : undefined;
 }
 
 function parseParameters(value: unknown): ChatParameters | undefined {
@@ -407,14 +481,39 @@ export class ChatsController {
   async list(
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: ResponseLike,
+    @Query() query: Record<string, string | undefined> = {},
   ) {
     response.setHeader('Cache-Control', 'no-store');
     try {
-      return {
-        conversations: await this.chats.list(
-          request.authenticatedSession!.principal,
-        ),
-      };
+      if (
+        Object.keys(query).some(
+          (key) => !['query', 'pinned', 'limit', 'cursor'].includes(key),
+        ) ||
+        Object.values(query).some((value) => typeof value !== 'string')
+      )
+        this.invalidInput();
+      const limit = query.limit === undefined ? 50 : Number(query.limit);
+      const text = (query.query ?? '').trim().normalize('NFC');
+      if (
+        text.length > 200 ||
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > 100 ||
+        (query.pinned !== undefined &&
+          !['true', 'false'].includes(query.pinned))
+      )
+        this.invalidInput();
+      return await this.chats.listPage(
+        request.authenticatedSession!.principal,
+        {
+          limit,
+          query: text,
+          ...(query.pinned === undefined
+            ? {}
+            : { pinned: query.pinned === 'true' }),
+          ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+        },
+      );
     } catch (error) {
       this.mapError(error);
     }
@@ -520,14 +619,25 @@ export class ChatsController {
     @Param('branchId') branchId: string,
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: ResponseLike,
+    @Body() body?: unknown,
   ) {
     response.setHeader('Cache-Control', 'no-store');
-    if (!UUID.test(id) || !UUID.test(branchId)) this.invalidInput();
+    const revision = recordBody(body)?.settingsRevision;
+    if (
+      !UUID.test(id) ||
+      !UUID.test(branchId) ||
+      typeof revision !== 'string' ||
+      !/^[1-9]\d{0,18}$/.test(revision) ||
+      BigInt(revision) > 9_223_372_036_854_775_807n ||
+      Object.keys(recordBody(body) ?? {}).length !== 1
+    )
+      this.invalidInput();
     try {
       return await this.chats.activateBranch(
         request.authenticatedSession!.principal,
         id,
         branchId,
+        revision,
       );
     } catch (error) {
       this.mapError(error);
@@ -717,6 +827,30 @@ export class ChatsController {
   }
 
   private mapError(error: unknown): never {
+    if (error instanceof AccessModelNotAllowedError)
+      throw new HttpException(
+        {
+          error: {
+            code: 'ACCESS_MODEL_FORBIDDEN',
+            message: 'The model is not available.',
+          },
+        },
+        404,
+      );
+    if (
+      error instanceof Error &&
+      ['CHAT_INPUT_INVALID', 'CHAT_PARAMETER_INVALID'].includes(error.message)
+    ) {
+      throw new HttpException(
+        {
+          error: {
+            code: error.message,
+            message: 'Conversation input is invalid.',
+          },
+        },
+        400,
+      );
+    }
     if (error instanceof ConversationNotFoundError) {
       throw new HttpException(
         {
@@ -735,5 +869,437 @@ export class ChatsController {
       );
     }
     throw error;
+  }
+}
+
+@Controller('conversations')
+export class ChatJobsController {
+  constructor(
+    private readonly jobs: ChatJobsService,
+    private readonly chats: ChatsService,
+  ) {}
+
+  private invalid(): never {
+    throw new HttpException(
+      {
+        error: {
+          code: 'CHAT_INPUT_INVALID',
+          message: 'Chat job input is invalid.',
+        },
+      },
+      400,
+    );
+  }
+
+  private mapError(error: unknown): never {
+    if (error instanceof ProviderParameterValidationError) this.invalid();
+    if (error instanceof ProviderDestinationError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_PROVIDER_DESTINATION_DENIED',
+            message: 'Provider destination is not allowed.',
+          },
+        },
+        422,
+      );
+    }
+    if (error instanceof ChatJobConflictError) {
+      const status = error.code === 'CHAT_SERVER_BUSY' ? 503 : 409;
+      throw new HttpException(
+        { error: { code: error.code, message: error.code } },
+        status,
+      );
+    }
+    if (error instanceof ChatSettingsConflictError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_SETTINGS_CONFLICT',
+            message: 'Conversation settings changed.',
+          },
+        },
+        409,
+      );
+    }
+    if (error instanceof ChatRegenerationTargetError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_REGENERATION_INVALID',
+            message: 'The answer cannot be regenerated.',
+          },
+        },
+        409,
+      );
+    }
+    if (error instanceof ChatAttachmentError) this.invalid();
+    if (error instanceof ChatProviderUnavailableError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_MODEL_UNAVAILABLE',
+            message: 'The model is unavailable.',
+          },
+        },
+        404,
+      );
+    }
+    if (error instanceof AccessError) {
+      throw new HttpException(
+        {
+          error: {
+            code: error.code,
+            message: error.message,
+            ...(error.scope ? { scope: error.scope } : {}),
+          },
+        },
+        error.status,
+      );
+    }
+    if (error instanceof AccessDailyLimitError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'ACCESS_DAILY_LIMIT_REACHED',
+            message: 'The daily request limit has been reached.',
+            scope: error.scope,
+            resetAt: error.resetAt?.toISOString() ?? null,
+          },
+        },
+        429,
+      );
+    }
+    if (error instanceof AccessModelNotAllowedError) {
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_MODEL_UNAVAILABLE',
+            message: 'The model is unavailable.',
+          },
+        },
+        404,
+      );
+    }
+    if (
+      error instanceof ConversationNotFoundError ||
+      error instanceof ChatError
+    ) {
+      throw new HttpException(
+        {
+          error: { code: 'CHAT_NOT_FOUND', message: 'Conversation not found.' },
+        },
+        404,
+      );
+    }
+    throw error;
+  }
+
+  private async mapStartError(
+    error: unknown,
+    request: AuthenticatedRequest,
+    id: string,
+  ): Promise<never> {
+    if (error instanceof ChatSettingsConflictError) {
+      const conversation = await this.chats.detail(
+        request.authenticatedSession!.principal,
+        id,
+        { limit: 1 },
+      );
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_SETTINGS_CONFLICT',
+            message: 'Conversation settings changed.',
+            conversation,
+            settingsRevision: conversation.settingsRevision,
+          },
+        },
+        409,
+      );
+    }
+    this.mapError(error);
+  }
+
+  private startInput(
+    body: unknown,
+    key: string | undefined,
+    regeneration: boolean,
+  ) {
+    const raw = recordBody(body);
+    const settingsRevision = raw?.settingsRevision;
+    const parsed = regeneration ? parseRegeneration(body) : parseMessage(body);
+    if (
+      !key ||
+      !IDEMPOTENCY_KEY.test(key) ||
+      typeof settingsRevision !== 'string' ||
+      !REVISION.test(settingsRevision) ||
+      BigInt(settingsRevision) > 9_223_372_036_854_775_807n ||
+      !parsed
+    )
+      this.invalid();
+    return { key, parsed, settingsRevision };
+  }
+
+  @Post(':id/jobs')
+  @UseGuards(AuthenticatedMutationGuard)
+  async startTurn(
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id)) this.invalid();
+    const {
+      key: validatedKey,
+      parsed,
+      settingsRevision,
+    } = this.startInput(body, key, false);
+    const message = parsed as NonNullable<ReturnType<typeof parseMessage>>;
+    try {
+      const result = await this.jobs.start({
+        ...message,
+        principal: request.authenticatedSession!.principal,
+        conversationId: id,
+        kind: 'turn',
+        idempotencyKey: validatedKey,
+        settingsRevision,
+        sessionId: request.authenticatedSession!.row.id,
+        absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
+      });
+      response.status?.(result.reused ? 200 : 202);
+      return { job: publicJob(result.job) };
+    } catch (error) {
+      if (
+        error instanceof ChatJobConflictError &&
+        error.code === 'CHAT_SERVER_BUSY'
+      )
+        response.setHeader('Retry-After', '1');
+      return this.mapStartError(error, request, id);
+    }
+  }
+
+  @Post(':id/messages/:messageId/regeneration-jobs')
+  @UseGuards(AuthenticatedMutationGuard)
+  async startRegeneration(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id) || !UUID.test(messageId)) this.invalid();
+    const {
+      key: validatedKey,
+      parsed,
+      settingsRevision,
+    } = this.startInput(body, key, true);
+    try {
+      const result = await this.jobs.start({
+        ...parsed,
+        content: '',
+        attachmentIds: [],
+        principal: request.authenticatedSession!.principal,
+        conversationId: id,
+        kind: 'regenerate',
+        regenerateAssistantMessageId: messageId,
+        idempotencyKey: validatedKey,
+        settingsRevision,
+        sessionId: request.authenticatedSession!.row.id,
+        absoluteExpiresAt: request.authenticatedSession!.absoluteExpiresAt,
+      });
+      response.status?.(result.reused ? 200 : 202);
+      return { job: publicJob(result.job) };
+    } catch (error) {
+      if (
+        error instanceof ChatJobConflictError &&
+        error.code === 'CHAT_SERVER_BUSY'
+      )
+        response.setHeader('Retry-After', '1');
+      return this.mapStartError(error, request, id);
+    }
+  }
+
+  @Get(':id/jobs/:jobId')
+  @UseGuards(AuthenticatedSessionGuard)
+  async get(
+    @Param('id') id: string,
+    @Param('jobId') jobId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ) {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id) || !UUID.test(jobId)) this.invalid();
+    try {
+      return {
+        job: publicJob(
+          await this.jobs.get(
+            request.authenticatedSession!.principal,
+            id,
+            jobId,
+          ),
+        ),
+      };
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
+  @Post(':id/jobs/:jobId/cancel')
+  @HttpCode(204)
+  @UseGuards(AuthenticatedMutationGuard)
+  async cancelJob(
+    @Param('id') id: string,
+    @Param('jobId') jobId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ResponseLike,
+  ): Promise<void> {
+    response.setHeader('Cache-Control', 'no-store');
+    if (!UUID.test(id) || !UUID.test(jobId)) this.invalid();
+    try {
+      await this.jobs.cancel(
+        request.authenticatedSession!.principal,
+        id,
+        jobId,
+      );
+    } catch (error) {
+      this.mapError(error);
+    }
+  }
+
+  @Get(':id/jobs/:jobId/events')
+  @UseGuards(AuthenticatedSessionGuard)
+  async events(
+    @Param('id') id: string,
+    @Param('jobId') jobId: string,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: ResponseLike,
+  ): Promise<void> {
+    if (!UUID.test(id) || !UUID.test(jobId)) this.invalid();
+    const principal = request.authenticatedSession!.principal;
+    const sessionId = request.authenticatedSession!.row.id;
+    let subscription: Awaited<ReturnType<ChatJobsService['subscribe']>>;
+    let ready = false;
+    let closed = false;
+    let revision = 0n;
+    let pendingBytes = 0;
+    let preSnapshotBytes = 0;
+    let blocked = false;
+    let terminalQueued = false;
+    const queued: JobCommitEvent[] = [];
+    const frames: string[] = [];
+    let finish: () => void = () => undefined;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      subscription?.close();
+      response.end?.();
+      finish();
+    };
+    const drain = () => {
+      blocked = false;
+      while (frames.length && !blocked && !closed) {
+        const frame = frames.shift()!;
+        pendingBytes -= Buffer.byteLength(frame, 'utf8');
+        blocked = response.write?.(frame) === false;
+      }
+      if (terminalQueued && !frames.length && !closed) close();
+    };
+    const enqueue = (frame: string) => {
+      if (closed) return;
+      const bytes = Buffer.byteLength(frame, 'utf8');
+      if (
+        bytes > this.jobs.maximumPendingBytes ||
+        pendingBytes + bytes + (response.writableLength ?? 0) >
+          this.jobs.maximumPendingBytes
+      ) {
+        close();
+        return;
+      }
+      frames.push(frame);
+      pendingBytes += bytes;
+      drain();
+    };
+    const deliver = (event: JobCommitEvent) => {
+      if (!ready) {
+        preSnapshotBytes += Buffer.byteLength(serializeJobFrame(event), 'utf8');
+        if (preSnapshotBytes > this.jobs.maximumPendingBytes) close();
+        else queued.push(event);
+        return;
+      }
+      const next = BigInt(event.revision);
+      if (next <= revision) return;
+      if (next !== revision + 1n) {
+        close();
+        return;
+      }
+      revision = next;
+      enqueue(serializeJobFrame(event));
+      if (event.name === 'terminal') {
+        terminalQueued = true;
+        if (!frames.length) close();
+      }
+    };
+    try {
+      subscription = await this.jobs.subscribe(principal, id, jobId, deliver);
+    } catch (error) {
+      this.mapError(error);
+    }
+    if (closed) {
+      subscription.close();
+      return;
+    }
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    response.setHeader('Connection', 'keep-alive');
+    response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders?.();
+    response.on?.('close', close);
+    response.on?.('drain', drain);
+    revision = BigInt(subscription.job.revision);
+    enqueue(
+      `id: ${revision}\nevent: snapshot\ndata: ${JSON.stringify({
+        jobId,
+        revision: subscription.job.revision,
+        status: subscription.job.status,
+        contentBytes: Buffer.byteLength(subscription.job.content, 'utf8'),
+      })}\n\n`,
+    );
+    ready = true;
+    for (const event of queued) deliver(event);
+    queued.length = 0;
+    if (
+      subscription.job.status === 'completed' ||
+      subscription.job.status === 'failed' ||
+      subscription.job.status === 'cancelled'
+    )
+      close();
+    const timer = setInterval(() => {
+      if (closed) return;
+      void this.jobs
+        .subscriptionValid(sessionId, principal, subscription.job)
+        .then((valid) => {
+          if (!valid) {
+            close();
+            return;
+          }
+          enqueue('event: heartbeat\n\n');
+        })
+        .catch(close);
+    }, 15_000);
+    timer.unref();
+    try {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+        if (closed) resolve();
+      });
+    } finally {
+      clearInterval(timer);
+      close();
+    }
   }
 }

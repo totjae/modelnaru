@@ -66,6 +66,7 @@ describe('ChatsService', () => {
       user,
       'conversation-id',
       'branch-id',
+      undefined,
     );
   });
 

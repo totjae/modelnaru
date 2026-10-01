@@ -1,7 +1,5 @@
 'use client';
-
 import { useState } from 'react';
-
 import { AccessManager } from './access-manager';
 import { ProviderManager } from './provider-manager';
 import { ServerSettings } from './server-settings';
@@ -9,60 +7,43 @@ import { SummarizationManager } from './summarization-manager';
 import { UsageDashboard } from './usage-dashboard';
 import { UserManager } from './user-manager';
 import { AdminLogViewer } from './admin-log-viewer';
-
-type AdminTab =
-  'guest' | 'logs' | 'memory' | 'providers' | 'server' | 'usage' | 'users';
-
-const tabs: Array<{ id: AdminTab; label: string }> = [
-  { id: 'usage', label: 'Usage' },
-  { id: 'logs', label: '로그' },
-  { id: 'users', label: '사용자' },
-  { id: 'guest', label: '게스트' },
-  { id: 'providers', label: '프로바이더' },
-  { id: 'memory', label: '장기기억' },
-  { id: 'server', label: '서버' },
-];
-
+import { TitleSettings } from './title-settings';
+const tabs = ['사용량', 'Provider', '접근·모델', '로그', '서버 설정'] as const;
 export function AdminWorkspace() {
-  const [tab, setTab] = useState<AdminTab>('usage');
-
+  const [tab, setTab] = useState<(typeof tabs)[number]>('사용량');
   return (
-    <div className="admin-workspace">
-      <nav className="admin-navigation" aria-label="관리자 메뉴" role="tablist">
+    <div className="admin-workspace n11-admin">
+      <nav className="admin-navigation" aria-label="관리자 메뉴">
         {tabs.map((item) => (
           <button
-            aria-controls={`admin-panel-${item.id}`}
-            aria-selected={tab === item.id}
-            className={tab === item.id ? 'active' : ''}
-            id={`admin-tab-${item.id}`}
-            key={item.id}
-            onClick={() => setTab(item.id)}
-            role="tab"
+            key={item}
             type="button"
+            aria-current={tab === item ? 'page' : undefined}
+            className={tab === item ? 'active' : ''}
+            onClick={() => setTab(item)}
           >
-            {item.label}
+            {item}
           </button>
         ))}
       </nav>
-
-      <div
-        aria-labelledby={`admin-tab-${tab}`}
-        className={`admin-tab-panel ${tab}`}
-        id={`admin-panel-${tab}`}
-        role="tabpanel"
-      >
-        {tab === 'usage' && <UsageDashboard />}
-        {tab === 'logs' && <AdminLogViewer />}
-        {tab === 'users' && (
+      <div className="admin-tab-panel" key={tab}>
+        {tab === '사용량' && <UsageDashboard />}
+        {tab === 'Provider' && <ProviderManager />}
+        {tab === '접근·모델' && (
           <>
             <UserManager />
             <AccessManager scope="users" />
+            <AccessManager scope="guest" />
           </>
         )}
-        {tab === 'guest' && <AccessManager scope="guest" />}
-        {tab === 'providers' && <ProviderManager />}
-        {tab === 'memory' && <SummarizationManager />}
-        {tab === 'server' && <ServerSettings />}
+        {tab === '로그' && <AdminLogViewer />}
+        {tab === '서버 설정' && (
+          <>
+            <TitleSettings />
+            <SummarizationManager />
+            <ServerSettings />
+          </>
+        )}
       </div>
     </div>
   );

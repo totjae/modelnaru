@@ -1,49 +1,37 @@
 #!/usr/bin/env sh
 set -eu
-
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DEPLOYMENT_ROOT=$(dirname -- "$SCRIPT_DIR")
 COMMAND=${1:-help}
 APICHAT_UID=${APICHAT_UID:-$(id -u)}
 APICHAT_GID=${APICHAT_GID:-$(id -g)}
 export APICHAT_UID APICHAT_GID
-
 cd "$DEPLOYMENT_ROOT"
-
 case "$COMMAND" in
-  start)
+  start|restart|update)
+    # Build and validate before interrupting a running release.
+    docker compose build admin-tool api web migrate
     "$SCRIPT_DIR/apichat-admin" validate
     "$SCRIPT_DIR/apichat-admin" render-env
-    exec docker compose --env-file .runtime.env up -d --build
+    docker compose --env-file .runtime.env stop gateway api web
+    exec docker compose --env-file .runtime.env up -d --no-build --force-recreate --wait
     ;;
   stop)
     exec docker compose --env-file .runtime.env down
     ;;
-  restart)
-    "$SCRIPT_DIR/apichat-admin" validate
-    "$SCRIPT_DIR/apichat-admin" render-env
-    exec docker compose --env-file .runtime.env up -d --build --force-recreate
-    ;;
   status)
-    exec docker compose --env-file .runtime.env ps
+    exec docker compose --env-file .runtime.env ps -a
     ;;
   logs)
     exec docker compose --env-file .runtime.env logs --tail=200 -f
     ;;
+  health)
+    docker compose --env-file .runtime.env exec -T gateway wget -q -O - http://127.0.0.1:8080/api/health/live
+    docker compose --env-file .runtime.env exec -T gateway wget -q -O - http://127.0.0.1:8080/api/health/ready
+    docker compose --env-file .runtime.env exec -T gateway wget -q --spider http://127.0.0.1:8080/
+    ;;
   help|-h|--help)
-    printf '%s\n' \
-      'Usage: ./bin/modelnaru <command>' \
-      '' \
-      'Commands:' \
-      '  start    설정을 검증하고 서비스를 build·시작' \
-      '  stop     서비스를 종료' \
-      '  restart  설정을 검증하고 container를 다시 생성' \
-      '  status   container 상태 표시' \
-      '  logs     최근 log를 표시하고 계속 추적' \
-      '  help     이 도움말 표시'
+    printf '%s\n' 'Usage: ./bin/modelnaru <start|stop|restart|update|status|logs|health>' 'start/restart/update: build, validate, stop application, migrate and recreate; wait for health.' 'Update requires an approved release and compatible config/schema. No automatic rollback.'
     ;;
-  *)
-    printf 'Unknown command: %s\n' "$COMMAND" >&2
-    exit 2
-    ;;
+  *) printf 'Unknown command: %s\n' "$COMMAND" >&2; exit 2 ;;
 esac

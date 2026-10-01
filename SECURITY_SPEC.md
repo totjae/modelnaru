@@ -1,5 +1,59 @@
 # ModelNaru 보안 상세 명세
 
+## N12 관리자 복구 구현 (2026-10-01, 격리 인수 완료)
+
+기존 대화형 reset-totp와 원자적 config 저장을 유지한다. validate는 Unix config/secret 0600을 요구하고 비대화형 초기화·복구는 거부한다. 새 secret은 터미널에서만 등록하며 시험도 PTY 출력을 메모리에서 폐기한다. restart는 config 파일의 atomic rename 후 mount를 재생성한다. 새 자격증명 fingerprint와 기존 session의 불일치로 이전 관리자 session을 폐기한다. 실제 HTTP 로그인/복구 검증 결과는 TEST_PLAN.md N12에 기록한다. 실행 절차의 원장은 README.md와 DEPLOYMENT_RUNBOOK.md다.
+
+## N02 새 버전 경계: 커스텀 outbound·렌더링·관리자 복구 (2026-09-30 확정, 항목별 구현 상태 아래 참조)
+
+### 커스텀 Provider 목적지
+
+- 등록·수정·동기화·시험은 관리자 session+CSRF만 허용한다. 사용자/게스트는 저장된 연결/model UUID만 선택하며 URL, DNS, header, 인증 방식과 승인 주소를 override할 수 없다. 내장 Provider의 고정 HTTPS endpoint 검증은 유지한다. 커스텀 1차 protocol은 PROVIDER_REGISTRATION_SPEC.md N02 절을 따른다.
+- `public`: HTTPS만 허용한다. URL은 `userinfo`, fragment, query, 빈 host, 비HTTP scheme, IPv6 zone ID, encoded slash/backslash·dot segment를 거부한다. host를 IDNA/ASCII로 정규화하고 A/AAAA를 조회한다. 결과가 하나라도 loopback, RFC1918/ULA, link-local, metadata, multicast, unspecified 또는 예약 주소면 전체 요청을 거부한다. 결과가 없거나 검증 불가능해도 거부한다. 검증한 공인 IP 하나에만 연결하며 TLS SNI·인증서 검증은 원래 hostname으로 수행한다.
+- `local`: 관리자가 연결별로 정확한 IPv4/IPv6 literal+port를 승인·저장해야 한다. HTTP는 이 승인 주소가 URL 주소와 같을 때만 허용한다. RFC1918 IPv4 또는 IPv6 ULA만 허용하고 loopback, link-local(특히 169.254.0.0/16), metadata, multicast, unspecified, public IP와 IPv4-mapped 우회는 거부한다. 로컬 host명/범위 CIDR/전체 사설망 승인은 지원하지 않는다. 주소가 바뀌면 관리자 승인을 다시 받아야 한다.
+- 등록 시와 매 models 조회·채팅·요약·제목·진단 요청 시 위 검증을 반복한다. HTTP client는 검증한 IP로 실제 socket을 열고 peer IP가 같음을 확인한다. hostname을 연결 단계에서 다시 임의 해석하거나 proxy 환경 변수로 우회하지 않는다. redirect는 모든 요청에서 금지하며 3xx는 안전한 오류다. pooled connection 재사용은 같은 연결의 승인 IP·host·port와 일치할 때만 허용하고 1차 구현은 커스텀 호출마다 새 연결을 사용한다.
+- URL query에 키를 넣지 않고 `authMode=none`이면 인증 header를 보내지 않는다. bearer 키는 기존 암호화·마스킹을 적용한다. 관리자가 Host·Cookie·Forwarded·Proxy-Authorization·hop-by-hop header를 지정할 수 없다. DNS/차단/redirect/인증/응답 오류는 분리된 안전 code로 반환하되 DNS 결과·내부 URL·upstream 본문·키는 일반 사용자 응답과 일반 로그에서 제외한다. 실제 사설 주소는 관리자 진단에서만 마스킹 표시한다. 이 정책을 통과하지 못한 요청은 Provider 슬롯과 일일 quota를 사용하지 않는다.
+
+### Markdown·링크·이미지
+
+N10 구현/검증 상태(2026-10-01): safe-markdown.tsx는 아래 경계를 React text node와 URL allowlist로 구현했다. proxy.ts가 응답별 nonce를 생성하고 요청/응답 CSP에 넣으며 layout.tsx의 theme script도 같은 nonce를 사용한다. 문서는 동적 렌더링·private/no-store다. production CSP의 script/style에 unsafe-inline/unsafe-eval을 추가하지 않았다. Edge production Web+loopback API fixture에서 CSP header/nonce 변경, XSS fixture 비실행, 외부 이미지 요청 0건·CSP 위반 0건을 확인했다. Next 적용 방식은 [공식 CSP 문서](https://nextjs.org/docs/app/guides/content-security-policy)를 따른다. 배포 proxy를 포함한 HTTPS 인수와 실기기/실제 자격증명은 N13이다.
+
+- 새 렌더러는 text/Markdown을 신뢰하지 않는다. raw HTML은 파싱·렌더링하지 않고 텍스트로 표시한다. HTML 속성·inline event handler, SVG/MathML 삽입, `javascript:`·`data:`·`file:`·`blob:` 링크를 허용하지 않는다. 링크는 상대 same-origin 또는 `https:`, `http:`, `mailto:`만 클릭 가능하다. 외부 링크는 새 탭과 `rel="noopener noreferrer"`를 사용한다.
+- 외부 Markdown 이미지 URL은 자동 fetch/렌더링하지 않고 alt와 안전한 링크만 표시한다. 사용자 업로드 이미지는 인증된 same-origin 파일 경로만 표시한다. 코드 블록과 표의 내용은 text node로 렌더링하고 복사 버튼은 표시된 텍스트만 Clipboard API에 쓴다. 미완성 streaming Markdown도 동일 경계를 적용한다.
+- N10에서 응답별 nonce를 가진 CSP를 적용한다. 최소 지시문: `default-src 'self'`, `script-src 'self' 'nonce-<request nonce>'`, `connect-src 'self'`, `img-src 'self' data: blob:`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`. Next.js 초기 theme script도 nonce를 받거나 외부 자체 script로 옮긴다. 무제한 `unsafe-inline`/`unsafe-eval`로 우회하지 않는다. N03에서 디자인 시안은 이 경계를 전제로 한다.
+
+### 관리자 TOTP 복구
+
+- 새 버전의 공식 복구 경로는 서버 shell에 접근할 수 있는 관리자의 기존 `./bin/apichat-admin reset-totp`다. 일회용 Web 복구 코드는 제공하지 않는다. 새 TOTP secret/QR은 CLI의 대화형 출력에서만 제시하고 offline으로 보관하며 문서·로그·스크린샷에 복사하지 않는다. 변경된 config를 검증하고 서비스를 재시작하면 credential fingerprint가 달라져 기존 관리자 session은 다음 인증에서 모두 거부된다. 새 secret의 TOTP로 로그인해야 한다.
+- host shell 접근 권한을 잃고 offline secret도 없으면 앱 자체만으로 관리자 MFA를 복구할 수 없다. README·SERVER_CONFIG_SPEC·DEPLOYMENT_RUNBOOK·REQUIREMENTS·DEPLOYMENT_PROFILE의 복구 설명은 이 정책에 맞췄다. N12에서 CLI 출력·권한·session 폐기를 실제 시험한다. 현재 `reset-totp` 명령은 존재하지만 새 버전 인수 시험은 아직 없다.
+
+N07에서 등록·모델 조회·채팅·요약에 공통 목적지 검증과 IP 고정 접속을 구현했다. 격리 DB·별도 API 프로세스·사설 IP mock 서버 시험에서 승인 주소 접속, 차단 주소·redirect 거부, key/none, 관리자 권한, 연결 변경 중 활성 작업 보호를 확인했다. DNS 혼합·재결과·IPv4-mapped·IPv6는 목적지 단위 시험으로 확인했다. 실제 Docker 네트워크와 공인 HTTPS 실접속은 N13에서 검증한다. 렌더링 CSP·XSS는 N10에서 production Web·fixture API를 사용하는 실제 브라우저로 검증했다. 배포 HTTPS 환경 인수는 N13, 관리자 복구의 새 버전 인수는 N12 범위로 남는다.
+
+## 2026-09-30 렌더링·복구 감사 보완 대기
+
+- 새 Markdown 렌더러 도입 전 raw HTML 비활성·URL scheme 제한·외부 이미지 자동 요청 정책·외부 링크 처리·CSP와 XSS fixture를 확정한다(AUD-07). 현재의 텍스트 렌더링을 새 HTML 렌더링의 보안 검증으로 대체하지 않는다.
+- N02 계약 전에는 TOTP 일회용 복구 code와 현행 CLI가 충돌했다. 위 N02 절에서 CLI 재설정을 선택했고 재발급·기존 session 폐기는 N12 인수 시험 대상이다(AUD-12).
+
+## 새 버전 지속 생성·즐겨찾기 경계 (2026-09-30, 계획)
+
+- 브라우저 구독 종료는 인증 종료가 아니다. 서버 작업은 시작 session의 유효성·주체·모델 권한을 확인하며 로그아웃·폐기·만료 및 권한 회수 시 중단한다.
+- 작업 ID·revision만 알아서는 조회·구독·취소할 수 없다. 매 접근에 유효 session과 소유권을 검사하고 취소 mutation에 CSRF를 적용한다.
+- 즐겨찾기·대화 고정·검색은 주체별로 격리한다. 즐겨찾기로 모델 허용 목록을 우회할 수 없다.
+- 부분 응답은 소유 대화의 DB 데이터로 취급하며 관리자 로그와 다른 session의 전송 기록에 복제하지 않는다. 삭제 후 늦은 작업 결과는 저장하지 않는다.
+- 생성·구독·보조 호출에 유한한 시간·동시성·버퍼 상한을 적용한다. 상세 기준은 CHAT_STATE_SPEC.md다.
+
+## 새 버전 커스텀 Provider 보안 원안 (2026-09-30 작성, N07 적용 범위는 위 N02 절)
+
+- 사용자 요청에 따라 관리자 지정 커스텀·로컬 모델 목적지를 지원한다. 기존 고정 HTTPS URL 일치 조건은 내장 Provider에 유지하고 커스텀 연결에는 별도 목적지 정책을 적용한다.
+- 등록·수정·시험은 관리자 session·CSRF 검증을 요구한다. 사용자·게스트 요청은 저장된 연결 ID만 참조하며 URL·header를 덮어쓸 수 없다.
+- 외부는 HTTPS를 기본으로 한다. 로컬 HTTP·사설 IP 접근은 해당 연결의 정확한 host·port를 관리자가 명시적으로 허용한 경우로 제한하며 사설 네트워크 전체를 일괄 허용하지 않는다.
+- URL userinfo·fragment·비HTTP scheme을 거부하고 자격증명은 URL query에 넣지 않는다. redirect는 따르지 않는다.
+- 등록 시험뿐 아니라 모델 조회·채팅·제목·요약 실행 때도 DNS의 IPv4/IPv6 결과와 실제 연결 목적지를 검사한다. 검증 후 재해석으로 목적지가 바뀌는 우회를 차단하는 연결 방식을 구현 전에 확정한다.
+- metadata·link-local·unspecified·multicast 및 허용하지 않은 loopback 목적지는 차단한다. 로컬 모델 허용을 내부 관리 서비스 전체에 대한 접근 허용으로 확대하지 않는다.
+- API 키는 암호화 저장·마스킹하며 인증 없음 모드는 인증 header를 보내지 않는다. 고급 header를 지원할 경우 Host·Cookie·proxy 및 hop-by-hop header 재정의를 제한한다.
+- 대상별 timeout·응답 크기·동시성 상한과 취소 처리를 적용한다. 키·본문이 포함된 URL이나 upstream 원문 오류는 관리자 로그로 복제하지 않는다.
+- 위 항목은 설계안이며 목적지 승인 저장·주소 해석·접속 검증 방식과 실패 코드는 구현 전 확정·시험한다.
+
 ## 1. 목적
 
 공개 회선에서 개인용으로 운영하는 ModelNaru의 기반 보안 경계와 secret 처리 규칙을 정의한다.

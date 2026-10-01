@@ -1,10 +1,21 @@
 import { mkdtemp, mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LoadedConfig } from '@modelnaru/config';
+import { HttpException } from '@nestjs/common';
+import { AttachmentsController } from '../src/attachments.controller.js';
+import { AttachmentNotFoundError } from '../src/attachments.repository.js';
+import {
+  PdfOcrUnavailableError,
+  PdfPageLimitError,
+  PdfPasswordProtectedError,
+  PdfOcrFailedError,
+  PdfTextTooLargeError,
+} from '../src/pdf-attachments.js';
 
 import type { AttachmentsRepository } from '../src/attachments.repository.js';
 import {
@@ -33,7 +44,17 @@ async function fixture(
   await mkdir(storageRoot);
   await mkdir(storageTemp);
   const repository = {
+    claimRetry: vi.fn(() =>
+      Promise.resolve({
+        storageKey: 'fixture/pdf',
+        fileKind: 'pdf' as const,
+        mediaType: 'application/pdf',
+      }),
+    ),
     assertConversation: vi.fn(() => Promise.resolve()),
+    finishProcessing: vi.fn((id, input) =>
+      Promise.resolve({ id, originalName: 'notes.md', ...input }),
+    ),
     createReady: vi.fn((_, input) =>
       Promise.resolve({
         byteSize: input.byteSize,
@@ -88,6 +109,93 @@ afterEach(async () => {
 });
 
 describe('AttachmentsService', () => {
+  it.each([
+    [new PdfOcrUnavailableError(), 503, 'FILE_PDF_OCR_UNAVAILABLE'],
+    [new PdfPageLimitError(), 413, 'FILE_PDF_PAGE_LIMIT'],
+    [new PdfPasswordProtectedError(), 422, 'FILE_PDF_PASSWORD_PROTECTED'],
+    [new PdfOcrFailedError(), 422, 'FILE_PDF_OCR_FAILED'],
+    [new PdfTextTooLargeError(), 413, 'FILE_TEXT_TOO_LARGE'],
+    [new AttachmentNotFoundError(), 404, 'FILE_NOT_FOUND'],
+  ])(
+    'preserves retry HTTP errors for %s after disconnect',
+    async (cause, status, code) => {
+      const { repository, service } = await fixture();
+      const response = Object.assign(new EventEmitter(), {
+        setHeader: vi.fn(),
+      });
+      vi.spyOn(
+        service as unknown as { extractStored: () => Promise<never> },
+        'extractStored',
+      ).mockImplementationOnce(() => {
+        response.emit('close');
+        return Promise.reject(cause);
+      });
+      const controller = new AttachmentsController(service);
+      const result = controller.retry(
+        '20000000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000001',
+        { authenticatedSession: { principal } } as never,
+        response,
+      );
+      await expect(result).rejects.toBeInstanceOf(HttpException);
+      await expect(result).rejects.toMatchObject({
+        status,
+        response: { error: { code } },
+      });
+      expect(repository.finishProcessing).toHaveBeenCalledWith(
+        '30000000-0000-4000-8000-000000000001',
+        { status: 'failed' },
+      );
+    },
+  );
+
+  it('preserves a late deletion error instead of reporting unsupported content', async () => {
+    const { repository, service } = await fixture();
+    vi.spyOn(
+      service as unknown as { extractStored: () => Promise<unknown> },
+      'extractStored',
+    ).mockResolvedValueOnce({ text: 'ready', encoding: 'utf-8' });
+    repository.finishProcessing.mockRejectedValue(
+      new AttachmentNotFoundError(),
+    );
+    await expect(
+      service.retry(principal, 'conversation', 'deleted'),
+    ).rejects.toBeInstanceOf(AttachmentNotFoundError);
+  });
+
+  it('preserves unexpected storage failures', async () => {
+    const { service } = await fixture();
+    const cause = new Error('storage failure');
+    vi.spyOn(
+      service as unknown as { extractStored: () => Promise<never> },
+      'extractStored',
+    ).mockRejectedValueOnce(cause);
+    await expect(
+      service.retry(principal, 'conversation', 'attachment'),
+    ).rejects.toBe(cause);
+  });
+  it('keeps extracting after upload reception completes even if the client leaves', async () => {
+    const { repository, service } = await fixture();
+    const controller = new AbortController();
+    const save = repository.createReady.getMockImplementation()!;
+    repository.createReady.mockImplementationOnce((owner, input) => {
+      const result = save(owner, input);
+      controller.abort();
+      return result;
+    });
+    await service.upload(principal, {
+      conversationId: '20000000-0000-4000-8000-000000000001',
+      fileName: 'notes.md',
+      includeInFutureMessages: true,
+      mediaType: 'text/markdown',
+      signal: controller.signal,
+      stream: Readable.from([new TextEncoder().encode('received')]),
+    });
+    expect(repository.finishProcessing).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ status: 'ready', extractedText: 'received' }),
+    );
+  });
   it('stores a text file under a UUID key and persists extracted metadata', async () => {
     const { repository, service, storageRoot } = await fixture();
 
@@ -103,14 +211,21 @@ describe('AttachmentsService', () => {
     expect(repository.createReady).toHaveBeenCalledWith(
       principal,
       expect.objectContaining({
-        encoding: 'utf-8',
-        extractedText: '첨부 내용',
+        status: 'processing',
         fileKind: 'text',
         imageHeight: null,
         imageWidth: null,
         includeInFutureMessages: true,
         originalName: 'notes.md',
         pageCount: null,
+      }),
+    );
+    expect(repository.finishProcessing).toHaveBeenCalledWith(
+      result.id,
+      expect.objectContaining({
+        status: 'ready',
+        encoding: 'utf-8',
+        extractedText: '첨부 내용',
       }),
     );
     const prefixes = await readdir(storageRoot);

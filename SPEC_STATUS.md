@@ -1,5 +1,19 @@
 # 명세 확정 현황
 
+## 2026-09-30 새 버전 현재 판단
+
+- 작업 순서·인계 형식: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) N00~N14 확정. N00 기준선과 N01 실행·API·DB, N02 Provider·보안·운영 문서 계약은 ADR-036의 재접속·원자 종료·설정 출력/직렬화 frame 상한 보완을 포함해 확정했다. N03 UI 기본/필수 상태 8종 정적 시안·컴포넌트 계약과 시각 검토를 완료했다(ADR-037). N04 schema·config·시험 기반은 분리된 PostgreSQL에서 검증해 완료했고 N05가 착수 가능하다. 실제 API job/Provider/UI·배포 검증은 후속 단계이며 최신 결과는 [TEST_PLAN.md](./TEST_PLAN.md)를 따른다.
+
+이 절과 SPEC_AUDIT.md의 같은 날짜 재점검이 현재 기준이다. 아래 기존 절은 초기 MVP 설계 기록이며 새 버전의 구현 착수 조건을 대신하지 않는다.
+
+- 확정: 매트 디자인 전면 개편, 채팅 목록·본문·닫힘 설정 패널, 모델 즉시 저장·설정 적용, 관리자 지정 제목 모델, 커스텀·로컬 Provider, 계속 생성·재접속, 모델 즐겨찾기와 검색, 대화 제목 검색·고정.
+- 확정: 이번 전환의 기존 데이터 이전은 필수가 아니다. 미래 업데이트마다 데이터를 초기화한다는 결정은 아니다.
+- 설계 가능: 제품 범위와 화면 시안은 진행할 수 있으며 기술 세부 판단은 사용자 위임 범위에서 진행한다.
+- 핵심 구현 전 보완: 작업·SSE·idempotency·DB와 quota/보조 호출 순서는 N01 문서에서 확정했다(ADR-032). Provider 종료/오류·입력 예산·동시성 config·커스텀 목적지·Markdown 보안·복구 계약은 N02 문서에서 확정했다(ADR-033). 모두 구현·검증 전이다(AUD-01~07, 12~14).
+- 출시 전 보완: 보조 호출 정책, 다중 탭 충돌, 첨부 수명 경합, 목록 pagination, 관리자 복구, 업데이트/복구와 자원 제한(AUD-08~15).
+- 상태: 제품 설계와 N01/N02 기술 계약 확정, N03 UI 계약·정적 시안·시각 검토 완료. 새 버전 API·DB·UI·배포 구현 및 실제 앱 인수 시험은 완료되지 않았다.
+- 상세 근거·우선순위·완료 조건의 원장은 [SPEC_AUDIT.md](./SPEC_AUDIT.md)다. 개별 계약은 해당 상세 명세에 작성한다.
+
 구현 기술의 권장안과 영역별 대체 기술은 [TECH_STACK_OPTIONS.md](./TECH_STACK_OPTIONS.md)를 참고한다.
 
 전체 문서의 누락·불일치와 구현 준비도 점검 결과는 [SPEC_AUDIT.md](./SPEC_AUDIT.md)를 참고한다.
@@ -40,7 +54,7 @@
 - 인터넷 공개 개인용 서비스, 예상 사용자 1~3명
 - Intel N100·16GB RAM·SSD 여유 약 220GB·Ubuntu 24.04.4 LTS 미니 PC 단일 서버
 - 전체 AI 생성 3개·PDF/OCR worker 1개 권장 동시성
-- 인터넷 공개 환경의 고정 관리자 TOTP MFA와 offline 복구 code
+- 인터넷 공개 환경의 고정 관리자 TOTP MFA. 새 버전 복구는 SECURITY_SPEC.md N02의 host CLI 재설정 정책이며 Web 복구 code는 제공하지 않음
 - 기본 `127.0.0.1:32432`, 시작 config에서 port 변경 가능
 - 기존 Nginx가 외부 80·443과 HTTPS를 처리
 - domain·port forwarding 기존 구성 사용

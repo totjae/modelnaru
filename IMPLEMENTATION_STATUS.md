@@ -1,5 +1,76 @@
 # 구현 진행 현황
 
+## 2026-10-01 시안 로고
+
+시안 모노그램 SVG를 생성하고 로그인·관리자·채팅 mark에 테마 색상으로 적용했다. WEB_UI_SPEC.md 상단 기준 및 TEST_PLAN.md 로고 검증 참조. N10-R1/N11-R1 보완 상태와 별개다.
+
+최신 디자인: 사용자 승인된 무채색 매트·단일 보라 강조색을 N10 공통·채팅 앱에 적용했다. N11 관리자·로그인/게스트 UI에도 적용했다. WEB_UI_SPEC.md N10/N11과 TEST_PLAN.md 최신 결과를 따른다.
+
+## 새 버전 작업 원장 (2026-09-30)
+
+순서와 작업 계약은 [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)가 기준이며 실행 상태는 이 표에서만 관리한다. 문서 작성 완료와 기능 구현 완료를 구분한다.
+
+| ID | 작업 | 상태 | 다음 조건/증거 |
+| --- | --- | --- | --- |
+| PLAN | 순서·인계 문서화 | 완료 | 실행 계획·AGENTS·개발 절차 갱신, 문서 검사 |
+| HANDOFF | 전체 참고 문서 인계 | 완료 | HANDOFF.md 문서 지도·첫 작업 계약 작성, 문서 검사. N00 실행과 별개 |
+| N00 | 기준선·적용 범위 | 완료 | HEAD·미커밋 문서·환경·201개 시험/typecheck/lint·문서 링크 확인. `TEST_PLAN.md`의 N00 결과 참조 |
+| N01 | 실행·API·DB 계약 | 완료 | CHAT_STATE/API/DATABASE/GUEST/ADMIN_LOGGING N01 절과 ADR-032/036. 작업 발견·원자 종료·출력 상한 보완 확정, 구현·실DB 검증은 N04~N09 |
+| N02 | Provider·보안·운영 계약 | 완료 | 관련 기준 문서 N02 절과 ADR-033/036. 실제 직렬화 frame byte·upstream/GET 상한 보완, 구현·실연동 검증은 N04~N12 |
+| N03 | UI 시안·컴포넌트 계약 | 완료 | 매트 방향·단일 강조색 승인, 8종 렌더링 검토와 사용자 후속 진행 요청. TEST_PLAN.md N03 종료 기록·ADR-037 참조 |
+| N04 | schema·config·시험 기반 | 완료 | `0020_n04_foundation.sql`, config v2·CLI init. mihoservice_server의 분리된 PostgreSQL 17 테스트 DB에서 신규 설치·재실행·제약/경합 시험 22개 통과, 전체 typecheck·lint 통과 (`TEST_PLAN.md` 최신 절). 운영 미적용 |
+| N05 | parser·공통 호출 | 완료 | 세 protocol terminal·오류/EOF·1 byte 분할·usage/byte·취소/timeout fixture. API 38 file·178 test/typecheck/lint 통과, `TEST_PLAN.md` N05 결과. 실제 Provider 연결은 별도 |
+| N06 | 지속 생성·quota | 완료 | 독립 job API·DB 시작/종료 transaction·재접속·SSE revision/버퍼·quota/slot·세션 폐기·재시작 복구 구현. 격리 PostgreSQL+로컬 mock Provider·별도 컴파일 API 프로세스에서 실제 HTTP/SSE·프로세스 재시작을 검증했고 N06 관련 3개 파일·7개 시험이 통과했다(`TEST_PLAN.md` 최신 N06 절). 운영 미적용, UI는 N10 |
+| N07 | 커스텀 Provider | 완료 (fixture 인수) | N07-R1/R2 도메인 lookup·HEAD/204/205 변환을 수정하고 실제 소켓 시험, API 190개, 수정 빌드의 격리 DB·HTTP 시험 2개를 통과했다(`TEST_PLAN.md` 최신 보완 절). 실제 공인 HTTPS/자격증명·Docker→로컬 추론 엔진은 N13 인수 |
+| N08 | 컨텍스트·요약·제목 | 완료 | 입력/출력·이미지 budget, 제한된 요약과 호출별 usage, 관리자 제목 API·공유 슬롯·조건부 저장 구현. API 203개(격리 PostgreSQL/실제 HTTP 5개 포함) 및 종료 회귀 추가 후 로컬 199개, typecheck/build/lint 통과. 상세 실행 구분은 TEST_PLAN.md N08. UI·실 Provider·운영 배포는 후속 단계 |
+| N09 | 탐색·설정·첨부 API | 완료 | N09-R1/R2 수정: 재처리 오류 code/status 보존, 같은 transaction의 PATCH/충돌 activeJob 조회. API 48개 파일·214개 통과(실DB 6개 포함), 실제 HTTP streaming PATCH/충돌·terminal 회귀, typecheck/build/lint 통과. TEST_PLAN.md 최신 보완 절. 실제 OCR·UI·배포 인수는 후속 단계 |
+| N10 | 공통·채팅 UI | 완료 (보완 검증) | N10-R1 명시 제목 편집만 PATCH, 일반 설정·409·자동 제목 polling 보존. Web 31개/typecheck/build/lint, 실제 HTTP/SSE 브라우저·22개 캡처 통과. TEST_PLAN.md 최신 보완 참조 |
+| N11 | 관리자·진입 UI | 완료 (보완 검증) | N11-R1 imageTokenEstimate 입력·저장/실패 초안·로드·null 해제, 실제 서버 contextBudget 함수 검증. Edge HTTP 167건·63개 캡처 통과. 실API/DB/Provider 전체 인수 N13 |
+| N12 | 복구·패키징·설치 | 완료 (격리 배포 검증) | CLI 복구·standalone·job SSE·정상 종료 저장·Valkey 제거·log rotation·update/health 구현. 별도 Docker/API/PostgreSQL/mock의 설치·복구·SIGTERM/SIGKILL·업데이트·stop/start 11개 인수 통과. 임시 환경 정리, 운영 미변경. TEST_PLAN.md N12 참조 |
+| N13 | 통합 인수 | 완료 | 필수 HTTPS/OCR/제목/모바일·스크린리더/이미지 실제 인수 통과. 사용자 sudo 정리 후 SSH 재확인: 시험 컨테이너0/network0/image0·root/site/cert 제거, 운영5개 healthy 유지. TEST_PLAN.md 최상단·tmp/n13/server-cleanup-result.json 참조 |
+| N14 | 서버 전환 | 완료 | 2026-10-02 https://chat.mihoservice.xyz → 별도 modelnaru-v2 새 DB/config2/migration20 전환. 기존 관리자 보존·실제 HTTP/SSE/취소/HTTPS·CLI health·외부 Edge 통과, 실제 rollback 후 재전환 성공. 새4개 healthy·기존5개 중지/보존, 사용자/Provider 빈 설치. TEST_PLAN.md 최상단 참조 |
+| UI-F | 운영 UI 피드백 F01~F11 | 완료 (로컬 구현·검증) | 메인 UI-F0~F6 순차 완료. Web31개·typecheck/build·tmp 제외 소스 lint 통과. Edge 채팅56/관리자124개 캡처,9개 폭·2테마·경계/초안 회귀 통과. 전체 pnpm lint는 기존 tmp/n13 파서 오류로 실패. TEST_PLAN 최신 UI-F 결과 참조. 사용자 시각 확인·실기기 재검증·운영 반영 별도 |
+| GIT-RESET | Git 기반 전체 재설치 | 구현·검증 중 | 사용자 승인: 운영/백업 및 관리자까지 초기화. codex/refactor-v2·modelnaru-git 준비, 새 인수 후 old 자원 제거 |
+
+완료 증거는 TEST_PLAN.md 또는 해당 계약 시험 문서에 기록하고 이 표에서 참조한다. 구현을 시작하면 담당자·수정 파일·차단 사유·다음 인계 내용을 추가한다. 아래 날짜별 기록은 배경과 결정 이력이며 이 원장의 실행 상태를 덮어쓰지 않는다.
+
+## 2026-09-30 종합 감사 결과
+
+- 완료: 새 버전 명세와 현행 코드 정적 대조, stream EOF·오류 이벤트 mock 재현 2건, 현재/초기 명세 적용 범위 구분.
+- 발견: AI 동시성 설정 미연결, quota 확인 전 요약 호출, 불완전/오류 stream의 성공 처리, 컨텍스트 budget 부족. 현재 코드 수정은 이번 감사 범위에서 수행하지 않았다.
+- 명세 보완 대기: SPEC_AUDIT.md AUD-01~15. P0 계약을 구체화한 뒤 핵심 실행부를 구현하고 P1 항목은 출시 전 검증한다.
+- 코드·DB·서버 변경 없음. 감사 완료와 새 버전 구현 완료를 구분한다.
+
+## 2026-09-30 지속 생성·사용성 개선 범위 확정
+
+- 사용자 확정: 화면 전환·새로고침 후 계속 생성, 모델 즐겨찾기.
+- 위임에 따른 설계 결정: 서버 작업·재구독 분리, checkpoint·revision·시작 중복 방지, 명시적 종료·재시작 복구, 주체별 즐겨찾기·모델 검색, 제목 검색·고정, 오류·첨부·컨텍스트 안내와 Provider 진단.
+- 기본 자원 정책: 대화·주체당 생성 1개, 전체 Provider 호출 3개, 작업 총 실행 기본 30분. 시험 후 조정 시 기준 문서를 함께 갱신한다.
+- 구현 순서: 작업 수명·API/DB 계약 → Provider 공통 실행·진단 → 새 채팅 UI·탐색 → 첨부·오류·컨텍스트 안내 → 통합·설치 검증.
+- 상태: 설계 확정·미구현. 구체적 schema·API와 체크포인트 주기 등은 구현 직전 설계하며 서버·DB는 변경하지 않았다.
+
+## 2026-09-30 커스텀 Provider 계획
+
+- 기능 포함 확정: 관리자 직접 주소·API 키 등록과 로컬 모델 서버 연결.
+- 설계안: OpenAI 호환 우선, 키/무인증, 자동 모델 조회 또는 수동 ID, 명시적 로컬 목적지 승인. 상세 기준은 PROVIDER_REGISTRATION_SPEC.md와 SECURITY_SPEC.md에 기록했다.
+- 미구현·미검증: Adapter·등록 UI·API·DB·Docker 연결 변경과 실제 로컬 모델 계약 시험.
+
+## 2026-09-30 설정 동작·자동 제목 계획 추가
+
+- 확정: 대화별 모델 즉시 저장·다음 요청 적용, 생성 중 변경 비활성화, 고급 설정 적용 버튼·미적용 변경 확인, 새 대화 Provider 기본값.
+- 기능 포함 확정: 지정 모델을 통한 대화 제목 자동 생성과 수동 제목 수정.
+- 추가 확정: 제목 생성 모델은 관리자 전역 설정으로 지정하며 사용자·게스트별 모델 설정은 제공하지 않는다.
+- 세부 설계 제안: 첫 정상 답변 후 1회, 실패 시 임시 제목 유지, 수동 제목 우선, 보조 호출 사용량 분리. 아직 사용자 확정 전이다.
+- 미구현: UI·API·DB·Provider 호출 변경. 검증은 문서 간 기준·상태와 diff 검사만 수행한다.
+
+## 2026-09-30 새 버전 계획
+
+- 디자인 방향 확정: 사용자·관리자 UI 전면 개편, Linear·Raycast·Craft 참고, 매트 표면과 아이리스 보라색 강조. 기준은 WEB_UI_SPEC.md와 ADR-025에 기록했다.
+- 전환 조건 확정: 기존 운영 데이터 보존·이전은 필수가 아니며 새 설치를 허용한다(ADR-026). 실제 초기화는 수행하지 않았다.
+- 기본 화면 구성 확정: 채팅의 왼쪽 목록·중앙 본문과 입력창·기본 닫힘 오른쪽 설정 패널, 입력창 모델 선택, 관리자 사이드 메뉴와 사용량 첫 화면, 간결한 첫 방문 화면, 모바일 목록·설정 별도 화면(ADR-027).
+- 계획: 세부 조작·전체 기능 범위·구체적 디자인 토큰과 시안. 구현과 브라우저 검증은 미착수다.
+- 아래 기능별 현황은 현재 배포 버전의 기록이며 새 버전 완료 상태를 의미하지 않는다.
+
 ## 상태 정의
 
 - `계획`: 명세만 존재

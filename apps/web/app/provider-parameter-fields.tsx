@@ -17,9 +17,7 @@ export interface ParameterPolicy {
 
 export type ParameterValues = Record<string, string | undefined>;
 
-export const defaultChatParameterValues: ParameterValues = Object.freeze({
-  temperature: '1',
-});
+export const defaultChatParameterValues: ParameterValues = Object.freeze({});
 
 export function parameterValuesFromRequest(
   parameters: Record<string, unknown>,

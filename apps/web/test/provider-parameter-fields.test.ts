@@ -21,11 +21,9 @@ describe('provider parameter request', () => {
     });
   });
 
-  it('uses Temperature 1.0 as the normal chat default', () => {
-    expect(defaultChatParameterValues).toEqual({ temperature: '1' });
-    expect(providerParameterRequest(defaultChatParameterValues)).toEqual({
-      temperature: 1,
-    });
+  it('leaves normal chat parameters unset for Provider defaults (N01)', () => {
+    expect(defaultChatParameterValues).toEqual({});
+    expect(providerParameterRequest(defaultChatParameterValues)).toEqual({});
   });
 
   it('omits values that are not supported by the selected model policy', () => {

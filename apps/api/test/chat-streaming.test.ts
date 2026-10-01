@@ -10,6 +10,68 @@ import { providerTemplateById } from '../src/provider-catalog.js';
 
 const messages = [{ content: '안녕', role: 'user' as const }];
 
+type Protocol = 'openai' | 'anthropic' | 'gemini';
+const frame = (document: unknown) => `data: ${JSON.stringify(document)}\n\n`;
+const openaiText = (text: string, reason: string | null = null) => ({
+  choices: [{ delta: { content: text }, finish_reason: reason }],
+});
+const anthropicText = (text: string) => ({
+  type: 'content_block_delta',
+  delta: { type: 'text_delta', text },
+});
+const geminiText = (text: string, reason?: string) => ({
+  candidates: [
+    {
+      content: { parts: [{ text }] },
+      ...(reason ? { finishReason: reason } : {}),
+    },
+  ],
+});
+
+async function collect(
+  protocol: Protocol,
+  chunks: string[],
+  options: {
+    maximumGeneratedTextBytes?: number;
+    splitBytes?: boolean;
+    status?: number;
+  } = {},
+) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (options.splitBytes) {
+        const bytes = encoder.encode(chunks.join(''));
+        for (let index = 0; index < bytes.length; index++)
+          controller.enqueue(bytes.subarray(index, index + 1));
+      } else {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  });
+  const events = [];
+  const request = {
+    init: { method: 'POST' },
+    protocol,
+    traceBody: null,
+    url: 'https://provider.example/chat',
+  };
+  for await (const event of streamProviderRequest(
+    {
+      request,
+      signal: new AbortController().signal,
+      ...(options.maximumGeneratedTextBytes !== undefined
+        ? { maximumGeneratedTextBytes: options.maximumGeneratedTextBytes }
+        : {}),
+    },
+    () =>
+      Promise.resolve(new Response(body, { status: options.status ?? 200 })),
+  ))
+    events.push(event);
+  return events;
+}
+
 function requestBody(request: { init: RequestInit }): Record<string, unknown> {
   if (typeof request.init.body !== 'string') {
     throw new Error('Expected a JSON request body');
@@ -197,10 +259,13 @@ describe('chat provider streaming', () => {
       expect(url).toBe(request.url);
       expect(init?.body).toBe(request.init.body);
       return Promise.resolve(
-        new Response('data: [DONE]\n\n', {
-          headers: { 'Content-Type': 'text/event-stream' },
-          status: 200,
-        }),
+        new Response(
+          'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+          {
+            headers: { 'Content-Type': 'text/event-stream' },
+            status: 200,
+          },
+        ),
       );
     };
     const events = [];
@@ -212,10 +277,13 @@ describe('chat provider streaming', () => {
       events.push(event);
     }
 
-    expect(events).toEqual([]);
+    expect(events).toEqual([
+      { text: 'ok', type: 'text_delta' },
+      { durationMs: 0, stopReason: 'stop', type: 'done' },
+    ]);
   });
 
-  it('normalizes text, usage and completion events', () => {
+  it('normalizes text and usage without declaring completion', () => {
     expect(
       normalizeProviderStreamEvent('openai', {
         choices: [{ delta: { content: 'hello' }, finish_reason: null }],
@@ -240,7 +308,6 @@ describe('chat provider streaming', () => {
     ).toEqual([
       { text: 'gemini', type: 'text_delta' },
       { inputTokens: 3, outputTokens: 2, type: 'usage' },
-      { durationMs: 0, stopReason: 'STOP', type: 'done' },
     ]);
   });
 
@@ -253,7 +320,9 @@ describe('chat provider streaming', () => {
           encoder.encode('data: {"choices":[{"delta":{"content":"나'),
         );
         controller.enqueue(
-          encoder.encode('루"},"finish_reason":null}]}\n\ndata: [DONE]\n\n'),
+          encoder.encode(
+            '루"},"finish_reason":null}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+          ),
         );
         controller.close();
       },
@@ -275,6 +344,394 @@ describe('chat provider streaming', () => {
       events.push(event);
     }
 
-    expect(events).toEqual([{ text: '나루', type: 'text_delta' }]);
+    expect(events).toEqual([
+      { text: '나루', type: 'text_delta' },
+      { durationMs: 0, stopReason: 'stop', type: 'done' },
+    ]);
+  });
+
+  it.each([
+    [
+      'openai',
+      [
+        frame(openaiText('답')),
+        frame(openaiText('', 'stop')),
+        'data: [DONE]\n\n',
+      ],
+      'stop',
+    ],
+    [
+      'anthropic',
+      [
+        frame(anthropicText('답')),
+        frame({
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn' },
+          usage: { output_tokens: 3 },
+        }),
+        frame({ type: 'message_stop' }),
+      ],
+      'end_turn',
+    ],
+    [
+      'gemini',
+      [frame(geminiText('답')), frame(geminiText('', 'STOP'))],
+      'STOP',
+    ],
+  ] as const)(
+    'accepts %s terminal and optional usage',
+    async (protocol, chunks, reason) => {
+      const events = await collect(protocol, [...chunks]);
+      expect(events).toContainEqual({ text: '답', type: 'text_delta' });
+      expect(events.at(-1)).toEqual({
+        durationMs: 0,
+        stopReason: reason,
+        type: 'done',
+      });
+      if (protocol === 'anthropic')
+        expect(events).toContainEqual({ outputTokens: 3, type: 'usage' });
+    },
+  );
+
+  it.each([
+    [
+      'openai',
+      [
+        frame(openaiText('가')),
+        frame(openaiText('', 'stop')),
+        'data: [DONE]\n\n',
+      ],
+    ],
+    [
+      'anthropic',
+      [
+        frame(anthropicText('가')),
+        frame({
+          type: 'message_delta',
+          delta: { stop_reason: 'stop_sequence' },
+        }),
+        frame({ type: 'message_stop' }),
+      ],
+    ],
+    ['gemini', [frame(geminiText('가', 'STOP'))]],
+  ] as const)(
+    'parses %s with every UTF-8 byte in a separate transport chunk',
+    async (protocol, chunks) => {
+      const events = await collect(protocol, [...chunks], { splitBytes: true });
+      expect(events).toContainEqual({ text: '가', type: 'text_delta' });
+      expect(events.at(-1)?.type).toBe('done');
+    },
+  );
+
+  it.each([
+    ['openai', [frame(openaiText('partial'))]],
+    ['openai', ['data: [DONE]\n\n']],
+    [
+      'anthropic',
+      [
+        frame(anthropicText('partial')),
+        frame({ type: 'message_delta', delta: { stop_reason: 'end_turn' } }),
+      ],
+    ],
+    ['gemini', [frame(geminiText('partial'))]],
+  ] as const)('rejects incomplete %s streams', async (protocol, chunks) => {
+    await expect(collect(protocol, [...chunks])).rejects.toMatchObject({
+      code: 'CHAT_PROVIDER_INCOMPLETE',
+    });
+  });
+
+  it.each([
+    [
+      'openai',
+      [frame(openaiText('partial')), frame(openaiText('', 'length'))],
+      'CHAT_OUTPUT_LIMIT',
+    ],
+    [
+      'openai',
+      [frame(openaiText('partial')), frame(openaiText('', 'content_filter'))],
+      'CHAT_PROVIDER_REFUSED',
+    ],
+    [
+      'openai',
+      [
+        frame({
+          choices: [{ delta: { tool_calls: [{}] }, finish_reason: null }],
+        }),
+      ],
+      'CHAT_PROVIDER_RESPONSE_INVALID',
+    ],
+    [
+      'anthropic',
+      [
+        frame(anthropicText('partial')),
+        frame({ type: 'message_delta', delta: { stop_reason: 'max_tokens' } }),
+      ],
+      'CHAT_OUTPUT_LIMIT',
+    ],
+    [
+      'anthropic',
+      [frame({ type: 'message_delta', delta: { stop_reason: 'refusal' } })],
+      'CHAT_PROVIDER_REFUSED',
+    ],
+    [
+      'gemini',
+      [frame(geminiText('partial', 'MAX_TOKENS'))],
+      'CHAT_OUTPUT_LIMIT',
+    ],
+    [
+      'gemini',
+      [frame(geminiText('partial', 'SAFETY'))],
+      'CHAT_PROVIDER_REFUSED',
+    ],
+    [
+      'gemini',
+      [frame(geminiText('partial', 'OTHER'))],
+      'CHAT_PROVIDER_RESPONSE_INVALID',
+    ],
+  ] as const)('maps %s terminal failure', async (protocol, chunks, code) => {
+    await expect(collect(protocol, [...chunks])).rejects.toMatchObject({
+      code,
+    });
+  });
+
+  it.each(['openai', 'anthropic', 'gemini'] as const)(
+    'rejects in-stream %s error without leaking its body',
+    async (protocol) => {
+      await expect(
+        collect(protocol, [
+          frame({ type: 'error', error: { message: 'secret' } }),
+        ]),
+      ).rejects.toMatchObject({
+        code: 'CHAT_PROVIDER_UPSTREAM_ERROR',
+        message: 'The AI provider could not complete the request.',
+      });
+    },
+  );
+
+  it.each([
+    [401, 'CHAT_PROVIDER_AUTH_FAILED'],
+    [429, 'CHAT_PROVIDER_RATE_LIMITED'],
+    [503, 'CHAT_PROVIDER_UPSTREAM_ERROR'],
+  ] as const)(
+    'classifies HTTP %i without returning its body',
+    async (status, code) => {
+      await expect(
+        collect('openai', ['private provider body'], { status }),
+      ).rejects.toMatchObject({
+        code,
+        message: 'The AI provider could not complete the request.',
+      });
+    },
+  );
+
+  it('rejects malformed UTF-8, unterminated SSE, empty text and output byte overflow', async () => {
+    await expect(collect('openai', [])).rejects.toMatchObject({
+      code: 'CHAT_PROVIDER_RESPONSE_INVALID',
+    });
+    await expect(
+      collect('openai', ['data: {invalid}\n\n']),
+    ).rejects.toMatchObject({ code: 'CHAT_PROVIDER_RESPONSE_INVALID' });
+    await expect(
+      collect('openai', [frame(openaiText('답')), 'data: [DONE]']),
+    ).rejects.toMatchObject({ code: 'CHAT_PROVIDER_RESPONSE_INVALID' });
+    await expect(
+      collect('openai', [frame(openaiText('', 'stop')), 'data: [DONE]\n\n']),
+    ).rejects.toMatchObject({ code: 'CHAT_EMPTY_RESPONSE' });
+    await expect(
+      collect(
+        'openai',
+        [
+          frame(openaiText('가')),
+          frame(openaiText('', 'stop')),
+          'data: [DONE]\n\n',
+        ],
+        { maximumGeneratedTextBytes: 2 },
+      ),
+    ).rejects.toMatchObject({ code: 'CHAT_OUTPUT_LIMIT' });
+    const malformed = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([0xff]));
+        controller.close();
+      },
+    });
+    const request = {
+      init: { method: 'POST' },
+      protocol: 'openai' as const,
+      traceBody: null,
+      url: 'https://provider.example/chat',
+    };
+    await expect(
+      (async () => {
+        for await (const event of streamProviderRequest(
+          { request, signal: new AbortController().signal },
+          () => Promise.resolve(new Response(malformed)),
+        )) {
+          void event;
+        }
+      })(),
+    ).rejects.toMatchObject({ code: 'CHAT_PROVIDER_RESPONSE_INVALID' });
+  });
+
+  it('decodes a UTF-8 scalar and CRLF delimiter split across byte chunks', async () => {
+    const payload = new TextEncoder().encode(
+      `${frame(openaiText('나루'))}${frame(openaiText('', 'stop'))}data: [DONE]\r\n\r\n`,
+    );
+    const syllable = payload.indexOf(0xeb);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let index = 0; index < payload.length; index++) {
+          controller.enqueue(payload.subarray(index, index + 1));
+        }
+        controller.close();
+      },
+    });
+    expect(syllable).toBeGreaterThan(0);
+    const request = {
+      init: { method: 'POST' },
+      protocol: 'openai' as const,
+      traceBody: null,
+      url: 'https://provider.example/chat',
+    };
+    const events = [];
+    for await (const event of streamProviderRequest(
+      { request, signal: new AbortController().signal },
+      () => Promise.resolve(new Response(body)),
+    ))
+      events.push(event);
+    expect(events).toEqual([
+      { text: '나루', type: 'text_delta' },
+      { durationMs: 0, stopReason: 'stop', type: 'done' },
+    ]);
+  });
+
+  it('preserves usage before a later provider error and rejects an oversized SSE event', async () => {
+    const events = [];
+    try {
+      const request = {
+        init: { method: 'POST' },
+        protocol: 'openai' as const,
+        traceBody: null,
+        url: 'https://provider.example/chat',
+      };
+      for await (const event of streamProviderRequest(
+        { request, signal: new AbortController().signal },
+        () =>
+          Promise.resolve(
+            new Response(
+              `${frame({ choices: [], usage: { prompt_tokens: 4, completion_tokens: 2 } })}${frame({ error: { message: 'private' } })}`,
+            ),
+          ),
+      ))
+        events.push(event);
+      throw new Error('Expected a provider error');
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'CHAT_PROVIDER_UPSTREAM_ERROR' });
+    }
+    expect(events).toEqual([
+      { inputTokens: 4, outputTokens: 2, type: 'usage' },
+    ]);
+    const terminalUsage = [];
+    try {
+      const request = {
+        init: { method: 'POST' },
+        protocol: 'openai' as const,
+        traceBody: null,
+        url: 'https://provider.example/chat',
+      };
+      for await (const event of streamProviderRequest(
+        { request, signal: new AbortController().signal },
+        () =>
+          Promise.resolve(
+            new Response(
+              frame({
+                choices: [{ delta: {}, finish_reason: 'length' }],
+                usage: { completion_tokens: 7 },
+              }),
+            ),
+          ),
+      ))
+        terminalUsage.push(event);
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'CHAT_OUTPUT_LIMIT' });
+    }
+    expect(terminalUsage).toEqual([{ outputTokens: 7, type: 'usage' }]);
+    await expect(
+      collect('gemini', [`data: ${'x'.repeat(1024 * 1024)}\n\n`]),
+    ).rejects.toMatchObject({ code: 'CHAT_PROVIDER_RESPONSE_INVALID' });
+  });
+
+  it('maps caller cancellation and idle timeout separately', async () => {
+    const request = {
+      init: { method: 'POST' },
+      protocol: 'openai' as const,
+      traceBody: null,
+      url: 'https://provider.example/chat',
+    };
+    const pendingFetch: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        if (init?.signal?.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        );
+      });
+    const cancellation = new AbortController();
+    const cancelled = (async () => {
+      for await (const event of streamProviderRequest(
+        { request, signal: cancellation.signal },
+        pendingFetch,
+      )) {
+        void event;
+      }
+    })();
+    cancellation.abort();
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+    const timedOut = (async () => {
+      for await (const event of streamProviderRequest(
+        { idleTimeoutMs: 5, request, signal: new AbortController().signal },
+        pendingFetch,
+      )) {
+        void event;
+      }
+    })();
+    await expect(timedOut).rejects.toMatchObject({
+      code: 'CHAT_PROVIDER_TIMEOUT',
+    });
+    const totalTimedOut = (async () => {
+      for await (const event of streamProviderRequest(
+        {
+          idleTimeoutMs: 1000,
+          request,
+          signal: new AbortController().signal,
+          totalTimeoutMs: 5,
+        },
+        pendingFetch,
+      )) {
+        void event;
+      }
+    })();
+    await expect(totalTimedOut).rejects.toMatchObject({
+      code: 'CHAT_PROVIDER_TIMEOUT',
+    });
+    const headerTimedOut = (async () => {
+      for await (const event of streamProviderRequest(
+        {
+          headerTimeoutMs: 5,
+          idleTimeoutMs: 1000,
+          request,
+          signal: new AbortController().signal,
+        },
+        pendingFetch,
+      )) {
+        void event;
+      }
+    })();
+    await expect(headerTimedOut).rejects.toMatchObject({
+      code: 'CHAT_PROVIDER_TIMEOUT',
+    });
   });
 });

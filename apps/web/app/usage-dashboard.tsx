@@ -35,7 +35,7 @@ interface UsageResponse {
     id: string;
     inputTokens: number | null;
     modelId: string;
-    operationType: 'chat' | 'summary';
+    operationType: 'chat' | 'summary' | 'title';
     outputTokens: number | null;
     principalLabel: string;
     principalType: 'guest' | 'user';
@@ -141,7 +141,11 @@ export function UsageDashboard() {
         <div>
           <p className="card-label">USAGE</p>
           <h2 id="usage-heading">사용량</h2>
-          <p>대화 내용 없이 사용자·모델·토큰과 요청 상태만 집계합니다.</p>
+          <p>
+            대화 내용 없이 사용자·모델·토큰과 요청 상태만 집계합니다. 합계는
+            Provider가 보고한 토큰만 포함하며, 미보고를 0으로 해석하지 마세요.
+            최근 요청에서 대화·보조 호출과 미보고를 확인할 수 있습니다.
+          </p>
         </div>
         <button
           className="quiet-button"
@@ -174,7 +178,7 @@ export function UsageDashboard() {
         <>
           <div className="usage-summary-grid" aria-live="polite">
             <article className="usage-summary-card token">
-              <span>전체 토큰</span>
+              <span>보고된 토큰 합계</span>
               <strong>{tokenCount(state.totals.totalTokens)}</strong>
               <small>
                 입력 {tokenCount(state.totals.inputTokens)} · 출력{' '}
@@ -317,14 +321,31 @@ export function UsageDashboard() {
                         <small>{event.providerTemplateId}</small>
                       </td>
                       <td>
-                        {event.operationType === 'summary' ? '요약' : '대화'}
+                        {{ chat: '대화', summary: '요약', title: '제목' }[
+                          event.operationType
+                        ] ?? '기타'}
                       </td>
                       <td>
                         <span className={`usage-status ${event.status}`}>
                           {statusLabel(event.status)}
                         </span>
                       </td>
-                      <td>{tokenCount(event.totalTokens)}</td>
+                      <td>
+                        {event.inputTokens === null ||
+                        event.outputTokens === null
+                          ? '미보고 포함'
+                          : tokenCount(event.inputTokens + event.outputTokens)}
+                        <small>
+                          입력{' '}
+                          {event.inputTokens === null
+                            ? '미보고'
+                            : tokenCount(event.inputTokens)}{' '}
+                          · 출력{' '}
+                          {event.outputTokens === null
+                            ? '미보고'
+                            : tokenCount(event.outputTokens)}
+                        </small>
+                      </td>
                       <td>{duration(event.durationMs)}</td>
                     </tr>
                   ))}
