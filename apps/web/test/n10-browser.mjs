@@ -611,6 +611,30 @@ try {
   await page.getByRole('button', { name: '답변 중지' }).waitFor();
   assert.equal(starts, 3);
   assert.equal(jobs.get('job-3').kind, 'regenerate');
+  const responseTargets = await page
+    .locator('.message-actions button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const box = button.getBoundingClientRect();
+        const icon = button.querySelector('svg').getBoundingClientRect();
+        return {
+          width: box.width,
+          height: box.height,
+          iconWidth: icon.width,
+          iconHeight: icon.height,
+        };
+      }),
+    );
+  assert(responseTargets.length >= 2);
+  assert(
+    responseTargets.every(
+      (b) =>
+        b.width >= 44 &&
+        b.height >= 44 &&
+        b.iconWidth >= 20 &&
+        b.iconHeight >= 20,
+    ),
+  );
   await page.getByRole('button', { name: '두 번째 대화', exact: true }).click();
   emit(jobs.get('job-3'), 'terminal', '다른 대화를 보는 동안 완료');
   await page
@@ -800,6 +824,14 @@ try {
       assert(ratio >= minimum, theme + '/' + foreground + ':' + ratio);
       contrasts.push({ theme, foreground, background, ratio, minimum });
     }
+    const actionColors = await page.evaluate(() => ({
+      secondary: getComputedStyle(document.querySelector('.new-chat-button'))
+        .backgroundColor,
+      primary: getComputedStyle(
+        document.querySelector('.composer-actions > button[type="submit"]'),
+      ).backgroundColor,
+    }));
+    assert.notEqual(actionColors.secondary, actionColors.primary);
     for (const width of [320, 390, 768, 1023, 1024, 1280, 1440, 1920, 2560]) {
       await page.setViewportSize({ width, height: 900 });
       if (width < 768)

@@ -4,7 +4,7 @@
 
 새 배포는 `codex/refactor-v2`의 Git checkout이다. 대상은 `/home/totquf4171/modelnaru-git`, project `modelnaru-git`, 공인 주소 `https://chat.mihoservice.xyz`, loopback32432다. Git 운영 전환은 완료했으며 이전 설치/백업의 sudo 삭제만 남았다. 실제 상태는 IMPLEMENTATION_STATUS.md GIT-RESET을 따른다. 아래 N14 archive 설명은 이전 기록이다.
 
-사용자 요청으로 DB·업로드·Provider 키·관리자 비밀번호/TOTP를 새로 생성한다. 이전 계정/대화/Provider를 이전하지 않는다. 이번 자동 초기화의 관리자 정보는 서버 `secrets/bootstrap-admin.json`에서 본인이 확인해 인증 앱에 등록하고 안전하게 보관한 뒤 임시 파일을 삭제한다. 비밀값을 Git/채팅에 붙여넣지 않는다. config.yaml·secrets/·data/·.env·.runtime.env·deployment-state.json은 Git 제외다.
+사용자 요청으로 DB·업로드·Provider 키·관리자 비밀번호/TOTP를 새로 생성한다. 이전 계정/대화/Provider를 이전하지 않는다. 이번 자동 초기화의 관리자 정보는 서버 `secrets/bootstrap-admin.json`에서 본인이 확인한다. ID·비밀번호 변경, TOTP 등록·복구와 초기 정보 파일 삭제는 아래 [관리자 계정 관리](#관리자-계정-관리)를 따른다. 비밀값을 Git/채팅에 붙여넣지 않는다. config.yaml·secrets/·data/·.env·.runtime.env·deployment-state.json은 Git 제외다.
 
 Git/Docker Engine/Compose plugin, Docker 실행 권한, host Nginx/공인 인증서를 준비한 서버 계정에서 최초 설치한다. 이미 생성된 root에서는 init/clone을 재실행하지 않는다.
 
@@ -49,7 +49,7 @@ curl --fail --resolve chat.mihoservice.xyz:443:127.0.0.1 https://chat.mihoservic
 
 update는 소스를 내려받지 않으며 build/validate/migration/health를 수행한다. 외부 PC에서도 실제 DNS/HTTPS 로그인을 확인한다. 데이터 초기화/reset --hard는 통상 업데이트 절차가 아니다. source commit/image·실행 상태는 TEST_PLAN.md, old 자원 제거와 복구 제한은 DEPLOYMENT_RUNBOOK.md Git 절을 따른다.
 
-## 현재 운영 릴리스: N14 v2 (2026-10-02 전환 완료)
+## 이전 운영 기록: N14 v2 archive (Git 전환 전)
 
 - 주소: https://chat.mihoservice.xyz . 서버 mihoservice_server의 /home/totquf4171/modelnaru-v2-20261002가 현재 배포 폴더다. Compose project는 modelnaru-v2이며 전용 compose.override.yaml의 name에도 고정했다. Host Nginx·기존 인증서·127.0.0.1:32432 연결을 유지했다.
 - 관리자 ID·비밀번호·TOTP는 기존과 같다. 관리자 항목만 서버 내부에서 보존하고 새 DB/암호화 키/파일 경로를 생성했다. 일반 사용자·대화·Provider 연결은 빈 상태로 시작하므로 관리자 화면에서 사용자와 Provider를 새로 등록한다. 시험 계정/mock/키를 운영 설정으로 남기지 않았다.
@@ -123,6 +123,8 @@ AI 서비스마다 별도의 웹 화면을 사용하면 대화가 흩어지고, 
 ### 게스트
 
 게스트는 ModelNaru의 구성을 소개하고 실제 채팅을 체험시키기 위한 임시 사용자입니다.
+
+로그인 화면의 **게스트 체험** 버튼을 누르면 별도 `/guest` 페이지에서 안내를 읽고 공유 코드를 입력합니다. 참가 성공 시 대화 공간으로 이동하며, 로그인 화면 하단에는 게스트 입력 폼을 표시하지 않습니다.
 
 - 관리자가 게스트 체험을 활성화하고 공유 코드를 설정한 경우에만 참가할 수 있습니다.
 - 같은 코드를 입력해도 방문자마다 별도 임시 주체와 세션을 발급합니다.
@@ -409,17 +411,102 @@ curl --fail http://127.0.0.1:32432/api/health/ready
 
 host Nginx는 HTTPS를 종료하고 이 loopback 진입점으로 전달합니다. 공개 DNS·인증서와 [SERVER_CONFIG_SPEC.md 6절](./SERVER_CONFIG_SPEC.md)의 proxy 설정이 먼저 필요합니다. 새 /api/conversations/:id/jobs/:jobId/events 경로는 두 proxy 모두 buffering/cache를 끕니다. 15초 heartbeat·600초 read/send timeout을 사용합니다. API/Web/PostgreSQL 포트를 직접 공개하지 않습니다.
 
-### 관리자 TOTP 복구
+### 관리자 계정 관리
 
-Docker 권한이 있는 서버 SSH 세션에서 배포 폴더로 이동합니다. 비밀번호도 잊었다면 set-password를 먼저 실행할 수 있습니다.
+이 절은 고정 **관리자 계정**을 위한 절차입니다. 일반 사용자 계정은 관리자 Web 화면에서 관리합니다. 관리자 ID·비밀번호·TOTP는 `config.yaml`에 저장되며 Web에서 변경하지 않습니다. 도구는 필요한 항목만 갱신하므로 사용자·대화·첨부·Provider 데이터를 초기화하지 않습니다.
+
+#### 실행 위치와 사전 조건
+
+Docker 실행 권한이 있는 서버 SSH 계정의 **대화형 터미널**에서 실행합니다. 현재 서버는 다음 경로이며, 다른 서버에서는 자신의 실제 설치 폴더로 바꿉니다.
+
+```bash
+cd /home/totquf4171/modelnaru-git
+./bin/apichat-admin help
+```
+
+기존 `config.yaml`과 `secrets/`, 빌드된 admin-tool 이미지가 필요합니다. `set-username`, `set-password`, `reset-totp` 중 필요한 명령만 실행하고 마지막에 검증·재시작을 한 번 수행하세요. 이미 설치했다면 `init`을 다시 실행하거나 config/data/secrets를 삭제하지 않습니다. 아래 명령 자체에 실제 비밀번호·secret을 인자로 넣지 않습니다.
+
+#### 1. 관리자 ID 변경
+
+```bash
+./bin/apichat-admin set-username
+```
+
+`새 관리자 ID`에 **영문·숫자·점·밑줄·하이픈으로 3~64자**를 입력합니다. 현재 ID가 기본값입니다. ID만 바꾸면 비밀번호와 TOTP secret은 유지되므로 인증 앱을 재등록할 필요는 없습니다. 인증 앱의 표시 이름은 자동으로 바뀌지 않으므로 필요하면 앱에서 이름만 수정합니다.
+
+#### 2. 관리자 비밀번호 변경 또는 분실 복구
+
+```bash
+./bin/apichat-admin set-password
+```
+
+`관리자 비밀번호 (10자 이상)`과 확인 입력에 새 비밀번호를 동일하게 입력합니다. 입력은 마스킹되며 최소 길이는 **10자**입니다. 서버 shell 권한으로 변경하므로 이전 비밀번호를 입력하지 않습니다. 비밀번호만 바꾸면 ID와 TOTP secret은 그대로입니다. 비밀번호 원문 대신 Argon2id hash가 config에 저장됩니다.
+
+#### 3. TOTP 최초 등록과 재발급
+
+인증 앱은 **시간 기반 일회용 코드(TOTP)**를 지원해야 합니다. 예를 들어 Google Authenticator 또는 Microsoft Authenticator에서 계정을 추가할 수 있습니다.
+
+| 상황 | 할 일 |
+| --- | --- |
+| 직접 `init`으로 새로 설치한 경우 | init 화면에 표시된 QR/Secret을 등록합니다. 재발급할 필요가 없습니다. |
+| 이번 자동 설치의 초기 정보를 아직 변경하지 않은 경우 | 서버에서 아래 초기 정보 파일의 `totpSecret`을 읽어 수동 등록합니다. |
+| 이미 인증 앱에 등록되어 정상 로그인되는 경우 | 다시 등록하거나 reset-totp를 실행할 필요가 없습니다. |
+| 인증 앱 분실·초기 secret 분실·새 secret으로 교체하려는 경우 | 아래 reset-totp를 실행하고 새 QR/Secret을 등록합니다. |
+
+이번 자동 설치에만 존재하는 초기 정보 확인 명령입니다. 출력에는 비밀번호·secret이 있으므로 본인 터미널에서만 확인하세요.
+
+```bash
+cat /home/totquf4171/modelnaru-git/secrets/bootstrap-admin.json
+```
+
+`bootstrap-admin.json`은 **생성 당시의 사본**입니다. ID·비밀번호·TOTP 변경 명령을 실행해도 갱신되지 않으므로 변경한 항목의 현재 값으로 사용하면 안 됩니다. 파일이 없으면 직접 init한 설치이거나 이미 정리한 것이며 오류로 볼 필요는 없습니다.
+
+재발급이 필요한 경우에만 실행합니다.
 
 ```bash
 ./bin/apichat-admin reset-totp
-./bin/apichat-admin validate
-./bin/modelnaru restart
 ```
 
-새 QR/secret을 인증 앱에 등록한 뒤 새 코드로 로그인합니다. 재시작 후 기존 관리자 세션과 이전 TOTP 코드는 거부됩니다. 복구 중 config와 secrets의 권한을 완화하지 않습니다. 서버 shell과 오프라인 secret을 모두 잃으면 Web 복구 수단은 없습니다.
+도구는 새 secret을 config에 저장하고 터미널에 QR과 `Secret:`을 표시합니다. 등록 방법은 둘 중 하나를 선택합니다.
+
+1. **QR 등록:** 인증 앱의 계정 추가 → QR 스캔에서 터미널의 QR을 스캔합니다.
+2. **수동 등록:** 계정 추가 → 설정 키 직접 입력에서 계정 이름은 `ModelNaru:현재관리자ID`, 키는 `Secret:` 뒤의 값만 입력합니다. 유형은 **시간 기반**입니다. 세부 옵션을 요구하는 앱은 **SHA-1·6자리·30초**를 선택합니다. 계정 이름은 표시용이며 서버 ID를 바꾸지 않습니다.
+
+등록 후 6자리 코드가 주기적으로 바뀌는지 확인하고 다음 적용 절차를 진행합니다. secret은 안전한 오프라인 장소에 보관하세요. QR·secret·현재 코드를 문서/스크린샷/채팅에 공유하지 않습니다. **reset-totp는 기존 QR을 다시 보여주는 명령이 아니라 새 secret으로 교체하는 명령**이며, 재시작 후 이전 인증 앱 항목의 코드는 사용할 수 없습니다.
+
+#### 4. 변경 적용과 로그인 확인
+
+```bash
+./bin/apichat-admin validate
+./bin/modelnaru restart
+./bin/modelnaru status
+./bin/modelnaru health
+```
+
+`validate`가 실패하면 오류를 해결한 뒤 재시작합니다. 변경은 hot reload되지 않으며 `restart`가 컨테이너를 재생성해야 반영됩니다. restart는 build·검증·migration·health 확인을 포함하므로 시간이 걸릴 수 있고 활성 생성이 중단될 수 있어 진행 중 작업이 없을 때 수행합니다. 설정 변경 후 기존 관리자 세션이 거부되면 새로 로그인합니다.
+
+`migrate`는 종료 코드0, api/web/gateway/postgres는 healthy가 정상입니다. [서비스](https://chat.mihoservice.xyz/)의 **관리자** 탭에서 현재 ID·새 비밀번호·인증 앱의 현재 6자리 코드를 입력합니다. ID 변경만 했다면 기존 비밀번호와 기존 인증 앱 코드를 사용합니다.
+
+#### 5. 초기 정보 파일 정리
+
+**새 자격증명으로 로그인에 성공하고 TOTP 등록·복구용 secret 보관까지 확인한 뒤**, 초기 정보 사본이 남아 있다면 아래 정확한 파일만 삭제합니다.
+
+```bash
+rm -- /home/totquf4171/modelnaru-git/secrets/bootstrap-admin.json
+```
+
+실제 관리자 설정은 config.yaml에 있으므로 이 사본 삭제는 로그인 설정을 지우지 않습니다. 파일이 이미 없으면 다시 만들지 않아도 됩니다. `config.yaml`이나 `secrets/` 전체를 삭제하지 마세요.
+
+#### 문제가 생겼을 때
+
+- **TOTP 코드가 거부됨:** 관리자 탭인지, 재시작했는지, 재발급 전의 옛 항목을 보고 있지 않은지 확인합니다. 휴대폰 날짜·시간을 자동 설정하고 서버에서 `timedatectl status`로 시간 동기화를 확인합니다. 다음 30초 구간의 새 코드로 다시 시도합니다.
+- **비밀번호 분실:** 서버 shell에서 set-password → validate → restart 순서로 변경합니다. TOTP도 잃었다면 같은 작업에서 reset-totp를 함께 수행합니다.
+- **`interactive terminal` 오류:** 명령을 pipe/비대화형 자동화로 실행하지 말고 서버에 로그인한 터미널에서 직접 실행합니다.
+- **Docker 권한 오류:** Docker 실행 권한이 있는 설치 계정인지 확인합니다. config/secrets를 누구나 읽게 만드는 chmod로 해결하지 않습니다.
+- **`No such file` 또는 config 없음:** 현재 경로가 새 Git 설치 폴더인지 확인합니다. 기존 archive/백업 폴더의 도구를 실행하지 않습니다.
+- **재시작 실패:** 같은 폴더에서 `./bin/modelnaru status`와 `./bin/modelnaru logs`를 확인합니다. 설정을 다시 초기화하거나 운영 데이터를 삭제하지 않습니다. 로그를 공유할 때 비밀값을 제외합니다.
+
+서버 shell과 복구에 필요한 secret을 모두 잃은 경우 Web 복구 코드는 제공되지 않습니다. 상세 운영·복구 경계는 [배포 실행서 4절](./DEPLOYMENT_RUNBOOK.md#4-설정-변경)을 따릅니다.
 
 ### v2 업데이트
 

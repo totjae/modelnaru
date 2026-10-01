@@ -227,6 +227,8 @@ const gateway = createServer(async (req, res) => {
     return json(res, { principal });
   }
   if (path === '/api/auth/guest/session') {
+    if (body.accessCode === 'invalid-code') return fail(res, 401);
+    if (body.accessCode === 'limited-code') return fail(res, 429);
     principal = { type: 'guest', id: 'g1' };
     return json(res, { principal });
   }
@@ -507,8 +509,25 @@ try {
         theme,
       );
       await page.setViewportSize({ width, height: 900 });
+      assert.equal(await page.locator('#guest-experience').count(), 0);
+      const entryColors = await page.evaluate(() => ({
+        selected: getComputedStyle(
+          document.querySelector('.login-mode .active'),
+        ).backgroundColor,
+        primary: getComputedStyle(
+          document.querySelector('.auth-card button[type="submit"]'),
+        ).backgroundColor,
+      }));
+      assert.notEqual(entryColors.selected, entryColors.primary);
       await shot(`${theme}-${width}-entry`);
     }
+  const faviconUrl = await page
+    .locator('link[rel="icon"][type="image/svg+xml"]')
+    .getAttribute('href');
+  assert(faviconUrl.includes('monogram-2'));
+  const faviconResponse = await page.request.get(origin + faviconUrl);
+  assert(faviconResponse.ok());
+  assert((await faviconResponse.text()).includes('M3 17V7l6 10V7l6 10V7l6 10'));
   const authLayouts = [];
   for (const theme of ['light', 'dark']) {
     await page.evaluate(
@@ -950,6 +969,22 @@ try {
   await page.reload();
   await page.getByRole('heading', { name: '사용자 로그인' }).waitFor();
   assert.equal(await page.locator('#guest-experience').count(), 0);
+  assert.equal(
+    await page.getByRole('link', { name: '게스트 체험', exact: true }).count(),
+    0,
+  );
+  await page.goto(origin + '/guest');
+  await page
+    .getByRole('heading', { name: '현재 게스트 체험을 이용할 수 없습니다' })
+    .waitFor();
+  assert.equal(await page.getByLabel('게스트 코드').count(), 0);
+  await page
+    .getByRole('link', {
+      name: '사용자·관리자 로그인으로 돌아가기',
+      exact: false,
+    })
+    .click();
+  await page.getByRole('heading', { name: '사용자 로그인' }).waitFor();
   await page.getByLabel('사용자 ID', { exact: true }).fill('member');
   await page.getByLabel('비밀번호', { exact: true }).fill('fixture-password');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
@@ -966,8 +1001,50 @@ try {
   );
   guestEnabled = true;
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await page.getByRole('heading', { name: '사용자 로그인' }).waitFor();
+  assert.equal(await page.locator('#guest-experience').count(), 0);
+  await page.getByRole('link', { name: '게스트 체험', exact: true }).click();
+  await page.waitForURL(origin + '/guest');
+  await page.getByLabel('게스트 코드').waitFor();
+  assert.equal(await page.getByLabel('사용자 ID', { exact: true }).count(), 0);
+  await page.goBack();
+  await page.getByRole('heading', { name: '사용자 로그인' }).waitFor();
+  await page.goto(origin + '/guest');
+  await page.reload();
+  await page.getByLabel('게스트 코드').fill('invalid-code');
+  await page.getByRole('button', { name: '게스트로 체험하기' }).click();
+  await page.getByText('게스트 코드를 확인하세요.', { exact: true }).waitFor();
+  assert.equal(
+    await page.getByLabel('게스트 코드').inputValue(),
+    'invalid-code',
+  );
+  await page.getByLabel('게스트 코드').fill('limited-code');
+  await page.getByRole('button', { name: '게스트로 체험하기' }).click();
+  await page
+    .getByText('현재 게스트 참가가 많거나 시도 횟수를 초과했습니다.', {
+      exact: true,
+    })
+    .waitFor();
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate((t) => {
+      document.documentElement.dataset.theme = t;
+    }, theme);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+      await shot(theme + '-' + width + '-guest-page');
+    }
+  }
   await page.getByLabel('게스트 코드').fill('fixture-code');
   await page.getByRole('button', { name: '게스트로 체험하기' }).click();
+  await page.getByRole('heading', { name: '게스트 체험 공간' }).waitFor();
+  await page.waitForURL(origin + '/');
+  await page.goto(origin + '/guest');
+  await page.waitForURL(origin + '/');
   await page.getByRole('heading', { name: '게스트 체험 공간' }).waitFor();
   assert.equal(await page.locator('.admin-workspace').count(), 0);
   assert.deepEqual(errors, []);

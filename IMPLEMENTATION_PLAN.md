@@ -1,5 +1,14 @@
 # ModelNaru 새 버전 실행 계획
 
+## UI-G 운영 반영 계약 (2026-10-02)
+
+사용자 운영 적용 요청 승인. 메인 담당. 로컬 검증 완료 UI-G와 관리자 README 보완을 codex/refactor-v2에 commit/push하고 clean 서버 checkout에서 ff-only 반영한다. Web만 변경하므로 DB migration/API 재시작 없이 제한된 builder로 web image를 build한 뒤 Web만 교체하고 Gateway를 재시작해 upstream DNS를 갱신한다. 기존 Web image를 별도 rollback tag로 보존하고 실패 시 그 image로 Web을 복구한다. config/secrets/data와 API/PostgreSQL container를 보존한다. 공인 HTTPS ready·/·/guest·아이콘과 실제 브라우저 진입을 검증한다. 인증정보 읽기/유료 호출/데이터 초기화 금지. 결과는 TEST_PLAN/STATUS/HANDOFF에 기록한다.
+
+## UI-G 추가 시각/게스트 경로 보완 (2026-10-02)
+
+선행 UI-F 구현. 메인 담당, 기준 WEB_UI_SPEC UI-G·GUEST_ACCESS_SPEC·기존 auth API. 순서: 버튼 토큰/위계와 답변 액션 수정→게스트 /guest 분리→기존 Web/unit/typecheck/build/lint·N10/N11 실제 브라우저 fixture→결과 문서. 수정 허용 apps/web/app/page.tsx, styles.css, chat-workspace.tsx, apps/web/test/n10-browser.mjs, n11-browser.mjs. 사용자 추가 favicon 요구로 수정 허용 apps/web/app/layout.tsx, apps/web/public/modelnaru-icon.svg, modelnaru-logo.svg, favicon.ico, manifest.webmanifest, icons/*.png(기존7개). 모두 같은 현재 SVG 모노그램에서 생성하며 dependency 추가 없음. 생성 허용 apps/web/app/entry-workspace.tsx(기존 세션/로그인 공통 component), apps/web/app/guest/page.tsx. 문서 WEB_UI_SPEC/GUEST_ACCESS_SPEC/TEST_PLAN/IMPLEMENTATION_STATUS/HANDOFF/본 계획 및 README 게스트 이용 안내. 기존 미커밋 관리자 README 문서는 보존한다. API/DB/auth 정책/의존성/lockfile/운영 변경·실 Provider 호출 금지. 완료: UI-G 기대동작과 접근성·기존 분기/재생성/제목/첨부·게스트 권한 회귀 유지. 실패/미검증은 명시하고 테스트 기대값을 단순 완화하지 않는다.
+
+
 ## GIT-RESET — Git 기반 재설치 (2026-10-02)
 
 사용자는 새 리팩토링 브랜치 생성, 기존 ModelNaru 운영 데이터/이전 백업 삭제와 새 설치를 명시 요청했고 관리자 ID/비밀번호/TOTP도 재생성을 선택했다. 메인 담당. 범위: 전체 N00~N14/UI-F 작업을 codex/refactor-v2로 커밋/원격 push, Git clone 배포 /home/totquf4171/modelnaru-git, project modelnaru-git, 새 DB·업로드·암호화 키·관리자. 선행: 소스 비밀값 검사·회귀·새 build/빈 DB 인수. 순서: 새 checkout 준비→32433 staging 검증→기존 v2 중지→32432 전환·외부 HTTPS 검증→정확한 기존 ModelNaru 경로/컨테이너/network/image와 N04 DB 제거. 새 배포 실패 시 삭제를 실행하지 않는다.

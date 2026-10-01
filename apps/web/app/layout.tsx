@@ -26,17 +26,21 @@ export const metadata: Metadata = {
   applicationName: 'ModelNaru',
   title: 'ModelNaru',
   description: '여러 AI 모델로 이어지는 개인용 대화 공간',
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.webmanifest?v=monogram-2',
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/modelnaru-icon.svg', type: 'image/svg+xml' },
-      { url: '/icons/icon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.ico?v=monogram-2', sizes: 'any' },
+      { url: '/modelnaru-icon.svg?v=monogram-2', type: 'image/svg+xml' },
+      {
+        url: '/icons/icon-32.png?v=monogram-2',
+        sizes: '32x32',
+        type: 'image/png',
+      },
     ],
-    shortcut: '/favicon.ico',
+    shortcut: '/favicon.ico?v=monogram-2',
     apple: [
       {
-        url: '/icons/apple-touch-icon.png',
+        url: '/icons/apple-touch-icon.png?v=monogram-2',
         sizes: '180x180',
         type: 'image/png',
       },

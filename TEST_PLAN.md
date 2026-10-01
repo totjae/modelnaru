@@ -1,5 +1,17 @@
 # ModelNaru 시험 계획·결과
 
+## UI-G 로컬 검증 완료 (2026-10-02)
+
+버튼 역할·답변 액션·독립 /guest·모노그램 favicon을 수정했다. Web 단위31개, Web typecheck/build, 전체 lint 통과. Edge 실제 로컬 Web+fixture API에서 N10 채팅56개 캡처(생성3/취소1/구독6), N11 진입·관리자·게스트128개 캡처/HTTP280건 통과. 검증은 버튼 역할별 computed 색상·대비, 답변44px 버튼/20px SVG, 분기/재생성, 로그인 하단 guest 부재, /guest 링크·뒤로가기·직접/새로고침·비활성·잘못된 코드·429·정상 참가·인증 후 복귀, 새 SVG 아이콘 HTTP200/버전/경로를 포함한다. 390/1440px guest overflow 없음. dark desktop 로그인/설정·dark mobile guest 캡처를 육안 확인했다.
+
+증거: tmp/ui-feedback/n10, n11. API는 fixture이며 실제 Provider/운영 접속·배포0회. 실제 모바일·Safari/Firefox·기존 브라우저 캐시 갱신은 미검증. 새 아이콘 URL 버전은 적용했지만 운영 반영 전 기존 사이트 표시가 바뀌었다고 주장하지 않는다. 사용자 최종 디자인 인수는 대기다.
+
+
+## 2026-10-02 관리자 계정 사용법 문서 보완
+
+README 관리자 계정 관리와 DEPLOYMENT_RUNBOOK 4절에 실행 위치/사전 조건, ID3~64자 허용문자, 비밀번호10자·확인 입력, 최초 TOTP와 재발급 구분, QR/수동 등록(SHA-1·6자리·30초), validate→restart→status/health→로그인, 초기 사본의 비동기화/삭제 조건, 오류·복구 절차를 추가했다. tools/admin-cli/src/cli.ts·helpers.ts 및 bin/modelnaru와 명령/검증 규칙을 정적으로 대조했다. 제품·실제 관리자 설정·서버·운영 데이터는 이번 작업에서 변경하지 않았고 자격증명/QR 출력 명령을 실행하지 않았다. 문서 상대 링크·code fence·CLI 명령명 확인 통과, git diff --check exit0(LF→CRLF 안내만 있음). 제품 시험은 문서 변경이므로 재실행하지 않았다.
+
+
 ## Git 운영 CLI 환경 파일 보완 (2026-10-02)
 
 최종 health에서 기존 CLI가 --env-file .runtime.env만 전달해 .env의 COMPOSE_PROJECT_NAME/COMPOSE_FILE을 누락하는 결함을 확인했다. 새 Docker 서비스 자체는 정상이며 helper의 두 env-file 호출은 이미 통과했다. bin/modelnaru가 .env 존재 시 .env→.runtime.env 순으로 명시 로드하도록 보완했다. .env 없는 설치는 기존 동작을 유지한다. host 실행 스크립트만 변경하며 API/Web 이미지 재빌드 대상은 아니다. 서버 sh -n 통과, 실제 ./bin/modelnaru status가 새 modelnaru-git 서비스만 조회하고 health의 live/ready/Web 모두 통과했다. 임시 디렉터리/가짜 Docker로 .env 유무×status/health/logs/stop/start/restart/update 14개 인자 전달 검증도 통과했고 실제 서비스 재시작은 하지 않았다. CLI 보완 commit eb6088b, API/Web build commit5bfe5db로 구분한다.

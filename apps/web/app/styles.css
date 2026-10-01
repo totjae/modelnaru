@@ -10,6 +10,9 @@
   --text-soft: #3f3f46;
   --muted: #686868;
   --accent: #6246b4;
+  --accent-hover: #553ba0;
+  --accent-muted: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 50%, transparent);
   --accent-contrast: #ffffff;
   --danger: var(--red);
   --danger-border: color-mix(in srgb, var(--red) 28%, transparent);
@@ -19,7 +22,7 @@
   --warning-fill: color-mix(in srgb, var(--orange) 10%, transparent);
   --subtle-fill: rgba(0, 0, 0, 0.035);
   --subtle-fill-strong: rgba(0, 0, 0, 0.065);
-  --selected-surface: #e6e5e0;
+  --selected-surface: var(--accent-muted);
   --ambient-one: rgba(0, 0, 0, 0.035);
   --ambient-two: rgba(91, 140, 255, 0.055);
   --backdrop: rgba(0, 0, 0, 0.55);
@@ -45,7 +48,10 @@
   --text: #ededed;
   --text-soft: #d8d8dc;
   --muted: #a3a3a3;
-  --accent: #b8a2df;
+  --accent: #b59bdf;
+  --accent-hover: #c2aaea;
+  --accent-muted: rgba(181, 155, 223, 0.15);
+  --accent-border: rgba(181, 155, 223, 0.5);
   --accent-contrast: #21172f;
   --danger: var(--red);
   --danger-border: color-mix(in srgb, var(--red) 28%, transparent);
@@ -55,7 +61,7 @@
   --warning-fill: color-mix(in srgb, var(--orange) 9%, transparent);
   --subtle-fill: rgba(255, 255, 255, 0.035);
   --subtle-fill-strong: rgba(255, 255, 255, 0.065);
-  --selected-surface: #2b2b2b;
+  --selected-surface: var(--accent-muted);
   --ambient-one: rgba(255, 255, 255, 0.055);
   --ambient-two: rgba(91, 140, 255, 0.045);
   --backdrop: rgba(0, 0, 0, 0.82);
@@ -2584,17 +2590,20 @@ h1 {
 .response-navigation {
   display: flex;
   align-items: center;
-  gap: 2px;
-  color: var(--muted);
-  font-size: 11px;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
 .response-navigation button,
 .regenerate-button {
   display: inline-grid;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -2615,7 +2624,7 @@ h1 {
 .response-navigation button:disabled,
 .regenerate-button:disabled {
   cursor: default;
-  opacity: 0.3;
+  opacity: 0.55;
 }
 
 .chat-welcome {
@@ -3820,9 +3829,9 @@ select:focus-visible,
   border-radius: 8px;
 }
 .chat-sidebar .new-chat-button {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--control-line);
 }
 .conversation-list-item {
   display: grid;
@@ -3939,13 +3948,30 @@ select:focus-visible,
   color: var(--muted);
   font-size: 12px;
 }
-.chat-message > button,
-.message-actions button {
+.chat-message > button {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--line);
   padding: 4px 12px;
   border-radius: 8px;
+}
+.message-actions button {
+  padding: 0;
+  background: transparent;
+  color: var(--text-soft);
+  border: 1px solid var(--control-line);
+}
+.message-actions svg {
+  display: block;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+.response-navigation span {
+  min-width: 44px;
+  text-align: center;
 }
 .chat-message small {
   overflow-wrap: anywhere;
@@ -4555,12 +4581,11 @@ dialog::backdrop {
   border-color: var(--control-line);
   background: transparent;
 }
-.chat-workspace .new-chat-button:hover:not(:disabled),
 .composer-actions > button[type='submit']:hover:not(:disabled),
 .chat-settings .settings-save-button:hover:not(:disabled) {
-  background: var(--accent);
+  background: var(--accent-hover);
   color: var(--accent-contrast);
-  filter: brightness(0.96);
+  filter: none;
 }
 .chat-workspace .panel-toggle:hover:not(:disabled),
 .chat-workspace .conversation-list-item:hover {
@@ -4657,7 +4682,6 @@ dialog::backdrop {
   white-space: normal;
 }
 .n11-entry button[type='submit'],
-.n11-entry .login-mode .active,
 .n11-admin button[type='submit'] {
   background: var(--accent);
   color: var(--accent-contrast);
@@ -4818,8 +4842,8 @@ dialog::backdrop {
   flex-wrap: wrap;
 }
 .n11-admin .usage-periods button.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 .n11-admin .usage-table-wrap,
 .n11-admin .table-wrap,
@@ -4995,9 +5019,9 @@ body:has(> .n11-entry, > .admin-shell) > .theme-control select {
   backdrop-filter: none;
 }
 .n11-entry .auth-card .login-mode button.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border-color: var(--accent);
+  background: var(--accent-muted);
+  color: var(--accent);
+  border-color: var(--accent-border);
 }
 .n11-entry :is(.eyebrow, .card-label),
 .admin-shell:has(.n11-admin) .eyebrow {
@@ -5081,4 +5105,50 @@ body:has(> .n11-entry, > .admin-shell) > .theme-control select {
   .n11-admin .provider-model {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* UI-G action hierarchy and dedicated guest entry. */
+.chat-sidebar .new-chat-button:hover:not(:disabled) {
+  background: var(--accent-muted);
+  border-color: var(--accent-border);
+  color: var(--text);
+  filter: none;
+}
+.chat-settings .settings-modal-actions .quiet-button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-soft);
+}
+.chat-settings .settings-modal-actions .quiet-button:hover:not(:disabled) {
+  background: var(--subtle-fill-strong);
+}
+.chat-settings .settings-modal-actions .danger-button {
+  background: var(--danger-fill);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+.n11-entry button[type='submit']:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--accent-contrast);
+}
+.guest-entry-navigation {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0;
+}
+.guest-entry-navigation a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+}
+.guest-entry .guest-portfolio {
+  min-height: auto;
+  margin-top: 0;
+  padding-top: 32px;
+}
+.guest-entry .guest-unavailable {
+  max-width: 720px;
+  margin: 48px auto;
+  padding: 24px;
 }

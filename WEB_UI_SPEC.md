@@ -1,5 +1,18 @@
 # ModelNaru Web UI 명세
 
+## UI-G 버튼 위계·답변 액션·게스트 페이지 (2026-10-02)
+
+상태: 구현·로컬 검증 완료, 운영 반영·사용자 시각 인수 대기. 이전 UI-F의 레이아웃·접근성·상태 계약은 보존한다. Primary(로그인/게스트 참가/보내기/설정 저장)만 accent fill, Secondary(새 대화/전송 기록)는 중립 surface/outline, Tertiary(설정/목록/취소)는 ghost, Destructive는 danger tint/outline, Selected(로그인 모드/선택 모델·대화/관리자 메뉴·기간)는 accent-muted다. 한 화면 주요 fill은1~2개가 기본 목표이며 다른 독립 관리자 폼의 submit을 임의 비활성화하지 않는다. 게스트 링크는 accent outline. dark accent=#b59bdf·hover=#c2aaea, light=#6246b4 유지, muted/border는 테마 accent 기반 별도 토큰, hover도 신규 Primary로 변하지 않는다.
+
+답변 분기 이전/다음은44px 이상 버튼·20px 이상 SVG와14px 이상 숫자/충분한 간격, 재생성은 사용자 후속 지시에 따라 아이콘만 표시하고 기존 tooltip/aria-label을 유지한다. 비활성 상태에서도 아이콘을 인지 가능하게 유지하고 동작/분기 API/중복 생성 방지는 유지한다.
+
+로그인 / 에 게스트 설명/입력 폼을 렌더링하지 않는다. 게스트 활성 시 게스트 체험 링크가 /guest로 이동한다. /guest는 독립 설명/코드입력/외부전송·임시수명 안내/일반 로그인 복귀 링크를 가진다. 기존 session/status/guest session API를 재사용한다. 세션 확인 중 폼을 숨기고 이미 인증된 사용자는 /로 복귀, 참가 성공도 /로 이동한다. 직접 /guest 접근·새로고침 지원. 게스트 비활성/상태 조회 실패는 참가 폼 없이 비활성 안내/복귀 링크를 표시한다. 잘못된 코드/429/네트워크 오류는 해당 페이지에서 표시하고 입력 초안 유지·중복 제출 차단, 관리자 API 접근 금지. 세션/CSRF/TOTP/SSRF 정책 변경 없음.
+
+탭 아이콘은 현재 선형 모노그램을 무채색 둥근 타일에 표시한다. SVG·ICO(16/32/48)·기존 PNG7개·manifest를 동일 원본으로 맞추며 metadata/manifest URL에 monogram-2 버전을 붙여 구형 캐시를 갱신한다. 재생성에는 시각적 텍스트를 추가하지 않는다.
+
+검증: dark/light의 역할별 computed style·대비,44px target/20px svg, 분기/재생성 회귀, /guest 직접/링크/뒤로가기/disabled/오류/성공 및 인증상태 복귀를 기존 N10/N11 fixture에서 확인. 390/1440px 캡처와 viewport overflow 확인. 실제 유료 호출·운영 배포는 이번 로컬 UI 변경에 포함하지 않는다.
+
+
 ## UI-F 운영 피드백 계약 (2026-10-02)
 
 적용: N14 이후 사용자 이미지 1~6의 운영 UI 개선. 상태: 구현·로컬 검증 완료, 사용자 시각 확인·운영 반영 대기. 사용자 요구의 원본 및 작업 계약은 [UI_FEEDBACK_HANDOFF.md](./UI_FEEDBACK_HANDOFF.md), 상태는 IMPLEMENTATION_STATUS.md다. 아래 치수/방식은 메인의 구현 결정이며 사용자 최종 시각 확인 전이다. 충돌하는 과거 N03/N10/N11 시각 배치 설명보다 이 절을 우선하며 인증·API·접근성·저장 계약은 유지한다.

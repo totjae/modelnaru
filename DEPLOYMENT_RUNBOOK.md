@@ -18,7 +18,7 @@ sudo python3 scripts/cleanup-legacy-modelnaru.py --execute
 
 old 자원0·새4서비스 healthy를 재확인해 결과를 기록한다. 삭제한 과거 데이터는 복구할 수 없다. 이후 Git 업데이트 실패는 config/schema 호환성을 확인한 commit/image로만 복구하며 Git만 되돌려 DB까지 복구됐다고 주장하지 않는다. 이번 초기화 승인은 미래의 새 운영 데이터 삭제에 재사용하지 않는다.
 
-## 현재 운영 릴리스: N14 v2 (2026-10-02 전환 완료)
+## 이전 운영 기록: N14 v2 archive (Git 전환 전)
 
 - 주소: https://chat.mihoservice.xyz . 서버 mihoservice_server의 /home/totquf4171/modelnaru-v2-20261002가 현재 배포 폴더다. Compose project는 modelnaru-v2이며 전용 compose.override.yaml의 name에도 고정했다. Host Nginx·기존 인증서·127.0.0.1:32432 연결을 유지했다.
 - 관리자 ID·비밀번호·TOTP는 기존과 같다. 관리자 항목만 서버 내부에서 보존하고 새 DB/암호화 키/파일 경로를 생성했다. 일반 사용자·대화·Provider 연결은 빈 상태로 시작하므로 관리자 화면에서 사용자와 Provider를 새로 등록한다. 시험 계정/mock/키를 운영 설정으로 남기지 않았다.
@@ -141,16 +141,34 @@ start/restart/update는 build와 validate 성공 후 앱을 중지하고 migrati
 
 ## 4. 설정 변경
 
+상세 사용자 절차는 [README 관리자 계정 관리](./README.md#관리자-계정-관리)를 따른다. 아래는 같은 명령의 운영 적용 기준이다. 현재 실행 위치는 `/home/totquf4171/modelnaru-git`, 실행 계정은 Docker 권한이 있는 서버 SSH 사용자이며 대화형 터미널이 필요하다. 일반 사용자 계정 변경은 관리자 Web 화면에서 수행한다.
+
 ```bash
-# 설치한 배포 폴더에서, Docker 권한이 있는 대화형 터미널
+cd /home/totquf4171/modelnaru-git
+# 아래 세 변경 명령 중 필요한 것만 실행
 ./bin/apichat-admin set-username
 ./bin/apichat-admin set-password
 ./bin/apichat-admin reset-totp
+# 선택한 변경을 모두 마친 뒤 한 번 검증·적용
 ./bin/apichat-admin validate
 ./bin/modelnaru restart
+./bin/modelnaru status
+./bin/modelnaru health
 ```
 
-필요한 변경 명령만 선택한다. 시작 설정은 hot reload하지 않으며 atomic rename된 config도 container 재생성 후 반영된다. TOTP 복구는 reset-totp → 새 QR/secret 등록 → validate → restart → 새 code 로그인 순서다. 재시작 후 기존 관리자 session·이전 code는 거부된다. 비대화형 reset은 거부한다. Web 복구 코드는 없고 shell과 오프라인 secret을 모두 잃으면 앱에서 복구할 수 없다.
+- set-username: 영문/숫자/점/밑줄/하이픈3~64자. 비밀번호와 TOTP secret은 보존한다. 인증 앱 표시 이름 변경은 별도이며 재등록은 불필요하다.
+- set-password: 새 비밀번호10자 이상을 두 번 입력하며 기존 비밀번호는 요구하지 않는다. hash만 저장하고 ID/TOTP는 보존한다.
+- reset-totp: 새로운 secret을 저장하고 QR/Secret을 출력한다. 기존 secret 표시 명령이 아니다. 인증 앱에서 QR 스캔 또는 키 수동 입력(시간 기반/SHA-1/6자리/30초)으로 등록한다. init 직후 표시된 secret 또는 변경하지 않은 자동 설치 초기 secret으로 정상 등록할 수 있다면 reset은 필요하지 않다.
+- 시작 설정은 hot reload하지 않으며 atomic rename된 config도 컨테이너 재생성 후 반영된다. validate 실패 시 재시작 전에 해결한다. restart는 build/검증/migration/컨테이너 재생성/health를 포함하므로 활성 생성에 미치는 영향을 확인한다. 변경 후 기존 관리자 session은 거부될 수 있으며 TOTP 교체 후 이전 코드는 거부된다.
+- 적용 후 공인 Web 관리자 탭에서 현재 ID/비밀번호/현재6자리 코드로 로그인한다. 문제가 있으면 휴대폰 자동 시간·서버 timedatectl status·이전 인증 앱 항목 사용 여부를 확인한다. 비밀번호/TOTP 원문을 공유하지 않는다. shell과 secret을 모두 잃으면 Web 복구 코드로 우회할 수 없다.
+
+이번 Git 자동 설치의 `secrets/bootstrap-admin.json`은 생성 당시의 ID/password/totpSecret/등록 URI 사본이며 설정 변경에 맞춰 갱신되지 않는다. 사용자만 서버에서 확인하고, 새 로그인·인증 앱 등록·복구용 secret 보관을 확인한 뒤 아래 파일만 삭제한다. 일반 init은 이 JSON 파일을 만들지 않으므로 없다는 이유로 다시 init하지 않는다.
+
+```bash
+rm -- /home/totquf4171/modelnaru-git/secrets/bootstrap-admin.json
+```
+
+위 사본 삭제는 config.yaml의 관리자 설정을 변경하지 않는다. config.yaml0600/secrets 디렉터리0700·secret 파일0600을 유지하고 전체 secrets/data 삭제나 권한 완화로 복구하지 않는다.
 
 ## 5. Nginx 연결
 

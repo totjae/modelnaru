@@ -1,5 +1,12 @@
 # ModelNaru 새 버전 구현 인계
 
+## UI-G 로컬 완료·운영 미반영 (2026-10-02 최신)
+
+최신 로컬 변경은 WEB_UI_SPEC UI-G, 작업 범위는 IMPLEMENTATION_PLAN UI-G, 검증은 TEST_PLAN 최신 절이다. 재생성은 아이콘만 유지하며44px 버튼/20px SVG, 버튼 역할별 색상, 독립 /guest, 현재 모노그램 탭/홈 화면 아이콘을 적용했다. 이전 관리자 사용법 README/실행서 수정도 미커밋 상태로 보존했다. 새 의존성/API/DB 변경 없음. 코드·문서 로컬 완료, commit/push/운영 반영은 이번 작업에서 수행하지 않았다.
+
+다음 작업은 사용자 시각 인수 또는 요청된 업데이트다. 배포 시 기존 운영 데이터·관리자 설정을 보존하고 과거 초기화 승인을 재사용하지 않는다. 관리자 ID는 사용자가 이후 변경했으므로 아래 초기 admin 안내를 현재 ID로 단정하지 않는다. 이전 설치 삭제 여부는 이번에 재확인하지 않았다.
+
+
 ## Git 운영 전환 완료·최종 old 삭제 대기 (2026-10-02 최신)
 
 현재 운영 root /home/totquf4171/modelnaru-git, project modelnaru-git, branch codex/refactor-v2. GitHub push/서버 clone·Linux build·새 DB와 관리자 비밀번호/TOTP·공인 HTTPS/login/무료 생성·SSE·취소 인수 완료. 제품 build commit5bfe5db, 결과 문서 후속 commit은 별도다. 실제 상태/증거는 TEST_PLAN 최신 절과 서버 deployment-state.json을 따른다. 이전 archive 설치는 현재 운영이 아니다.

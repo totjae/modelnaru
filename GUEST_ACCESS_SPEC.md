@@ -1,5 +1,10 @@
 # ModelNaru 게스트 체험 명세
 
+## UI-G 게스트 진입 경로 (2026-10-02, 구현·로컬 검증 완료)
+
+비로그인 루트 /는 사용자·관리자 로그인만 제공하며 게스트 활성 시 체험 링크로 /guest에 이동한다. 설명·코드 입력·임시 세션 안내는 독립 /guest에서 제공한다. 세션 확인/비활성/오류/참가 성공·복귀 계약은 WEB_UI_SPEC UI-G가 원장이다. 기존 API·공유 코드·수명·권한·quota 계약은 유지한다. 검증 증거는 TEST_PLAN UI-G, 운영 반영은 대기다.
+
+
 ## N01 quota·수명 계약 (2026-09-30, 확정·미구현)
 
 새 버전 chat job은 유료 요약보다 먼저 일일 chat 1회를 예약한다. 예약 원장은 DATABASE_SCHEMA.md N01의 `chat_quota_reservations`이고 실행 순서는 CHAT_STATE_SPEC.md N01을 따른다. 기존 6.3절의 `upstream 직전 예약`은 새 버전에서 이 절로 대체한다. quota 날짜는 예약 시 설정된 IANA timezone의 현지 날짜로 고정하며 자정이 지나도 원래 날짜 counter에서만 해제한다. user 전체+user 모델, guest 전체+guest session+guest 모델을 한 transaction에서 검사·증가시킨다. 정상 재구독·동일 idempotency key 재조회는 예약하지 않는다.
