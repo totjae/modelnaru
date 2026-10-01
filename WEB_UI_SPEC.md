@@ -2,7 +2,7 @@
 
 ## UI-G 버튼 위계·답변 액션·게스트 페이지 (2026-10-02)
 
-상태: 구현·로컬 검증 완료, 운영 반영·사용자 시각 인수 대기. 이전 UI-F의 레이아웃·접근성·상태 계약은 보존한다. Primary(로그인/게스트 참가/보내기/설정 저장)만 accent fill, Secondary(새 대화/전송 기록)는 중립 surface/outline, Tertiary(설정/목록/취소)는 ghost, Destructive는 danger tint/outline, Selected(로그인 모드/선택 모델·대화/관리자 메뉴·기간)는 accent-muted다. 한 화면 주요 fill은1~2개가 기본 목표이며 다른 독립 관리자 폼의 submit을 임의 비활성화하지 않는다. 게스트 링크는 accent outline. dark accent=#b59bdf·hover=#c2aaea, light=#6246b4 유지, muted/border는 테마 accent 기반 별도 토큰, hover도 신규 Primary로 변하지 않는다.
+상태: 구현·로컬 검증·운영 반영 완료, 사용자 시각 인수 대기. 이전 UI-F의 레이아웃·접근성·상태 계약은 보존한다. Primary(로그인/게스트 참가/보내기/설정 저장)만 accent fill, Secondary(새 대화/전송 기록)는 중립 surface/outline, Tertiary(설정/목록/취소)는 ghost, Destructive는 danger tint/outline, Selected(로그인 모드/선택 모델·대화/관리자 메뉴·기간)는 accent-muted다. 한 화면 주요 fill은1~2개가 기본 목표이며 다른 독립 관리자 폼의 submit을 임의 비활성화하지 않는다. 게스트 링크는 accent outline. dark accent=#b59bdf·hover=#c2aaea, light=#6246b4 유지, muted/border는 테마 accent 기반 별도 토큰, hover도 신규 Primary로 변하지 않는다.
 
 답변 분기 이전/다음은44px 이상 버튼·20px 이상 SVG와14px 이상 숫자/충분한 간격, 재생성은 사용자 후속 지시에 따라 아이콘만 표시하고 기존 tooltip/aria-label을 유지한다. 비활성 상태에서도 아이콘을 인지 가능하게 유지하고 동작/분기 API/중복 생성 방지는 유지한다.
 

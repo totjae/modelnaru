@@ -1,5 +1,10 @@
 # 구현 진행 현황
 
+## UI-G 운영 적용 완료 (2026-10-02)
+
+제품99d0940 Web 배포·공인 HTTPS 진입/guest/아이콘 검증 완료. API/DB container 유지·4서비스 healthy. 자세한 실행 증거/미검증 범위는 TEST_PLAN 최신 절. 사용자 최종 시각 인수만 남는다.
+
+
 ## UI-G 추가 UI 개선 — 로컬 완료 (2026-10-02)
 
 WEB_UI_SPEC UI-G 기준 버튼 위계·무채색 새 대화·약한 선택색·답변44px/아이콘20px·아이콘만 재생성·/guest 분리·최신 모노그램 favicon/PNG/manifest 구현. Web31개·typecheck/build/lint·Edge 채팅56/진입·관리자128개 캡처 통과(TEST_PLAN 최신 절). 운영 배포·사용자 시각 인수 대기. 기존 미커밋 관리자 운영 문서 보존, API/DB/의존성 변경 없음.

@@ -1,5 +1,12 @@
 # ModelNaru 시험 계획·결과
 
+## UI-G 운영 반영 완료 (2026-10-02)
+
+사용자 요청으로 codex/refactor-v2 제품 commit 99d0940을 운영 /home/totquf4171/modelnaru-git에 ff-only 반영했다. 제한 builder(CPU1.5/RAM3GiB) frozen-lockfile Linux build 통과. Web image sha256:9b0eef0a64c5406840e6615c61cff7a6c255d5cb84da84a98c6bc3a3ee801bc8로 Web만 교체, Gateway nginx -t/reload 성공. API/PostgreSQL container ID 불변,4서비스 healthy·live/ready 정상. config/secrets/data 수정·migration·실 Provider 호출 없음. 이전 Web은 modelnaru-ui-g-rollback-web 태그로 보존, 임시 builder 제거.
+
+외부 PC의 공인 DNS/CA HTTPS Edge에서 로그인·약한 선택색/Primary 구분·로그인 하단 guest 부재·/guest 링크 및390px 가로 넘침 없음·로그인 복귀·새 SVG favicon 버전/내용·ready200·pageerror0 검증. 게스트 활성=true. 최초 networkidle 대기는30초 timeout이었으며 실제 DOM 준비/요소 기반 재시험은 통과했다. 증거 tmp/ui-g/production/login.png,guest-mobile.png 및 production-check.mjs. 실제 사용자 로그인·채팅/재생성은 이번 운영 점검에서 실행하지 않았으며 로컬 fixture 회귀 증거를 유지한다. 사용자 시각 인수는 별도다.
+
+
 ## UI-G 로컬 검증 완료 (2026-10-02)
 
 버튼 역할·답변 액션·독립 /guest·모노그램 favicon을 수정했다. Web 단위31개, Web typecheck/build, 전체 lint 통과. Edge 실제 로컬 Web+fixture API에서 N10 채팅56개 캡처(생성3/취소1/구독6), N11 진입·관리자·게스트128개 캡처/HTTP280건 통과. 검증은 버튼 역할별 computed 색상·대비, 답변44px 버튼/20px SVG, 분기/재생성, 로그인 하단 guest 부재, /guest 링크·뒤로가기·직접/새로고침·비활성·잘못된 코드·429·정상 참가·인증 후 복귀, 새 SVG 아이콘 HTTP200/버전/경로를 포함한다. 390/1440px guest overflow 없음. dark desktop 로그인/설정·dark mobile guest 캡처를 육안 확인했다.

@@ -2,7 +2,7 @@
 
 ## UI-G 운영 반영 계약 (2026-10-02)
 
-사용자 운영 적용 요청 승인. 메인 담당. 로컬 검증 완료 UI-G와 관리자 README 보완을 codex/refactor-v2에 commit/push하고 clean 서버 checkout에서 ff-only 반영한다. Web만 변경하므로 DB migration/API 재시작 없이 제한된 builder로 web image를 build한 뒤 Web만 교체하고 Gateway를 재시작해 upstream DNS를 갱신한다. 기존 Web image를 별도 rollback tag로 보존하고 실패 시 그 image로 Web을 복구한다. config/secrets/data와 API/PostgreSQL container를 보존한다. 공인 HTTPS ready·/·/guest·아이콘과 실제 브라우저 진입을 검증한다. 인증정보 읽기/유료 호출/데이터 초기화 금지. 결과는 TEST_PLAN/STATUS/HANDOFF에 기록한다.
+사용자 운영 적용 요청 승인. 메인 담당. 로컬 검증 완료 UI-G와 관리자 README 보완을 codex/refactor-v2에 commit/push하고 clean 서버 checkout에서 ff-only 반영한다. Web만 변경하므로 DB migration/API 재시작 없이 제한된 builder로 web image를 build한 뒤 Web만 교체하고 Gateway의 nginx 설정 검사 후 graceful reload로 upstream DNS를 갱신한다. 기존 Web image를 별도 rollback tag로 보존하고 실패 시 그 image로 Web을 복구한다. config/secrets/data와 API/PostgreSQL container를 보존한다. 공인 HTTPS ready·/·/guest·아이콘과 실제 브라우저 진입을 검증한다. 인증정보 읽기/유료 호출/데이터 초기화 금지. 결과는 TEST_PLAN/STATUS/HANDOFF에 기록한다.
 
 ## UI-G 추가 시각/게스트 경로 보완 (2026-10-02)
 
