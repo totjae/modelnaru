@@ -2,7 +2,7 @@
 
 ## Git 운영 CLI 환경 파일 보완 (2026-10-02)
 
-최종 health에서 기존 CLI가 --env-file .runtime.env만 전달해 .env의 COMPOSE_PROJECT_NAME/COMPOSE_FILE을 누락하는 결함을 확인했다. 새 Docker 서비스 자체는 정상이며 helper의 두 env-file 호출은 이미 통과했다. bin/modelnaru가 .env 존재 시 .env→.runtime.env 순으로 명시 로드하도록 보완했다. .env 없는 설치는 기존 동작을 유지한다. host 실행 스크립트만 변경하며 API/Web 이미지 재빌드 대상은 아니다. 실제 status/health·shell 구문·env 유무 인자 전달 검증 결과를 아래에 기록한다.
+최종 health에서 기존 CLI가 --env-file .runtime.env만 전달해 .env의 COMPOSE_PROJECT_NAME/COMPOSE_FILE을 누락하는 결함을 확인했다. 새 Docker 서비스 자체는 정상이며 helper의 두 env-file 호출은 이미 통과했다. bin/modelnaru가 .env 존재 시 .env→.runtime.env 순으로 명시 로드하도록 보완했다. .env 없는 설치는 기존 동작을 유지한다. host 실행 스크립트만 변경하며 API/Web 이미지 재빌드 대상은 아니다. 서버 sh -n 통과, 실제 ./bin/modelnaru status가 새 modelnaru-git 서비스만 조회하고 health의 live/ready/Web 모두 통과했다. 임시 디렉터리/가짜 Docker로 .env 유무×status/health/logs/stop/start/restart/update 14개 인자 전달 검증도 통과했고 실제 서비스 재시작은 하지 않았다. CLI 보완 commit eb6088b, API/Web build commit5bfe5db로 구분한다.
 
 ## 2026-10-02 Git 재설치 운영 인수 (전환 완료·old 삭제 대기)
 
