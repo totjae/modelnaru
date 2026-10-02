@@ -1,5 +1,12 @@
 # ModelNaru 시험 계획·결과
 
+## UI-J 운영 반영 및 위치 검증 완료 (2026-10-02)
+
+제품8159953 commit/push·clean 서버 ff-only 반영. 제한 builder(CPU1.5/RAM3GiB) frozen-lockfile Linux build 통과, Web image sha256:1579c101023cb67cccf385dfe0ec4eeefa69e5f1b3d20e8b3985bfd09ee134fe로 Web만 교체. Gateway nginx -t/reload·health 정상. API/PostgreSQL container ID 보존. 이전 image modelnaru-ui-j-rollback-web 보존, 임시 builder 제거. DB/config/secrets 수정·migration·Provider 호출0.
+
+공인 HTTPS 인앱 브라우저에서 사용자→관리자 전환 실제 측정: 로고top172,제목top294.4,게스트링크top522.575,카드top124 모두 전환 전후 동일(top/left delta0). 카드 높이는566.6→660.2로 관리자 필드만 추가. 사용자 빈 TOTP 공간 복원 없이 소개 위치 고정 확인. 인증 제출 및 실제 모바일 재시험은 미실행.
+
+
 ## UI-J 로그인 위치 고정 검증 (2026-10-02)
 
 운영에서 관리자 전환 시 카드 높이 약94px 증가에 따라 소개 top이 약47px 움직이는 현상을 확인했다. landing-hero 상단 정렬과 desktop 소개 padding-top48px로 카드 높이와 분리했다. Web build(타입 검사 포함)·변경 harness lint·diff 검사 통과. N11 Edge132캡처/HTTP280건 exit0: dark/light320/390/768/1023/1024/1280/1440/1920/2560에서 로고·제목·게스트 링크·카드 top/left 변화1px 이하, 사용자 TOTP DOM 없음/관리자 required 및 사용자 카드 높이 축소 유지. dark1440 사용자/관리자 캡처 육안 비교 완료. API/인증 변경 없음. 운영 반영·실기기 인수 미실행.

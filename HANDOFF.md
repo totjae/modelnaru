@@ -1,5 +1,10 @@
 # ModelNaru 새 버전 구현 인계
 
+## 최신: UI-J 운영 적용 완료 (2026-10-02)
+
+운영 Web 제품8159953. 공인 HTTPS 로그인 소개/카드 좌표 고정 검증 완료. 아래 UI-J 배포 대기는 당시 기록이다. 배포 image·rollback 태그·검증 범위는 TEST_PLAN 최신 절. 다음 사용자 피드백에 따라 기존 데이터와 관리자 설정 보존.
+
+
 ## 최신: UI-J 로컬 완료·배포 대기 (2026-10-02)
 
 운영 UI-I 제품200a171 유지. UI-J는 styles.css와 n11-browser.mjs 및 관련 문서만 수정, 로그인 소개/카드 상단을 고정한다. WEB_UI_SPEC/IMPLEMENTATION_PLAN UI-J 계약과 TEST_PLAN 최신 검증 참조. 운영 반영 시 기존 데이터/관리자/API/DB 보존 Web-only 절차 적용.
