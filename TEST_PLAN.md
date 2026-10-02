@@ -1,5 +1,12 @@
 # ModelNaru 시험 계획·결과
 
+## UI-I 운영 반영 완료 (2026-10-02)
+
+제품200a171 Git push·clean 서버 ff-only 완료. CPU1.5/RAM3GiB frozen-lockfile Linux build 통과, Web image sha256:2f35f609528ffbc530e3e4c2701c919f976ae258773b3b391cc4cebe9102189b로 Web만 교체. Gateway nginx -t/reload,4서비스 healthy,live/ready 정상. API/PostgreSQL container ID 불변,config/secrets/data·migration 변경0,Provider 호출0. 이전 image modelnaru-ui-i-rollback-web 보존, 임시 builder 제거.
+
+외부 PC Edge 공인 HTTPS에서 로그인·guest 소개/복귀·390px overflow·favicon·ready200/pageerror0 및 배포 CSS의 model-favorite-toggle/theme-control-inline/composer:focus-within 포함 확인. 증거 tmp/ui-i/production-check.mjs 및 production 캡처. 인증 후 채팅은 로컬 N10 회귀 증거를 유지하며 실제 Android 가상키보드/운영 계정 즐겨찾기 시험은 미실행.
+
+
 ## UI-I 로컬 검증 완료 (2026-10-02)
 
 Web31개·build·전체 lint 통과. N10 Edge56캡처/생성3·취소1·구독6 및 N11 Edge132캡처/HTTP280건 정상 종료. 즐겨찾기 별 등록/해제→필터 빈 안내→재등록, aria-pressed 일치 확인. textarea 자체 outline/shadow 없음 및 composer focus-within 바탕색 변화 확인. dark/light320~2560 회귀에서 모바일 composer 하단 viewport 간격12px 이하, 전역 테마 컨트롤 숨김·목록 내부 테마 선택 확인. 기존 첨부·모델 메뉴·낮은 viewport·IME/중지 시험 유지.
