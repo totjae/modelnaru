@@ -160,16 +160,33 @@ export function ModelPicker({
                 </button>
                 <button
                   type="button"
+                  className="model-favorite-toggle"
                   aria-label={`${item.modelId} 즐겨찾기`}
+                  title={item.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 등록'}
                   aria-pressed={!!item.isFavorite}
                   onClick={() => onFavorite(item)}
                 >
-                  {item.isFavorite ? '해제' : '저장'}
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill={item.isFavorite ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" />
+                  </svg>
                 </button>
               </li>
             ))}
           </ul>
-          {!visible.length && <p>조건에 맞는 허용 모델이 없습니다.</p>}
+          {!visible.length && (
+            <p>
+              {favorite
+                ? '등록한 즐겨찾기 중 조건에 맞는 모델이 없습니다. 즐겨찾기 필터를 끄고 모델 옆 별을 눌러 등록하세요.'
+                : '조건에 맞는 허용 모델이 없습니다.'}
+            </p>
+          )}
           <button type="button" onClick={close}>
             닫기
           </button>

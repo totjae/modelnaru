@@ -1,5 +1,14 @@
 # ModelNaru 새 버전 실행 계획
 
+## UI-I 운영 반영 계약 (2026-10-02)
+
+사용자 운영 적용 승인. 메인 담당, 검증된 UI-I를 codex/refactor-v2에 commit/push·서버 ff-only 반영. 이전 Web image 별도 보존→CPU1.5/RAM3GiB builder로 Web build→Web만 no-deps 교체/healthy→Gateway nginx -t/graceful reload→공인 HTTPS 검증. API/PostgreSQL container·config/secrets/data 보존. migration/인증정보 읽기/유료 호출/초기화 금지. 실패하면 보존 Web image로 복구하며 TEST_PLAN/STATUS/HANDOFF에 결과와 미검증 범위 기록.
+
+## UI-I 계약 (2026-10-02)
+
+선행 UI-H. 메인 수행, WEB_UI_SPEC UI-I와 기존 즐겨찾기 API/CHAT_STATE 기준. 수정 허용 apps/web/app/{chat-model-picker.tsx,chat-workspace.tsx,styles.css,theme-toggle.tsx}, apps/web/test/{n10-browser.mjs,n11-browser.mjs}, WEB_UI_SPEC/TEST_PLAN/STATUS/HANDOFF/본 계획/README. API/DB/권한/의존성/운영 변경 금지. 순서 원인 확인→즐겨찾기 표현/테마 위치/입력 focus→Web 빌드·시험·브라우저 경계→문서. 완료는 기존 기능 회귀 및 새 UI 조건 통과, 실기기 미검증 명시.
+
+
 ## UI-H 운영 반영 계약 (2026-10-02)
 
 사용자 운영 적용 승인. UI-H 검증 완료 변경을 codex/refactor-v2에 commit/push하고 clean 운영 checkout에서 ff-only 반영한다. 메인 담당, UI-G와 동일한 Web-only 절차: 이전 Web image rollback tag 보존→CPU1.5/RAM3GiB builder build→Web만 no-deps 교체/healthy→Gateway 설정 검사/graceful reload→공인 HTTPS 로그인 여백·guest 소개·health 확인. API/DB container·config/secrets/data 보존. migration/인증정보 열람/유료 호출/초기화 금지. 실패하면 보존 Web image로 복구하며 결과/한계를 TEST_PLAN/STATUS/HANDOFF에 기록한다.

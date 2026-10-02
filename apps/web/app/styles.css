@@ -3811,7 +3811,7 @@ select:focus-visible,
 }
 .chat-sidebar {
   background: var(--surface);
-  padding: 16px 12px 64px;
+  padding: 16px 12px 12px;
   gap: 10px;
 }
 .chat-sidebar nav {
@@ -4097,7 +4097,7 @@ select:focus-visible,
   line-height: 22px;
 }
 .user-shell .sidebar-collapsed .composer {
-  margin-bottom: max(46px, env(safe-area-inset-bottom));
+  margin-bottom: max(8px, env(safe-area-inset-bottom));
 }
 .composer-actions {
   display: grid;
@@ -4433,7 +4433,7 @@ dialog::backdrop {
   }
   .chat-main .composer {
     width: calc(100% - 24px);
-    margin-bottom: max(46px, env(safe-area-inset-bottom));
+    margin-bottom: max(8px, env(safe-area-inset-bottom));
     padding: 10px;
     gap: 4px;
   }
@@ -5432,4 +5432,41 @@ body:has(> .n11-entry, > .admin-shell) > .theme-control select {
     left: 24px;
     top: -26px;
   }
+}
+
+/* UI-I: whole composer focus and personal model favorites. */
+.composer textarea:focus,
+.composer textarea:focus-visible {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+.chat-main .composer:focus-within {
+  background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%);
+}
+body:has(.user-shell) > .theme-control {
+  display: none;
+}
+.chat-sidebar .theme-control-inline {
+  position: static;
+  align-self: flex-start;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+.model-picker-menu .model-favorite-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--muted);
+}
+.model-picker-menu .model-favorite-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+.model-favorite-toggle svg {
+  width: 20px;
+  height: 20px;
 }

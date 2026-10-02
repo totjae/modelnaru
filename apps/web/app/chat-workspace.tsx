@@ -21,6 +21,7 @@ import {
 } from './job-subscription';
 import { SafeMarkdown } from './safe-markdown';
 import { ModelPicker, type PickerModel } from './chat-model-picker';
+import { ThemeToggle } from './theme-toggle';
 import { ChatDialog } from './chat-dialog';
 import { ChatIcon } from './chat-icons';
 import { mergeOlderMessagePage } from './chat-message-pagination';
@@ -1585,6 +1586,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             이 대화는 현재 게스트 세션에만 보입니다.
           </p>
         )}
+        <ThemeToggle inline />
       </aside>
 
       <div className="chat-main">

@@ -30,7 +30,7 @@ function storedTheme(): ThemeMode {
   }
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ inline = false }: { inline?: boolean }) {
   const [mode, setMode] = useState<ThemeMode>('system');
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function ThemeToggle() {
   }
 
   return (
-    <label className="theme-control">
+    <label className={`theme-control${inline ? ' theme-control-inline' : ''}`}>
       <span>테마</span>
       <select value={mode} onChange={changeTheme} aria-label="화면 테마">
         <option value="system">시스템</option>

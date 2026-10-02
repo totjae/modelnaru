@@ -467,6 +467,23 @@ try {
         .querySelector('[aria-label="fixture-model 즐겨찾기"]')
         ?.getAttribute('aria-pressed') === 'true',
   );
+  await page.getByLabel('즐겨찾기', { exact: true }).check();
+  assert.equal(await page.locator('.model-picker-menu li').count(), 1);
+  await page.getByRole('button', { name: 'fixture-model 즐겨찾기' }).click();
+  await page
+    .getByText(
+      '등록한 즐겨찾기 중 조건에 맞는 모델이 없습니다. 즐겨찾기 필터를 끄고 모델 옆 별을 눌러 등록하세요.',
+      { exact: true },
+    )
+    .waitFor();
+  await page.getByLabel('즐겨찾기', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'fixture-model 즐겨찾기' }).click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[aria-label="fixture-model 즐겨찾기"]')
+        .getAttribute('aria-pressed') === 'true',
+  );
   await page
     .getByRole('textbox', { name: '모델 검색', exact: true })
     .fill('아주 긴');
@@ -773,6 +790,22 @@ try {
   await page
     .locator('.chat-toast')
     .waitFor({ state: 'detached', timeout: 7000 });
+  await composer.evaluate((el) => el.blur());
+  const restingSurface = await page
+    .locator('.composer')
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  await composer.focus();
+  const focusedSurface = await page
+    .locator('.composer')
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  assert.notEqual(focusedSurface, restingSurface);
+  assert.deepEqual(
+    await composer.evaluate((el) => ({
+      outline: getComputedStyle(el).outlineStyle,
+      shadow: getComputedStyle(el).boxShadow,
+    })),
+    { outline: 'none', shadow: 'none' },
+  );
   await composer.fill('한 줄');
   const shortHeight = (await composer.boundingBox()).height;
   await composer.fill(Array(15).fill('자동으로 늘어나는 입력').join('\n'));
@@ -799,7 +832,11 @@ try {
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   }
   for (const theme of ['light', 'dark']) {
-    await page.getByRole('combobox', { name: '화면 테마' }).selectOption(theme);
+    if (await page.locator('.chat-sidebar').isHidden())
+      await page
+        .getByRole('button', { name: '대화 목록', exact: true })
+        .click();
+    await page.locator('.theme-control-inline select').selectOption(theme);
     const colors = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
       return Object.fromEntries(
@@ -900,6 +937,17 @@ try {
           Math.abs(metrics.picker.y - metrics.send.y) <= 1,
       );
       assert(metrics.cards.every((height) => height >= 88 && height <= 96));
+      if (width < 768) {
+        const box = await page.locator('.composer').boundingBox();
+        assert(
+          900 - box.y - box.height <= 12,
+          'mobile composer must sit near viewport bottom',
+        );
+        assert.equal(
+          await page.locator('body > .theme-control').isVisible(),
+          false,
+        );
+      }
       await capture({ path: resolve(output, `${theme}-${width}.png`) });
       layouts.push({ theme, width, ...overflow });
       await page.getByRole('button', { name: '설정', exact: true }).click();

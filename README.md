@@ -655,6 +655,8 @@ N08 API가 실행되고 `0020` migration이 적용된 환경에서 관리자 로
 
 일반 사용자/게스트 session으로 `GET /api/conversations?query=제목&limit=50`에서 대화를 검색하고 응답 nextCursor로 다음 페이지를 조회합니다. 조건을 바꾸면 cursor를 지웁니다. 고정과 설정은 대화 응답의 settingsRevision을 포함한 PATCH로 저장하며 409 충돌이면 응답의 최신 설정을 다시 확인합니다. branch 전환에도 revision을 제출합니다. 모델 변경 응답의 removedParameters는 제거된 이전 설정입니다.
 
+채팅 화면에서 테마는 **대화 목록** 안에서 변경합니다. 모델 선택 목록의 별 버튼으로 각 사용자가 자신의 즐겨찾기를 등록·해제하고, 즐겨찾기 체크박스로 등록한 모델만 볼 수 있습니다. 메시지 입력에 집중하면 첨부·모델·전송 버튼을 포함한 입력 박스 전체의 바탕색이 은은하게 변합니다.
+
 모델 검색은 `GET /api/access/models`, 즐겨찾기는 `/api/model-favorites`의 GET 및 `/:modelId` PUT/DELETE를 사용합니다. 첨부 상태는 pending 목록 또는 개별 GET으로 확인하고 failed 파일은 `POST /api/files/conversations/:conversationId/:attachmentId/retry`로 명시적으로 재처리합니다. 모든 mutation은 같은 origin의 인증 cookie와 CSRF를 요구합니다. 새 UI는 N10/N11에서 이 revision 계약과 연결했습니다. 전체 필드·오류·동작 한계는 [API 명세](./API_SPEC.md) N09와 [파일 명세](./FILE_PROCESSING_SPEC.md) N09를 따릅니다.
 
 ## 라이선스
