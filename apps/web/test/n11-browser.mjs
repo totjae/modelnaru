@@ -550,6 +550,18 @@ try {
           .evaluateAll((els) =>
             els.map((el) => el.getBoundingClientRect().toJSON()),
           );
+      const stableBounds = () =>
+        page
+          .locator(
+            '.brand-panel .mark, .landing-title, .landing-actions, .auth-card',
+          )
+          .evaluateAll((els) =>
+            els.map((el) => ({
+              top: el.getBoundingClientRect().top,
+              left: el.getBoundingClientRect().left,
+            })),
+          );
+      const beforeToggle = await stableBounds();
       const user = await bounds();
       assert.equal(await page.locator('input[name="totp"]').count(), 0);
       assert.equal(await page.locator('.auth-totp-slot').count(), 0);
@@ -564,6 +576,13 @@ try {
       await page.getByRole('button', { name: '관리자', exact: true }).click();
       await page.evaluate(() => scrollTo(0, 0));
       const admin = await bounds();
+      const afterToggle = await stableBounds();
+      for (let index = 0; index < beforeToggle.length; index++)
+        for (const axis of ['top', 'left'])
+          assert(
+            Math.abs(beforeToggle[index][axis] - afterToggle[index][axis]) <= 1,
+            `login anchor moves: ${theme}/${width}/${index}/${axis}`,
+          );
       assert.equal(
         await page.getByLabel('인증 앱 코드').getAttribute('required'),
         '',

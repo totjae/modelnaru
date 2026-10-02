@@ -1,5 +1,14 @@
 # ModelNaru 새 버전 실행 계획
 
+## UI-J 운영 반영 계약 (2026-10-02)
+
+사용자 commit/push/운영 반영 명시 승인. 메인 담당, 검증한 UI-J를 기존 codex/refactor-v2에 push·clean 서버 ff-only 반영. 이전 Web rollback 태그 보존, CPU1.5/RAM3GiB builder로 Web build 후 Web만 교체·Gateway nginx -t/reload. API/DB container·config/secrets/data 보존, migration/유료 호출/인증정보 열람 금지. health 및 공인 HTTPS의 실제 사용자/관리자 전환 소개/카드 좌표 검증. 실패 시 이전 Web 복구, 결과는 TEST_PLAN/STATUS/HANDOFF 기록.
+
+## UI-J 작업 계약 (2026-10-02)
+
+메인 담당, 선행 UI-I/현행 UI-H 로그인. 수정 허용 apps/web/app/styles.css, apps/web/test/n11-browser.mjs, WEB_UI_SPEC/본 계획/TEST_PLAN/IMPLEMENTATION_STATUS/HANDOFF. 소개/로그인 상단 정렬과 desktop 여백만 변경. API/인증/DB/의존성/운영 변경 금지. CSS→build/N11 다중 폭 위치 회귀/캡처→문서 갱신. 카드 축소를 유지하면서 두 모드 소개/카드 상단 좌표 동일해야 완료.
+
+
 ## UI-I 운영 반영 계약 (2026-10-02)
 
 사용자 운영 적용 승인. 메인 담당, 검증된 UI-I를 codex/refactor-v2에 commit/push·서버 ff-only 반영. 이전 Web image 별도 보존→CPU1.5/RAM3GiB builder로 Web build→Web만 no-deps 교체/healthy→Gateway nginx -t/graceful reload→공인 HTTPS 검증. API/PostgreSQL container·config/secrets/data 보존. migration/인증정보 읽기/유료 호출/초기화 금지. 실패하면 보존 Web image로 복구하며 TEST_PLAN/STATUS/HANDOFF에 결과와 미검증 범위 기록.

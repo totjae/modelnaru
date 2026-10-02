@@ -1,5 +1,10 @@
 # ModelNaru 시험 계획·결과
 
+## UI-J 로그인 위치 고정 검증 (2026-10-02)
+
+운영에서 관리자 전환 시 카드 높이 약94px 증가에 따라 소개 top이 약47px 움직이는 현상을 확인했다. landing-hero 상단 정렬과 desktop 소개 padding-top48px로 카드 높이와 분리했다. Web build(타입 검사 포함)·변경 harness lint·diff 검사 통과. N11 Edge132캡처/HTTP280건 exit0: dark/light320/390/768/1023/1024/1280/1440/1920/2560에서 로고·제목·게스트 링크·카드 top/left 변화1px 이하, 사용자 TOTP DOM 없음/관리자 required 및 사용자 카드 높이 축소 유지. dark1440 사용자/관리자 캡처 육안 비교 완료. API/인증 변경 없음. 운영 반영·실기기 인수 미실행.
+
+
 ## UI-I 운영 반영 완료 (2026-10-02)
 
 제품200a171 Git push·clean 서버 ff-only 완료. CPU1.5/RAM3GiB frozen-lockfile Linux build 통과, Web image sha256:2f35f609528ffbc530e3e4c2701c919f976ae258773b3b391cc4cebe9102189b로 Web만 교체. Gateway nginx -t/reload,4서비스 healthy,live/ready 정상. API/PostgreSQL container ID 불변,config/secrets/data·migration 변경0,Provider 호출0. 이전 image modelnaru-ui-i-rollback-web 보존, 임시 builder 제거.

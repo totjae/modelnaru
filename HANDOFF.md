@@ -1,5 +1,10 @@
 # ModelNaru 새 버전 구현 인계
 
+## 최신: UI-J 로컬 완료·배포 대기 (2026-10-02)
+
+운영 UI-I 제품200a171 유지. UI-J는 styles.css와 n11-browser.mjs 및 관련 문서만 수정, 로그인 소개/카드 상단을 고정한다. WEB_UI_SPEC/IMPLEMENTATION_PLAN UI-J 계약과 TEST_PLAN 최신 검증 참조. 운영 반영 시 기존 데이터/관리자/API/DB 보존 Web-only 절차 적용.
+
+
 ## 최신: UI-I 운영 적용 완료 (2026-10-02)
 
 운영 Web 제품200a171, 공인 HTTPS·배포 CSS 검증 완료. 아래 UI-I 미반영은 당시 기록이다. 실제 모바일 후속 피드백에 대응하며 기존 사용자 데이터와 관리자 설정 보존. image·복구 태그·시험 범위는 TEST_PLAN 최신 절.
