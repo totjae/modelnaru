@@ -1,5 +1,10 @@
 # 구현 진행 현황
 
+## OUTPUT-8192 운영 적용 완료 (2026-11-04)
+
+제품28a869e commit/push·운영 API 반영 완료. 실행 컨테이너 기본8192와 개별/모델 작은 한도 유지 검사4개 통과, 공인 HTTPS ready 및4서비스 healthy. 기존 데이터·설정 보존, Provider 호출 없음. 상세 근거 TEST_PLAN OUTPUT-8192 운영 검증 절 참조.
+
+
 ## OUTPUT-8192 로컬 완료 (2026-11-04)
 
 일반 채팅 기본 출력 및 공통 상한8192 구현·API230개 통과/6개 제외·typecheck/build/lint 통과. AI_INTEGRATION_SPEC 원장과 README 갱신. 운영 미반영. 기존 사용자 명시4096/모델 작은 상한·제목/요약 개별 제한 유지.

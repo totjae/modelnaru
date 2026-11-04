@@ -1,5 +1,10 @@
 # ModelNaru 시험 계획·결과
 
+## OUTPUT-8192 운영 검증 완료 (2026-11-04)
+
+제품28a869e commit/push 및 서버 ff-only 반영. 제한 builder(CPU1.5/RAM3GiB) frozen-lockfile Linux build 통과. API image sha256:ee184752fc7994fd226e7d69794f73bcd65b99a88b2895a57036acec69f9bd2f로 API만 교체했다. 재시작 전 미종료 job0건 확인, gateway nginx -t/reload 및 live/ready·공인 HTTPS ready 정상,4서비스 healthy. 실제 실행 API의 contextBudget 검사4개 통과: 기본8192·명시1024 유지·모델4096 유지·큰 요청8192 제한. PostgreSQL container ID 보존, DB/config/secrets/Web 변경 및 migration 없음. Provider 호출0회로 실제 생성 재시험은 미실행. rollback image modelnaru-output8192-rollback-api 보존, 임시 builder 제거. 아래 로컬 미배포 기록은 당시 상태다.
+
+
 ## OUTPUT-8192 로컬 검증 (2026-11-04)
 
 기본 출력 예약/공통 상한과 Anthropic 미지정 fallback4096→8192 변경. API230개 통과·조건부6개 제외, API typecheck/build·변경 코드 lint·diff 검사 통과. 기본 context16384에서 출력8192/입력6553, 명시1024 유지·모델4096 상한 유지·큰 요청8192 제한 회귀 확인. DB 변경·실 Provider 호출·운영 반영 없음. 실패 trace 기록 보완은 이번 범위에 포함하지 않는다.
