@@ -1,5 +1,9 @@
 # 구현 진행 현황
 
+## R3 운영 반영 (2026-11-05)
+
+제품 a087c3f commit/push·운영 ff-only·Linux build·API/Web 교체·migration0021 완료.4서비스 healthy, DB container/config/secrets 보존, 배포 컨테이너 출력 정책5개 검사 및 migration 재실행 통과. 외부 HTTPS 로그인/반응형·R3 자산·비인증 template API401 검사 통과. 실제 계정/모델·휴대폰 기능 인수는 TEST_PLAN의 R3 운영 사용자 체크리스트를 따른다. 유료 호출 없음. 첫 migration 파일 권한 오류는 이전 image 복구 후 소스 권한을 정상화해 재빌드/사전 읽기 검사로 해결했다. 이전 로컬 미배포 기록은 당시 상태다.
+
 
 ## R3 현황 (2026-11-05, 로컬 완료·운영 미반영)
 

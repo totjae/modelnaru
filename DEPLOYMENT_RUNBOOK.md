@@ -1,6 +1,14 @@
 # ModelNaru 배포 실행서
 
-## R3 배포 인계 (2026-11-05, 운영 미반영)
+## R3 파일 권한 사전 검사 (2026-11-05)
+
+배포 백업은0700 디렉터리/0600 파일로 서버 내부에 보관한다. 이 제한 umask를 Git checkout 소스에 적용하지 않는다. Git 관리 일반 파일은0644, 실행 파일은0755를 유지하여 이미지의 비관리자 node 사용자가 migration을 읽을 수 있어야 한다. config/secrets는 별도 기존0600/0700 정책을 유지한다.
+
+운영 중지 전에 새 migrate 이미지의 런타임 사용자로 migrations 디렉터리의 모든 SQL 읽기를 확인한다. 첫 R3 시도는 새 SQL0600으로 EACCES가 발생하여 이전 앱 image로 복구했으며 DB migration은 미적용이었다. Git 관리 소스 권한만 정상화한 뒤 재빌드/읽기 검사를 수행한다. 최종 배포 결과는 TEST_PLAN 최신 절을 따른다.
+
+## R3 배포 인계 (2026-11-05, 운영 반영 완료)
+
+제품 a087c3f 반영 완료. 실제 실행은 DB container 보존을 위해 build/validate/render-env 후 app stop→migrate run --rm --no-deps→API/Web up --no-deps --no-build --wait→gateway 시작/검증 순서로 분리했다. 복구 태그/backup/검증은 TEST_PLAN 최신 R3 운영 절을 따른다. 아래는 이후 업데이트의 기본 절차다.
 
 API·Web 변경과 추가형 migration0021_chat_templates.sql이 함께 필요하다. 이전 Web-only 업데이트를 재사용하지 않는다. 사용자 배포 요청 이후 기존 Git 업데이트 절차에 따라 검증된 소스를 반영하고, 서버 프로젝트 root에서 기존 ./bin/modelnaru update를 실행한다. 사전 조건은 기존 Docker/설정 환경, 데이터 backup 및 활성 job/재시작 영향 확인이다. 이 명령은 현재 checkout을 build/validate/migrate/health하며 소스를 내려받지는 않는다.
 

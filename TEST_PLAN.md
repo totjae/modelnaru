@@ -1,5 +1,32 @@
 # ModelNaru 시험 계획·결과
 
+## R3 운영 배포 검증 (2026-11-05)
+
+- 제품 commit a087c3f92f8321bebe6064aa420b181c363fe193을 origin/codex/refactor-v2에 push하고 clean 서버 /home/totquf4171/modelnaru-git를 ff-only 갱신했다. buildx CPU1.5/RAM3GiB, frozen-lockfile Linux API/Web/admin/migrate build 및 config validate 통과. 운영 교체 전 활성 job0을 두 차례 확인했다.
+- 서버 내부 data/backups/r3-20261105-a087c3f에 DB custom dump와 configuration archive를0700/0600으로 보존했다. 비밀값/backup은 PC로 가져오거나 문서에 출력하지 않았다. 복구 태그 modelnaru-r3-rollback-api/-web/-migrate/-admin-tool 보존.
+- 최초 migration은 Git 신규 SQL 파일0600으로 런타임 node 읽기가 거부(EACCES)돼 미적용. 즉시 이전 API/Web image로 복구하고 health 통과. 배포 보조 스크립트의 제한 umask가 원인이었으며 tracked 일반 파일0644/실행 파일0755만 복원하여 재빌드했다. config/secrets 권한은 변경하지 않았다. 재시도 전 새 이미지의 비관리자 런타임 사용자가 모든 SQL을 읽는 사전 검사를 통과했다.
+- 재시도 migration0021 적용, API/Web 교체, gateway nginx -t/reload·health 통과. 기존 update와 같은 build/validate/render-env/migrate/health 단계를 분리 실행해 PostgreSQL container를 재생성하지 않았다. 원본 config/secrets 파일 hash 일치, DB container ID 보존, template 테이블0건/적용 migration1건 확인. 시험 템플릿/계정/대화를 운영에 만들지 않았다.
+- 실행 API image sha256:d53272c30b265daa6a975d9855c4b01d901cd12ac01f0fd39379c5e823723074, Web sha256:a3603e8f6f596d0c0879fa580157d013ed1c86153fe1ba1895af87d096a6ce8d. 서버 backup/state.json에 이전 image와 새 release/image·보존 판정 기록.
+- 실제 API container의 contextBudget 직접 검사5개 통과: 기본8192, 명시16384/1024, 출력 상한 null에서16384 유지, 알려진4096 한도에16384 거부. Provider 호출 없이 검증했다. migration 재실행 checksum/no-op 통과. 서버 SNI/CA 검증 HTTPS ready 정상, api/web/gateway/postgres4개 healthy. 임시 buildx 제거 완료.
+- 외부 PC Edge 공인 HTTPS: live/ready200, 비인증 사용자·관리자 template GET401, 로그인 DOM/새 R3 CSS 확인,1440/360 캡처2개와 모바일 overflow 없음, pageerror0. tmp/r3-live/result.json 및 screenshots. 첫 harness는 Windows ESM 경로, 다음은 networkidle 대기로 실패했으며 file URL/DOM·로그인 표시 기준으로 수정 후 exit0. 제품 변경 없이 통과했다.
+- 실제 Provider 유료 생성·인증된 관리자/사용자/게스트 UI·실제 휴대폰은 이번 운영 smoke 범위 밖이며 아래 체크리스트의 대기 상태를 유지한다. 로컬 fixture 결과와 혼동하지 않는다.
+
+## R3 운영 사용자 인수 체크리스트 (2026-11-05)
+
+아래는 실제 계정/모델/휴대폰에서 남은 기능 인수다. 로컬245/34개 시험 및 fixture 브라우저 통과와 구분한다. 기존 업무 대화 대신 별도 시험 대화를 사용한다. 실제 생성은 Provider 비용이 발생할 수 있으므로 호출 승인 후 수행한다.
+
+| 확인 항목 | 실행·기대 결과 | 운영 기능 인수 |
+| --- | --- | --- |
+| 설정 저장/복원 | 설정 미지정 기본8192 유지. 지원 모델에서 최대 출력16384 저장→새로고침→일반 생성/재생성의 전송 기록에서16384 확인. 작은 명시값1024도 유지. 모델 상한 초과는 오류, 자동8192 축소 없음 | 대기 |
+| 나머지 설정 | temperature/topP·penalty·seed의0, stop 배열, thinking 및 모델별 지원 항목을 저장/새로고침/전송 기록으로 대조. system prompt·history/context·timeout·web search·trace는 각 실행 동작으로 확인. 미지원 항목에는 이유 표시 | 대기 |
+| 관리자 템플릿 | 생성→수정→복제→비활성/활성→삭제. 프롬프트/모든 설정 저장, 선택항목 미지정은 기존값 유지, reset 항목은 기본 복원. 삭제/수정해도 적용한 대화는 유지 | 대기 |
+| 사용자·게스트 | 모델 옆 버튼으로 선택·미리보기·현재 대화 적용→새로고침→사용자 직접 수정. 다른 대화는 그대로. 게스트에도 동일하며 만료 세션은 거부 | 대기 |
+| 모델 예외·경합 | 권장 모델 권한 없음/비활성/삭제 시 현재 또는 허용 모델 선택. 미지원 필드 제외 확인, 사용할 모델 없으면 차단. 미리보기 이후 템플릿/권한 변경·다른 탭 설정 변경 시 충돌, 부분 저장 없음 | 대기 |
+| 재생성 | 시작/스트리밍/완료/취소/실패/새로고침에서 같은 질문의 AI 박스1개. 이전/다음 버전 보존, 다른 질문 이력 유지. 실패 버전 표시와 다음 질문의 활성 문맥 안내 확인 | 대기 |
+| 복사·배치·휴대폰 | 사용자 오른쪽/AI 왼쪽, 아이콘 hover/focus/눌림·성공 체크·Clipboard 내용. 실패 안내. 실제 Android/iOS 터치/키보드, light/dark360~1440, 긴 코드/표/첨부/스크롤에서 넘침 없음 | 대기 |
+
+완료 시 사용 모델/계정 역할·브라우저·시각·결과만 기록하고 인증정보나 대화/전송 기록 원문은 문서에 넣지 않는다. 전송 기록은 시험 후 기존 보관 설정으로 복원한다.
+
 ## R3 최종 로컬 검증 (2026-11-05)
 
 범위: 설정 전수 경로·명시 출력값, 관리자 템플릿/사용자·게스트 적용, 복사 아이콘, 답변 한 박스·좌우 배치. 기준 HEAD b0d6b75 위 작업 트리이며 운영 반영/외부 Provider 호출은 하지 않았다. 아래 A 절은 수정 전 기준선이다.
