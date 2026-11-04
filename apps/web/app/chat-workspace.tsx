@@ -2079,6 +2079,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 />
                 <button
                   type="button"
+                  className="composer-template-button"
+                  aria-label="템플릿"
+                  title="템플릿 선택"
                   disabled={busy}
                   onClick={() => {
                     const open = () => {
@@ -2089,7 +2092,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                     else open();
                   }}
                 >
-                  템플릿
+                  <ChatIcon name="template" />
                 </button>
                 {detail.activeJob ? (
                   <button

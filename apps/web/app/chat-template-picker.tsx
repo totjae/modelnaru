@@ -36,6 +36,7 @@ export function ChatTemplatePicker({
     [selected, setSelected] = useState(''),
     [model, setModel] = useState(currentModel);
   const [preview, setPreview] = useState<Preview | null>(null),
+    [previewOpen, setPreviewOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),
     [confirmed, setConfirmed] = useState(false),
@@ -62,6 +63,7 @@ export function ChatTemplatePicker({
     setSelected(id);
     setModel(t?.providerModelId ?? currentModel);
     setPreview(null);
+    setPreviewOpen(false);
     setConfirmed(false);
     setMessage('');
   }
@@ -75,26 +77,34 @@ export function ChatTemplatePicker({
         templateVersion: template.version,
         settingsRevision: revision,
         providerModelId: model,
-        ...(apply ? { previewToken: preview?.previewToken } : {}),
       };
+      const prepared =
+        preview ??
+        (await chatApi<Preview>(
+          `/api/conversations/${conversationId}/template-preview`,
+          { method: 'POST', body },
+        ));
+      setPreview(prepared);
       if (apply) {
+        if (prepared.excluded.length && !confirmed) {
+          setMessage(
+            '이 모델에서 지원하지 않는 설정을 제외할지 확인해 주세요.',
+          );
+          return;
+        }
         await chatApi(`/api/conversations/${conversationId}/template-apply`, {
           method: 'POST',
-          body,
+          body: { ...body, previewToken: prepared.previewToken },
         });
         await onApplied();
         onClose();
       } else {
-        setPreview(
-          await chatApi<Preview>(
-            `/api/conversations/${conversationId}/template-preview`,
-            { method: 'POST', body },
-          ),
-        );
-        setConfirmed(false);
+        setPreviewOpen(true);
       }
     } catch (e) {
       setPreview(null);
+      setPreviewOpen(false);
+      setConfirmed(false);
       setMessage(e instanceof Error ? e.message : '적용하지 못했습니다.');
     } finally {
       setBusy(false);
@@ -143,6 +153,7 @@ export function ChatTemplatePicker({
               onChange={(e) => {
                 setModel(e.target.value);
                 setPreview(null);
+                setPreviewOpen(false);
                 setConfirmed(false);
               }}
             >
@@ -157,14 +168,18 @@ export function ChatTemplatePicker({
           <button
             type="button"
             disabled={busy || !models.some((m) => m.id === model)}
-            onClick={() => void submit(false)}
+            aria-expanded={previewOpen}
+            aria-controls="template-preview-content"
+            onClick={() =>
+              previewOpen ? setPreviewOpen(false) : void submit(false)
+            }
           >
-            적용 내용 미리보기
+            {previewOpen ? '미리보기 닫기' : '적용 내용 미리보기'}
           </button>
         </>
       )}
-      {preview && (
-        <div className="template-preview">
+      {preview && previewOpen && (
+        <div className="template-preview" id="template-preview-content">
           <h3>적용될 설정</h3>
           <p>
             모델:{' '}
@@ -206,24 +221,18 @@ export function ChatTemplatePicker({
                 </div>
               ))}
           </dl>
-          {!!preview.excluded.length && (
-            <label>
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-              />
-              이 모델에서 지원하지 않는 설정을 제외합니다:{' '}
-              {preview.excluded.map((key) => labels[key] ?? key).join(', ')}
-            </label>
-          )}
-          <button
-            disabled={busy || (!!preview.excluded.length && !confirmed)}
-            onClick={() => void submit(true)}
-          >
-            현재 대화에 적용
-          </button>
         </div>
+      )}
+      {!!preview?.excluded.length && (
+        <label>
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+          />
+          이 모델에서 지원하지 않는 설정을 제외합니다:{' '}
+          {preview.excluded.map((key) => labels[key] ?? key).join(', ')}
+        </label>
       )}
       <p role="status">{message}</p>
       {message && (
@@ -231,15 +240,31 @@ export function ChatTemplatePicker({
           disabled={busy}
           onClick={() => {
             setPreview(null);
+            setPreviewOpen(false);
+            setConfirmed(false);
             setRetry((v) => v + 1);
           }}
         >
           템플릿 목록 새로고침
         </button>
       )}
-      <button disabled={busy} onClick={onClose}>
-        닫기
-      </button>
+      <div className="template-dialog-actions">
+        <button type="button" disabled={busy} onClick={onClose}>
+          닫기
+        </button>
+        <button
+          type="button"
+          disabled={
+            busy ||
+            !template ||
+            !models.some((m) => m.id === model) ||
+            (!!preview?.excluded.length && !confirmed)
+          }
+          onClick={() => void submit(true)}
+        >
+          적용
+        </button>
+      </div>
     </ChatDialog>
   );
 }

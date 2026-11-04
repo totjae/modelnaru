@@ -1,5 +1,20 @@
 # ModelNaru 시험 계획·결과
 
+## 템플릿 적용·미리보기 보완 (2026-11-05)
+
+Web typecheck·build 및 변경 chat-template-picker.tsx/r3-browser.mjs lint exit0. R3 브라우저 exit0: 미리보기 없이 적용 클릭→미지원 목록 표시/저장0, 펼치기/미리보기 닫기→본문 제거, 닫힌 상태의 제외 확인 후 적용, 하단 닫기/적용 top 차1px 미만과 적용의 오른쪽 위치, guest 미지원 없음은 미리보기 없이 즉시 적용을 확인했다. 기존 A안 light/dark4개 폭·복사·재생성·취소·관리자 인수 유지. 직접 적용도 서버 previewToken을 사용하며 API 정책은 변경하지 않았다. API/실Provider/운영 인수는 재실행하지 않았다.
+
+## R3 A안 적용 (2026-11-05)
+
+pnpm --filter @modelnaru/web build exit0(타입 검사 포함), r3-browser.mjs ESLint 및 diff 공백 검사 통과. 설치된 Edge+로컬 fixture R3 browser exit0:9캡처/72요청/pageerror0/외부요청0. light/dark 각각360/768/1024/1440px에서 AI 너비가 부모 본문 가용 폭과1px 이내 일치, border0/투명 배경, 사용자·AI 오른쪽 끝 정렬, 페이지 overflow 없음 검사. 기존 템플릿/복사/재생성·취소 인수 유지.1440 light와360 dark 캡처 육안 확인. CSS/브라우저 검사 변경으로 API 시험·단위시험은 재실행하지 않았으며 직전 Web34개 통과 기록은 보존한다. 기존 N10 브라우저 회귀도 exit0(시작3/취소1/구독6/56캡처), 스크롤·설정·재생성 상태 보존 확인. 실제 운영·실기기 검증은 별도다.
+
+## R3 UI 후속 검증 (2026-11-05)
+
+- Web typecheck·프로덕션 build exit0. 변경 TS/TSX/mjs ESLint --max-warnings=0 및 git diff --check 통과. Web suite8파일34개 통과. 최초 sandbox Temp rename EPERM으로0개 실행 실패 후 TEMP/TMP를 tmp/r3-test-temp로 지정해 재실행 통과했다.
+- 빌드한 Web으로 기존 R3 browser 인수 통과. 관리자 제목 영역의 새로고침/새 템플릿 위치, 미설정 기존 값 유지 표시→복원 체크 시 기본값으로 복원 표시→직접 설정 시 복원 체크 해제/비활성→resetParameters 저장을 추가 검사했다. 기존 템플릿 적용·게스트·재생성·취소·복사·4개 폭 검사는 유지했다. 아이콘과 select 이름 중복으로 첫 harness strict selector가 실패하여 combobox 역할로 구체화 후 통과. 접근성 이름은 유지했다.
+- 시안 HTML의 A/B/C 선택·light/dark·모바일390px에서 가로 넘침 없음 확인. 비교 PNG2개와 실제 관리자 캡처 육안 확인. 시안은 가상 데이터이며 실제 API를 호출하지 않는다.
+- 실제 운영 배포/Provider 호출/API·DB 변경 없음. 실제 메시지 CSS 변경과 해당 회귀 인수는 사용자 시안 선택 후 수행한다. 스크린샷 비교안은 WEB_UI_SPEC R3 UI 후속 기준 참조.
+
 ## R3 운영 배포 검증 (2026-11-05)
 
 - 제품 commit a087c3f92f8321bebe6064aa420b181c363fe193을 origin/codex/refactor-v2에 push하고 clean 서버 /home/totquf4171/modelnaru-git를 ff-only 갱신했다. buildx CPU1.5/RAM3GiB, frozen-lockfile Linux API/Web/admin/migrate build 및 config validate 통과. 운영 교체 전 활성 job0을 두 차례 확인했다.

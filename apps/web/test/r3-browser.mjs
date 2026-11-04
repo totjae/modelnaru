@@ -108,6 +108,7 @@ let role = 'user',
   starts = 0,
   job,
   previewCalls = 0,
+  previewExcluded = ['topK'],
   applyCalls = 0,
   templates = [
     {
@@ -272,7 +273,7 @@ const server = createServer(async (req, res) => {
         generationParameters: { maxOutputTokens: 16384 },
         defaultProviderModelId: body.providerModelId,
       },
-      excluded: ['topK'],
+      excluded: previewExcluded,
       previewToken: 'a'.repeat(64),
     });
   }
@@ -399,16 +400,43 @@ try {
   await page.reload();
   await page.getByText('기존 답변입니다.', { exact: true }).waitFor();
   await page.getByRole('button', { name: '템플릿', exact: true }).click();
-  await page.getByLabel('템플릿', { exact: true }).selectOption('template');
+  await page
+    .getByRole('combobox', { name: '템플릿', exact: true })
+    .selectOption('template');
   await page.getByText(/지정 모델을 사용할 수 없습니다/).waitFor();
+  await page.getByRole('button', { name: '적용', exact: true }).click();
+  await page
+    .getByText('이 모델에서 지원하지 않는 설정을 제외할지 확인해 주세요.')
+    .waitFor();
+  assert.equal(applyCalls, 0);
+  assert.equal(await page.locator('.template-preview').count(), 0);
   await page.getByRole('button', { name: '적용 내용 미리보기' }).click();
-  await page.getByRole('button', { name: '현재 대화에 적용' }).waitFor();
+  await page.getByRole('button', { name: '미리보기 닫기' }).waitFor();
+  assert.equal(await page.locator('.template-preview').count(), 1);
+  await page.getByRole('button', { name: '미리보기 닫기' }).click();
+  assert.equal(await page.locator('.template-preview').count(), 0);
+  await page.getByRole('button', { name: '적용 내용 미리보기' }).waitFor();
   assert.equal(
-    await page.getByRole('button', { name: '현재 대화에 적용' }).isDisabled(),
+    await page.getByRole('button', { name: '적용', exact: true }).isDisabled(),
     true,
   );
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: '현재 대화에 적용' }).click();
+  const footerButtons = await page
+    .locator('.template-dialog-actions button')
+    .evaluateAll((nodes) =>
+      nodes.map((n) => ({
+        text: n.textContent.trim(),
+        top: n.getBoundingClientRect().top,
+        left: n.getBoundingClientRect().left,
+      })),
+    );
+  assert.deepEqual(
+    footerButtons.map((b) => b.text),
+    ['닫기', '적용'],
+  );
+  assert(Math.abs(footerButtons[0].top - footerButtons[1].top) < 1);
+  assert(footerButtons[1].left > footerButtons[0].left);
+  await page.getByRole('button', { name: '적용', exact: true }).click();
   await page
     .getByRole('dialog', { name: '템플릿 선택' })
     .waitFor({ state: 'detached' });
@@ -444,38 +472,99 @@ try {
   await page.reload();
   await page.getByText('부분 답변', { exact: true }).waitFor();
   assert.equal(await card.count(), 1);
-  for (const width of [360, 768, 1024, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await page.screenshot({
-      path: resolve(output, `chat-${width}.png`),
-      fullPage: true,
-    });
-    const rects = await page.locator('.chat-message').evaluateAll((nodes) =>
-      nodes.map((n) => {
-        const r = n.getBoundingClientRect();
-        return {
-          role: n.classList.contains('user') ? 'user' : 'assistant',
-          left: r.left,
-          right: r.right,
-        };
-      }),
-    );
-    assert(rects[0].right >= rects[1].right);
-    assert(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    );
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    for (const width of [360, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.screenshot({
+        path: resolve(
+          output,
+          `chat-${width}${theme === 'dark' ? '-dark' : ''}.png`,
+        ),
+        fullPage: true,
+      });
+      const rects = await page.locator('.chat-message').evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const r = n.getBoundingClientRect();
+          return {
+            role: n.classList.contains('user') ? 'user' : 'assistant',
+            left: r.left,
+            right: r.right,
+          };
+        }),
+      );
+      assert(Math.abs(rects[0].right - rects[1].right) <= 1);
+      assert(
+        await card.evaluate((node) => {
+          const parent = node.parentElement;
+          const style = getComputedStyle(node);
+          const container = getComputedStyle(parent);
+          const available =
+            parent.clientWidth -
+            parseFloat(container.paddingLeft) -
+            parseFloat(container.paddingRight);
+          return (
+            Math.abs(node.getBoundingClientRect().width - available) <= 1 &&
+            style.borderTopWidth === '0px' &&
+            style.backgroundColor === 'rgba(0, 0, 0, 0)'
+          );
+        }),
+      );
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      );
+    }
   }
   role = 'guest';
+  previewExcluded = [];
   await page.reload();
   await page.getByRole('button', { name: '템플릿', exact: true }).click();
-  await page.getByLabel('템플릿', { exact: true }).selectOption('template');
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page
+    .getByRole('combobox', { name: '템플릿', exact: true })
+    .selectOption('template');
+  assert.equal(await page.locator('.template-preview').count(), 0);
+  await page.getByRole('button', { name: '적용', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '템플릿 선택' })
+    .waitFor({ state: 'detached' });
+  assert.equal(applyCalls, 2);
   role = 'admin';
   await page.reload();
   await page.getByRole('button', { name: '템플릿', exact: true }).click();
   await page.getByRole('heading', { name: '시스템 프롬프트 템플릿' }).waitFor();
+  assert.equal(
+    await page
+      .locator('.template-manager .section-heading')
+      .getByRole('button', { name: '새로고침', exact: true })
+      .count(),
+    1,
+  );
+  assert.equal(
+    await page
+      .locator('.template-manager .section-heading')
+      .getByRole('button', { name: '새 템플릿', exact: true })
+      .count(),
+    1,
+  );
+  const outputField = page.locator('.parameter-item').filter({
+    has: page.locator('.parameter-title', { hasText: '최대 출력 토큰' }),
+  });
+  await outputField.getByText('기존 값 유지', { exact: true }).waitFor();
+  await page.getByText('기본값으로 되돌릴 항목', { exact: true }).click();
+  const resetOutput = page.locator(
+    'input[name="resetParameter"][value="maxOutputTokens"]',
+  );
+  await resetOutput.check();
+  await outputField.getByText('기본값으로 복원', { exact: true }).waitFor();
+  await outputField.getByRole('checkbox', { name: '직접 설정' }).check();
+  assert.equal(await resetOutput.isChecked(), false);
+  assert.equal(await resetOutput.isDisabled(), true);
+  await outputField.getByRole('checkbox', { name: '직접 설정' }).uncheck();
+  await resetOutput.check();
   await page.getByLabel('이름', { exact: true }).fill('새 템플릿');
   await page
     .getByLabel('시스템 프롬프트', { exact: true })
@@ -485,6 +574,10 @@ try {
     .getByText('템플릿을 저장했습니다. 기존 대화의 적용값은 유지됩니다.')
     .waitFor();
   assert(templates.some((t) => t.name === '새 템플릿'));
+  assert.deepEqual(
+    templates.find((t) => t.name === '새 템플릿').settings.resetParameters,
+    ['maxOutputTokens'],
+  );
   await page.screenshot({ path: resolve(output, 'admin.png'), fullPage: true });
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
@@ -497,7 +590,7 @@ try {
         applyCalls,
         errors,
         external,
-        screenshots: 5,
+        screenshots: 9,
         requests: requests.length,
       },
       null,

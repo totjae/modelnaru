@@ -1,5 +1,21 @@
 # ModelNaru 새 버전 실행 계획
 
+## R3 UI 후속 운영 배포 (2026-11-05)
+
+사용자가 A안·템플릿 UI 후속의 운영 배포와 검증 사항 기록을 요청했다. 메인 담당. 검증한 변경만 기존 codex/refactor-v2에 commit/push, clean 서버 ff-only. 이번 제품 변경은 Web만 해당하므로 이전 Web image 복구 태그 및 config/secrets hash·API/DB container ID를 보존하고 제한 builder로 Web만 build한다. 활성 job 상태 확인 후 Web만 no-deps 교체/healthy, gateway nginx 검사/reload, 공인 HTTPS·새 CSS/번들·비인증 API 차단 검증. API/DB/migration/config 변경·유료 호출 없음. 실패 시 이전 Web image 복구. 수정 허용 계획/STATUS/HANDOFF/TEST_PLAN/README/DEPLOYMENT_RUNBOOK 및 ignored tmp 배포 보조파일.
+
+## R3 템플릿 적용 버튼 보완 (2026-11-05)
+
+사용자 요청: 적용 버튼을 미리보기 밖의 하단 오른쪽으로 옮기고 닫기와 같은 줄에 둔다. 미리보기는 펼침/접힘을 제공한다. 직접 적용 시 UI를 펼치지 않고 서버 preview를 먼저 받아 기존 token/원자성 계약을 유지한다. 미지원 제외 항목은 접힌 상태에도 별도로 표시하며 확인 전 적용하지 않는다. 템플릿/모델 변경·오류는 이전 preview와 확인 상태를 폐기한다. 수정 허용 chat-template-picker.tsx/styles.css/r3-browser.mjs 및 관련 진행·시험·사용법 문서. API/DB/권한/배포 변경 없음. 검증은 build/타입/lint 및 직접 적용·접기·미지원 확인 브라우저 인수다.
+
+## R3 대화창 A안 확정 (2026-11-05)
+
+사용자가 A안을 선택했다. 수정 허용은 styles.css의 기존 R3 메시지 규칙 및 r3-browser.mjs의 폭/테마 검사, WEB_UI_SPEC/TEST_PLAN/STATUS/HANDOFF/README다. AI 전체 폭·배경/테두리 제거, 사용자 fit-content 최대94%와 약한 배경, 모바일 사용자 안쪽 여백만 축소한다. 기존 상태·이력·재생성·복사 동작 보존. Web build/변경 lint/R3 브라우저 및 N10 회귀를 통과하면 로컬 완료. 운영 배포는 별도다.
+
+## R3 UI 후속 작업 (2026-11-05)
+
+사용자 요청: 템플릿 미지정=기존 값 유지/직접 해제=기본값으로 되돌릴 항목으로 안내, 관리자 목록 새로고침·새 템플릿을 기존 section-heading/quiet-button 형식에 정렬, 채팅 템플릿 아이콘 통일. 대화 박스는 실제 제품 수정 전에3개 시안을 비교하고 사용자 선택을 기다린다. 메인 담당. 수정 허용 apps/web/app/chat-template-manager.tsx, provider-parameter-fields.tsx, chat-workspace.tsx, chat-icons.tsx, styles.css 및 R3 browser harness/WEB_UI_SPEC/TEST_PLAN/STATUS/HANDOFF/README. 시안 생성 허용 design/refactor-v3/chat-layout-options.html 및 PNG. API/DB/권한/저장 의미/대화 박스 실제 CSS/배포 변경 금지. 완료: 타입·빌드·변경 lint·기존 R3 브라우저 인수와 시안 light/dark/mobile 확인. 시안은 가상 본문으로 작성한다.
+
 ## R3 운영 배포 계약 (2026-11-05)
 
 사용자가 운영 배포와 검증 사항 정리를 요청했다. 메인이 기존 codex/refactor-v2 소스를 commit/push하고 clean 운영 checkout을 ff-only 갱신한다. 사전 활성 job0·DB backup·기존 API/Web image 복구 태그를 확보하고 제한 builder(CPU1.5/RAM3GiB)로 Linux build 후 기존 update 절차의 validate/migration/health를 수행한다. config/secrets/사용자·대화·첨부를 보존한다. 새 migration0021은 추가형이다. 실패 시 이전 API/Web image로 복구하고 추가 schema는 보존한다. 유료 Provider 생성은 실행하지 않으며 health/HTTPS/인증 차단/배포 코드 계산·schema 검증과 사용자 후속 UI 체크리스트를 기록한다. 수정 허용 문서는 본 계획/TEST_PLAN/STATUS/HANDOFF/README/DEPLOYMENT_RUNBOOK이며 배포 보조 스크립트는 ignored tmp에 둔다.

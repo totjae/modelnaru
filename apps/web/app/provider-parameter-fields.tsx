@@ -180,12 +180,16 @@ export function ProviderParameterFields({
   onChange,
   requiredKeys = [],
   minimumOverrides = {},
+  unsetLabel,
+  resetKeys = [],
 }: {
   onChange: (values: ParameterValues) => void;
   policy: ParameterPolicy | undefined;
   minimumOverrides?: Record<string, number>;
   requiredKeys?: string[];
   values: ParameterValues;
+  unsetLabel?: string;
+  resetKeys?: string[];
 }) {
   if (!policy)
     return (
@@ -202,7 +206,10 @@ export function ProviderParameterFields({
           policy.profile === 'novelai' && field.key === 'thinkingBudget'
             ? '1'
             : initialValue(field);
-        const value = values[field.key] ?? initial;
+        const value = values[field.key] ?? (unsetLabel ? '' : initial);
+        const inactiveLabel = resetKeys.includes(field.key)
+          ? '기본값으로 복원'
+          : unsetLabel;
         const disabledReason = parameterDisabledReason(
           field.key,
           values,
@@ -225,6 +232,9 @@ export function ProviderParameterFields({
                   '이 Provider가 지원하는 생성 설정입니다.')}
             </p>
             <small>기본값: {defaults[field.key] ?? 'Provider 자동 설정'}</small>
+            {unsetLabel && !configured && (
+              <small className="template-value-state">{inactiveLabel}</small>
+            )}
             {!required && (
               <label className="parameter-toggle">
                 <input
@@ -254,6 +264,9 @@ export function ProviderParameterFields({
                   onChange({ ...values, [field.key]: event.target.value })
                 }
               >
+                {unsetLabel && !configured && (
+                  <option value="">{inactiveLabel}</option>
+                )}
                 {field.options?.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -265,7 +278,11 @@ export function ProviderParameterFields({
                 rows={3}
                 value={value}
                 disabled={!configured || Boolean(disabledReason)}
-                placeholder="한 줄에 하나씩 입력"
+                placeholder={
+                  unsetLabel && !configured
+                    ? inactiveLabel
+                    : '한 줄에 하나씩 입력'
+                }
                 onChange={(event) =>
                   onChange({ ...values, [field.key]: event.target.value })
                 }
@@ -278,6 +295,7 @@ export function ProviderParameterFields({
                 step={field.step}
                 value={value}
                 required={required}
+                placeholder={inactiveLabel}
                 disabled={!configured || Boolean(disabledReason)}
                 onChange={(event) =>
                   onChange({ ...values, [field.key]: event.target.value })

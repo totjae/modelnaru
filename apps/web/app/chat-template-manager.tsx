@@ -5,6 +5,7 @@ import {
   ProviderParameterFields,
   parameterValuesFromRequest,
   providerParameterRequest,
+  parameterLabels,
   type ParameterField,
   type ParameterValues,
 } from './provider-parameter-fields';
@@ -24,6 +25,7 @@ export function ChatTemplateManager() {
   const [models, setModels] = useState<{ id: string; label: string }[]>([]);
   const [editing, setEditing] = useState<ChatTemplate | null>(null);
   const [values, setValues] = useState<ParameterValues>({});
+  const [resetKeys, setResetKeys] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -73,6 +75,7 @@ export function ChatTemplateManager() {
   }, [reload]);
   function edit(template: ChatTemplate | null) {
     setEditing(template);
+    setResetKeys(template?.settings.resetParameters ?? []);
     setValues(
       parameterValuesFromRequest(template?.settings.generationParameters ?? {}),
     );
@@ -150,33 +153,49 @@ export function ChatTemplateManager() {
   }
   const settings = editing?.settings ?? defaults;
   return (
-    <section className="template-manager">
-      <h2>시스템 프롬프트 템플릿</h2>
+    <section className="template-manager" aria-labelledby="templates-heading">
+      <div className="section-heading">
+        <div>
+          <p className="card-label">CHAT PRESETS</p>
+          <h2 id="templates-heading">시스템 프롬프트 템플릿</h2>
+        </div>
+        <div className="row-actions">
+          <button
+            className="quiet-button"
+            type="button"
+            disabled={busy}
+            onClick={() => setReload((v) => v + 1)}
+          >
+            새로고침
+          </button>
+          <button
+            className="quiet-button"
+            type="button"
+            disabled={busy || !loaded}
+            onClick={() => edit(null)}
+          >
+            새 템플릿
+          </button>
+        </div>
+      </div>
       <p>
         사용자와 게스트가 현재 대화에 적용한 뒤 자유롭게 수정할 수 있습니다.
       </p>
       <p role="status">{message}</p>
-      {!loaded && (
-        <button type="button" onClick={() => setReload((x) => x + 1)}>
-          목록 다시 불러오기
-        </button>
-      )}
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setReload((v) => v + 1)}
-      >
-        목록 새로고침
-      </button>
       <div className="template-list">
         {templates.map((t) => (
           <div key={t.id}>
             <strong>{t.name}</strong>{' '}
             <small>{t.isEnabled ? '활성' : '비활성'}</small>
-            <button disabled={busy} onClick={() => edit(t)}>
+            <button
+              className="quiet-button"
+              disabled={busy}
+              onClick={() => edit(t)}
+            >
               수정
             </button>
             <button
+              className="quiet-button"
               disabled={busy}
               onClick={() =>
                 edit({ ...t, id: '', name: `${t.name} 복사`.slice(0, 100) })
@@ -184,15 +203,16 @@ export function ChatTemplateManager() {
             >
               복제
             </button>
-            <button disabled={busy} onClick={() => void remove(t)}>
+            <button
+              className="quiet-button"
+              disabled={busy}
+              onClick={() => void remove(t)}
+            >
               삭제
             </button>
           </div>
         ))}
       </div>
-      <button disabled={busy} onClick={() => edit(null)}>
-        새 템플릿
-      </button>
       <form
         key={`${editing?.id ?? 'new'}:${editing?.version ?? ''}:${editing?.name ?? ''}`}
         onSubmit={save}
@@ -254,8 +274,9 @@ export function ChatTemplateManager() {
             />
           </label>
           <p>
-            아래 숫자 설정을 비우면 현재 대화 값을 유지합니다. 프롬프트는 입력한
-            내용으로 교체합니다.
+            기존 값 유지: 비워 두거나 직접 설정을 켜지 않은 항목은 현재 대화의
+            값을 바꾸지 않습니다. 값을 지정하면 그 값으로 교체합니다. 시스템
+            프롬프트는 입력한 내용으로 교체하며, 빈 칸이면 지웁니다.
           </p>
           {(
             [
@@ -273,6 +294,7 @@ export function ChatTemplateManager() {
                 min={min}
                 max={max}
                 step={1}
+                placeholder="기존 값 유지"
                 defaultValue={settings[key] ?? ''}
               />
             </label>
@@ -287,7 +309,7 @@ export function ChatTemplateManager() {
                   : String(settings.webSearchEnabled)
               }
             >
-              <option value="keep">현재 설정 유지</option>
+              <option value="keep">기존 값 유지</option>
               <option value="true">사용</option>
               <option value="false">사용 안 함</option>
             </select>
@@ -295,13 +317,23 @@ export function ChatTemplateManager() {
           <ProviderParameterFields
             policy={{ profile: '템플릿 · 적용 시 모델 호환성 검사', fields }}
             values={values}
-            onChange={setValues}
+            unsetLabel="기존 값 유지"
+            resetKeys={resetKeys}
+            onChange={(next) => {
+              setValues(next);
+              setResetKeys((keys) =>
+                keys.filter((key) => next[key] === undefined),
+              );
+            }}
           />
           <details>
-            <summary>직접 설정 해제할 항목</summary>
+            <summary>기본값으로 되돌릴 항목</summary>
             <p>
-              체크한 항목은 적용 시 Provider 기본값으로 복원합니다. 위 직접
-              설정과 동시에 선택할 수 없습니다.
+              체크한 항목은 현재 대화의 직접 지정값을 지우고 앱 또는 모델의 기본
+              동작으로 되돌립니다. 기존 값 유지와는 다릅니다. 예를 들어 최대
+              출력이 16,384인 대화에서 기존 값 유지는 16,384를 유지하고, 기본값
+              복원은 8,192를 적용합니다(모델 한도가 더 작으면 해당 한도). 위에서
+              값을 직접 지정한 항목은 동시에 선택할 수 없습니다.
             </p>
             {fields.map((f) => (
               <label key={f.key}>
@@ -309,10 +341,17 @@ export function ChatTemplateManager() {
                   type="checkbox"
                   name="resetParameter"
                   value={f.key}
-                  defaultChecked={settings.resetParameters?.includes(f.key)}
+                  checked={resetKeys.includes(f.key)}
+                  onChange={(e) =>
+                    setResetKeys((keys) =>
+                      e.target.checked
+                        ? [...keys, f.key]
+                        : keys.filter((key) => key !== f.key),
+                    )
+                  }
                   disabled={values[f.key] !== undefined}
                 />
-                {f.key}
+                {parameterLabels[f.key] ?? f.key}
               </label>
             ))}
           </details>
