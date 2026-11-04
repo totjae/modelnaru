@@ -1,5 +1,11 @@
 # ModelNaru 배포 실행서
 
+## R3 UI 후속 배포 기록 (2026-11-05)
+
+Web 제품 ccb10da 운영 반영 완료. 이번 변경은 Web-only이므로 API/DB/migration을 재실행하지 않았다. 기존 운영 Git root에서 clean ff-only→제한 Web build→active job 확인→Web up --no-deps --no-build --force-recreate --wait→gateway nginx -t/reload→health/공인 HTTPS를 수행했다. 설정/비밀값·API/DB container 보존 확인.
+
+복구 Web image는 modelnaru-r3-ui-rollback-web이며 같은 프로젝트의 modelnaru-git-web 태그로 복구 후 Web만 같은 no-deps 절차로 교체하고 gateway reload/health를 확인한다. 데이터나 schema를 되돌리는 단계는 없다. 실제 image/source와 검증/남은 체크리스트는 TEST_PLAN 최신 R3 UI 후속 절을 따른다. 아래 R3 초기 전체 배포 계약은 이전 API/DB 변경을 포함한 배포의 기록이다.
+
 ## R3 파일 권한 사전 검사 (2026-11-05)
 
 배포 백업은0700 디렉터리/0600 파일로 서버 내부에 보관한다. 이 제한 umask를 Git checkout 소스에 적용하지 않는다. Git 관리 일반 파일은0644, 실행 파일은0755를 유지하여 이미지의 비관리자 node 사용자가 migration을 읽을 수 있어야 한다. config/secrets는 별도 기존0600/0700 정책을 유지한다.

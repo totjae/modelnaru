@@ -1,5 +1,29 @@
 # ModelNaru 시험 계획·결과
 
+## R3 UI 후속 운영 배포 검증 완료 (2026-11-05)
+
+- 배포 제품 ccb10da3ae4f71002b5c13f5ff47b4cf762c22bb, clean 서버 ff-only. Web만 배포했으며 API는 a087c3f 유지. Dockerfile 공통 build stage에서 컴파일되지만 실행 API/migrate/admin image는 교체하지 않았다. builder CPU1.5/RAM3GiB·frozen-lockfile Linux build exit0.
+- 준비/교체 전 active job0 확인. 이전 Web은 modelnaru-r3-ui-rollback-web 태그로 보존. data/config/secrets를 변경하지 않는 Web-only 배포로 신규 DB backup/migration은 실행하지 않았으며 기존 R3 backup은 유지한다. 보존 판정은 서버 tmp/r3-ui-ccb10da/state.json(0600, 상위0700)에 기록했다. API/PostgreSQL container ID 및 config/secrets/.runtime.env hash 불변.
+- Web up --no-deps --no-build --force-recreate --wait, nginx -t/reload, health 통과.4개 서비스 healthy. 실행 Web image sha256:35ab51a1ea3df86600e84e872459c98ddafcbe966d0bb051b2ce437b6a04027e. 임시 buildx 제거 완료. 배포 실패/rollback 없음.
+- 외부 PC Edge에서 실제 DNS/공인 HTTPS live/ready200, 사용자·관리자 template GET 비인증401. 새 CSS의 template-dialog-actions/composer-template-button 및 실행 JS 번들의 미리보기 닫기/기본값으로 되돌릴 항목/기존 값 유지 문구 확인. 로그인 표시/1440·360캡처/모바일 overflow 없음/pageerror0. tmp/r3-ui-live/result.json과 캡처2개, 검사 exit0. 서버 SNI/CA 검증 HTTPS ready도 정상.
+- 실제 인증된 관리자/사용자/게스트 동작은 기존 로컬 R3 fixture(미리보기 token·직접 적용·미지원 확인·버튼 정렬·A안2테마4폭 포함) 근거를 유지한다. 운영 계정을 생성·수정하거나 인증정보를 읽지 않았으며 실계정/휴대폰·유료 Provider 생성은 아래 운영 인수 체크리스트의 대기 상태다. 배포 자산 확인을 실제 로그인 기능 검증으로 바꾸어 기록하지 않는다.
+
+## R3 UI 후속 운영 인수 체크리스트 (2026-11-05)
+
+배포 smoke와 실제 로그인 후 기능 인수를 구분한다. 아래 기능은 로컬 fixture 인수를 통과했으며 운영 실제 계정·모바일 확인은 대기다.
+
+| 항목 | 확인할 동작 | 운영 사용자 인수 |
+| --- | --- | --- |
+| A안 대화창 | AI 답변이 짧아도 전체 본문 폭·무테두리/무배경, 사용자만 은은한 배경. light/dark·휴대폰·긴 코드/표에서 넘침 없음 | 대기 |
+| 관리자 템플릿 | 제목 오른쪽 새로고침/새 템플릿 배치와 기존 UI 스타일 일치, 편집/목록 갱신 정상 | 대기 |
+| 유지/기본값 복원 | 미지정은 기존 값 유지, 복원 체크는 기존 직접값 삭제. 직접 값을 다시 지정하면 복원 체크가 해제됨. 설명과 적용 결과 일치 | 대기 |
+| 템플릿 선택 | 모델 옆 아이콘으로 열기. 닫기/적용이 하단 같은 줄, 적용이 오른쪽. 미리보기를 열지 않고 적용 가능 | 대기 |
+| 미리보기 토글 | 펼치면 미리보기 닫기로 변경, 클릭하면 본문 접힘. 접어도 적용/닫기 및 필요한 제외 확인 사용 가능 | 대기 |
+| 예외·보존 | 미지원 설정은 제외 확인 전 적용되지 않음. stale revision/권한 변경 시 오류와 기존 값 보존. 사용자·게스트 동일 흐름 | 대기 |
+| 기존 채팅 회귀 | 재생성1박스/이전답변·중지·새로고침·복사·스크롤 유지. 실제 생성은 호출 비용 승인 후 확인 | 대기 |
+
+브라우저에 이전 화면이 남으면 새로고침 후 확인한다. 로그인 검증을 위해 관리자 비밀번호나 TOTP를 문서/채팅에 기록하지 않는다.
+
 ## 템플릿 적용·미리보기 보완 (2026-11-05)
 
 Web typecheck·build 및 변경 chat-template-picker.tsx/r3-browser.mjs lint exit0. R3 브라우저 exit0: 미리보기 없이 적용 클릭→미지원 목록 표시/저장0, 펼치기/미리보기 닫기→본문 제거, 닫힌 상태의 제외 확인 후 적용, 하단 닫기/적용 top 차1px 미만과 적용의 오른쪽 위치, guest 미지원 없음은 미리보기 없이 즉시 적용을 확인했다. 기존 A안 light/dark4개 폭·복사·재생성·취소·관리자 인수 유지. 직접 적용도 서버 previewToken을 사용하며 API 정책은 변경하지 않았다. API/실Provider/운영 인수는 재실행하지 않았다.
