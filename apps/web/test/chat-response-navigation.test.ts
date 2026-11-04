@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { responseAlternatives } from '../app/chat-response-navigation';
+import {
+  displayResponse,
+  responseAlternatives,
+} from '../app/chat-response-navigation';
 
 const original = {
   branchId: 'root',
@@ -57,5 +60,43 @@ describe('responseAlternatives', () => {
     expect(responseAlternatives([], { ...regenerated, role: 'user' })).toEqual(
       [],
     );
+  });
+});
+
+describe('R3 same-question response card', () => {
+  it('replaces only sibling responses and keeps other questions', () => {
+    const other = {
+      ...original,
+      id: 'other',
+      parentMessageId: 'other-question',
+    };
+    expect(displayResponse([other, original], regenerated)).toEqual([
+      other,
+      regenerated,
+    ]);
+    expect(
+      displayResponse([other, original, regenerated], regenerated),
+    ).toEqual([other, regenerated]);
+    expect(displayResponse([other], regenerated)).toEqual([other]);
+    expect(
+      displayResponse(
+        [
+          {
+            ...original,
+            parentMessageId: original.parentMessageId,
+          },
+        ],
+        { ...regenerated, parentMessageId: null },
+      ),
+    ).toEqual([original]);
+  });
+  it('allows failed response preview without making its branch selectable', () => {
+    expect(
+      responseAlternatives(
+        [{ id: 'branch-b', isSelectable: false, messages: [regenerated] }],
+        original,
+        true,
+      ),
+    ).toEqual([{ branchId: 'branch-b', messageId: 'answer-b' }]);
   });
 });

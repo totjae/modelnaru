@@ -1,5 +1,9 @@
 # ModelNaru Provider 계약 시험
 
+## R3 파라미터 회귀 (2026-11-05)
+
+context-budget/provider-parameter-policy/chat-streaming fixture와 전체 API suite를 실행했다. 미설정8192/작은 모델 한도, 명시16384 보존, 알려진 상한 초과 거부, 한도 null,0/false/stop 배열 및 native Anthropic/Gemini/NovelAI 매핑·중계 미지원 제외를 검사했다. 전체245개 통과는 로컬 mock/격리 PostgreSQL 근거이며 실제 외부 Provider의 모델별 지원 확인이 아니다. 명령·환경 오류·재실행·미검증은 TEST_PLAN R3가 원장이다.
+
 ## 2026-10-02 Gemini Pro 이미지 재시험 통과 (최신)
 
 사용자가 추가1회/출력1024/새 예산 $0.02를 승인한 실제 이미지 입력이 completed·색/도형/위치 검사 true로 통과했다. known usage1159/631·7185ms·단일 chat usage1개/보조0개, 비용 추정 $0.00989. HTTP200 SSE·event8·terminal 확인, 별도 테스트 계정 quota1. 기존 max256 실패를 보존하고 자동 재시도하지 않았다. 승인 소진, 유료 모델 disabled/자동 제목 null, 첨부0·PC 계정 복사본 삭제. TEST_PLAN.md 최상단 및 tmp/n13/image-retest-result.json/image-retest-safe-audit.json 참조. 청구서 실비/다른 Provider나 모든 이미지 유형 지원으로 확대하지 않는다.

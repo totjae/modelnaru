@@ -1,5 +1,13 @@
 # ModelNaru 배포 실행서
 
+## R3 배포 인계 (2026-11-05, 운영 미반영)
+
+API·Web 변경과 추가형 migration0021_chat_templates.sql이 함께 필요하다. 이전 Web-only 업데이트를 재사용하지 않는다. 사용자 배포 요청 이후 기존 Git 업데이트 절차에 따라 검증된 소스를 반영하고, 서버 프로젝트 root에서 기존 ./bin/modelnaru update를 실행한다. 사전 조건은 기존 Docker/설정 환경, 데이터 backup 및 활성 job/재시작 영향 확인이다. 이 명령은 현재 checkout을 build/validate/migrate/health하며 소스를 내려받지는 않는다.
+
+기존 DB·관리자/Provider 설정·키·대화·첨부를 초기화하지 않는다. migration은 템플릿 테이블만 추가하며 적용값은 기존 conversation 설정에 저장한다. 복구 시 이전 API/Web image와 schema 호환성을 확인하고 추가 테이블을 임의 삭제하지 않는다. 적용했던 대화 설정은 템플릿 삭제/코드 복구로 자동 되돌아가지 않는다.
+
+health/migration 완료 후 README R3 사용법대로 관리자 템플릿 관리, 사용자·게스트 목록/모델 예외/현재 설정 적용 및 직접 출력 설정을 확인한다. 실제 Provider 생성 시험은 별도 승인/비용 정책을 따른다. 이번 로컬 검증은 Windows build·fixture/격리 PostgreSQL·Edge 기준이며 Linux Docker/운영 검증을 대신하지 않는다.
+
 ## Git 전환·기존 데이터 삭제 (2026-10-02)
 
 사용자가 운영 데이터·이전 백업과 관리자 인증까지 모두 초기화하도록 명시 요청했다. 이전 N14 보존 정책은 이번 정리 대상에 한해 대체한다. 새 root `/home/totquf4171/modelnaru-git`, project `modelnaru-git`, branch `codex/refactor-v2`다. 설치/업데이트 명령은 README.md Git 절과 같고 실제 완료 여부는 TEST_PLAN/IMPLEMENTATION_STATUS가 원장이다.

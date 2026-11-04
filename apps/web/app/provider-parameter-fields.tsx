@@ -39,7 +39,7 @@ export function parameterValuesFromRequest(
   );
 }
 
-const labels: Record<string, string> = {
+export const parameterLabels: Record<string, string> = {
   frequencyPenalty: 'Frequency penalty',
   maxOutputTokens: '최대 출력 토큰',
   outputEffort: 'Output effort',
@@ -85,7 +85,8 @@ const descriptions: Record<string, string> = {
 
 const defaults: Record<string, string> = {
   frequencyPenalty: 'Provider 자동 설정(보통 0)',
-  maxOutputTokens: '모델이 정한 출력 한도',
+  maxOutputTokens:
+    '미설정 시 최대 8,192 (모델 한도가 더 작으면 해당 한도). 직접 설정 시 입력값 적용',
   outputEffort: 'Provider 자동 설정',
   presencePenalty: 'Provider 자동 설정(보통 0)',
   reasoningEffort: 'Provider 자동 설정',
@@ -111,6 +112,27 @@ function initialValue(field: ParameterField): string {
   return '';
 }
 
+function parameterDisabledReason(
+  key: string,
+  values: ParameterValues,
+  policy?: ParameterPolicy,
+): string | undefined {
+  const configured = policy?.disabledFields?.find(
+    (field) => field.key === key,
+  )?.reason;
+  if (configured) return configured;
+  if (policy?.profile === 'anthropic') {
+    if (key === 'thinkingDisplay' && !(Number(values.thinkingBudget) > 0))
+      return 'Thinking budget를 설정해야 전송됩니다.';
+    if (
+      ['temperature', 'topP', 'topK'].includes(key) &&
+      (Number(values.thinkingBudget) > 0 || values.outputEffort)
+    )
+      return 'Thinking 또는 Output effort 사용 중에는 적용되지 않습니다.';
+  }
+  return undefined;
+}
+
 export function providerParameterRequest(
   values: ParameterValues,
   policy?: ParameterPolicy,
@@ -126,6 +148,7 @@ export function providerParameterRequest(
     if (
       value === undefined ||
       disabled.has(key) ||
+      parameterDisabledReason(key, values, policy) ||
       (allowed && !allowed.has(key))
     )
       continue;
@@ -175,36 +198,31 @@ export function ProviderParameterFields({
       {policy.fields.map((field) => {
         const required = requiredKeys.includes(field.key);
         const configured = required || values[field.key] !== undefined;
-        const value = values[field.key] ?? initialValue(field);
-        const policyDisabled = policy.disabledFields?.find(
-          (item) => item.key === field.key,
-        )?.reason;
-        const reasoningConflict =
-          policy.profile === 'openai-reasoning' &&
-          values.reasoningEffort !== undefined &&
-          ['temperature', 'topP'].includes(field.key)
-            ? 'Reasoning effort를 직접 설정하면 이 값은 Provider 요청에서 제외됩니다.'
-            : undefined;
-        const thinkingConflict =
-          policy.profile === 'anthropic' &&
-          ((Number(values.thinkingBudget) || 0) > 0 ||
-            values.outputEffort !== undefined) &&
-          ['temperature', 'topP', 'topK'].includes(field.key)
-            ? 'Thinking 또는 Output effort를 직접 설정하면 이 값은 Provider 요청에서 제외됩니다.'
-            : undefined;
-        const disabledReason =
-          policyDisabled ?? reasoningConflict ?? thinkingConflict;
+        const initial =
+          policy.profile === 'novelai' && field.key === 'thinkingBudget'
+            ? '1'
+            : initialValue(field);
+        const value = values[field.key] ?? initial;
+        const disabledReason = parameterDisabledReason(
+          field.key,
+          values,
+          policy,
+        );
         return (
           <div
             className={`parameter-item${disabledReason ? ' parameter-item-disabled' : ''}`}
             key={field.key}
           >
             <div className="parameter-title">
-              {labels[field.key] ?? field.key}
+              {policy.profile === 'novelai' && field.key === 'thinkingBudget'
+                ? '추론 사용 (0: 끄기, 1: 켜기)'
+                : (parameterLabels[field.key] ?? field.key)}
             </div>
             <p>
-              {descriptions[field.key] ??
-                '이 Provider가 지원하는 생성 설정입니다.'}
+              {policy.profile === 'novelai' && field.key === 'thinkingBudget'
+                ? '이 요청 형식에서는 추론 활성화 여부만 전송하며 토큰 예산은 지정하지 않습니다.'
+                : (descriptions[field.key] ??
+                  '이 Provider가 지원하는 생성 설정입니다.')}
             </p>
             <small>기본값: {defaults[field.key] ?? 'Provider 자동 설정'}</small>
             {!required && (
@@ -217,7 +235,10 @@ export function ProviderParameterFields({
                     onChange({
                       ...values,
                       [field.key]: event.target.checked
-                        ? initialValue(field)
+                        ? policy.profile === 'novelai' &&
+                          field.key === 'thinkingBudget'
+                          ? '1'
+                          : initialValue(field)
                         : undefined,
                     })
                   }

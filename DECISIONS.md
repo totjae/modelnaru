@@ -1,5 +1,9 @@
 # ModelNaru 설계 결정 기록
 
+## R3 결정 (2026-11-05, 구현)
+
+사용자 Q1~Q4에 따라 명시 출력의 공통8192 상한을 제거하고 미설정 기본만 유지한다(AI_INTEGRATION_SPEC R3-OUTPUT). 템플릿은 선택적 권장 모델과 현재 대화 snapshot 적용으로 구현하며 게스트에도 허용한다(CHAT_STATE_SPEC/GUEST_ACCESS_SPEC R3). 기존 설정 UI·parser·권한·transaction·아이콘을 재사용하고 새 dependency를 추가하지 않았다. 템플릿 version과 대화 revision/preview 결과 비교로 부분 적용을 막는다(API_SPEC R3). 재생성은 DB 이력을 바꾸지 않고 동일 부모 응답의 표시를 교체한다(CHAT_STATE_SPEC R3). 운영 배포는 이번 로컬 구현과 별개다.
+
 ## 1. 목적
 
 구현 중 내려진 중요한 기술 결정을 이유와 영향까지 기록한다. 상태는 `확정`, `대체`, `보류`로 구분한다.

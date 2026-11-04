@@ -40,7 +40,10 @@ import {
   streamProviderRequest,
 } from './chat-streaming.js';
 import type { ChatPrincipal } from './chats.repository.js';
-import { normalizeProviderParameters } from './provider-parameter-policy.js';
+import {
+  normalizeProviderParameters,
+  ProviderParameterValidationError,
+} from './provider-parameter-policy.js';
 import {
   ContextSummarizationUnavailableError,
   estimateContextSize,
@@ -203,6 +206,14 @@ export class ChatJobsService
       runtime.modelId,
       input.parameters,
     );
+    if (
+      Object.keys(input.parameters).some(
+        (key) => !Object.hasOwn(normalized, key),
+      )
+    )
+      throw new ProviderParameterValidationError(
+        'A setting is unsupported by this model or request format.',
+      );
     const parameters = {
       ...normalized,
       maxOutputTokens: contextBudget(

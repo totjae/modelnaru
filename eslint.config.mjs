@@ -46,6 +46,7 @@ export default tseslint.config(
     files: [
       'apps/web/test/n10-browser.mjs',
       'apps/web/test/n11-browser.mjs',
+      'apps/web/test/r3-browser.mjs',
       'apps/web/test/n13-integration.mjs',
       'apps/web/test/n13-server-acceptance.mjs',
       'apps/api/test/n13-ocr.mjs',

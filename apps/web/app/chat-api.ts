@@ -1,6 +1,14 @@
 import { csrfToken } from './client-auth';
 
 const messages: Record<string, string> = {
+  TEMPLATE_CONFLICT:
+    '템플릿이 변경되었습니다. 목록을 새로고침한 뒤 다시 선택하세요.',
+  TEMPLATE_PREVIEW_CHANGED:
+    '모델이나 적용 설정이 변경되었습니다. 다시 미리보기하세요.',
+  TEMPLATE_INPUT_INVALID:
+    '템플릿 입력 범위와 직접 설정/해제 중복을 확인하세요.',
+  CHAT_PARAMETER_INVALID:
+    '설정값이 모델 지원 범위를 벗어납니다. 최대 출력 토큰과 모델 한도를 확인하세요.',
   CHAT_PRINCIPAL_BUSY:
     '다른 대화에서 생성 중입니다. 해당 대화를 열어 확인하거나 완료 후 보내세요.',
   CHAT_CONVERSATION_BUSY:

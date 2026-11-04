@@ -1,5 +1,9 @@
 # 관리자 로그 및 감사 기록 명세
 
+## R3 템플릿 감사 (2026-11-05, 구현)
+
+관리자 저장/삭제는 같은 transaction의 audit_logs에 template.saved/template.deleted, target_type=chat_template, after_data={id,version}을 기록한다. 프롬프트·파라미터 본문·대화 내용은 추가하지 않는다. 사용자 적용은 기존 대화 설정 경로를 사용하며 별도 원문 로그를 만들지 않는다. DB 시험에서 prompt가 audit payload에 없는지 확인했다(TEST_PLAN R3).
+
 ## N13 Provider 응답 메타데이터 진단 (2026-10-01, 구현·로컬 fixture 검증 완료)
 
 공통 streamProviderRequest는 요청마다 종료 시 provider_response_diagnostic 한 건을 기본 API process 로그에 기록한다. 원본 trace opt-in/보존 한도와 독립적이며 DB·관리자 log API의 새로운 레코드는 아니다. 허용 필드는 무작위 진단 id, protocol, HTTP 상태, Content-Type 분류(text/event-stream·application/json·text/html·text/plain·other·missing), 요청/헤더/첫 byte/마지막 byte/종료 ISO 시각과 경과 ms, 수신 byte/chunk/frame/data event 수, outcome, 처리 단계, 고정 내부 원인 코드 및 기존 공개 오류 코드다. frame은 처리한 완성 SSE block(주석 포함), event는 크기 검사 후 처리한 비어 있지 않은 data block([DONE] 포함)이며 실패 JSON도 event 수에 포함한다. chunk/byte는 읽은 전체 수로, terminal 뒤 같은 chunk의 미처리 frame까지 event 수로 계산하지 않는다. 미수신 시각/상태는 null이고 0 byte chunk는 첫 byte 시각을 만들지 않는다.

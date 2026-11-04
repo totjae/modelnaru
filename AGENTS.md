@@ -52,6 +52,7 @@
 | 게스트 체험 명세   | [GUEST_ACCESS_SPEC.md](./GUEST_ACCESS_SPEC.md)                   | 공유 코드, 임시 session·격리·수명·모델 권한과 일일 호출 제한      |
 | Web UI 명세        | [WEB_UI_SPEC.md](./WEB_UI_SPEC.md)                               | 새 버전 매트 디자인·참고 사례, 테마·컴포넌트·레이아웃·반응형 기준과 현행 UI 기록 |
 | 운영 UI 피드백 인계 | [UI_FEEDBACK_HANDOFF.md](./UI_FEEDBACK_HANDOFF.md) | 사용자 주석 이미지 추적·단계별 파일 범위·보존 조건·검증/인계 계약 |
+| 3차 리팩토링 요구·설계 검토 | [REFACTOR_V3.md](./REFACTOR_V3.md) | 5개 요청 추적·초기 조사·설계 제안·미결정 질문과 인수 기준 |
 
 ## 3. 개발하면서 작성할 상세 문서
 

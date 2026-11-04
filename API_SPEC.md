@@ -1,5 +1,14 @@
 # ModelNaru API 상세 명세
 
+## R3 템플릿 구현 계약 (2026-11-05, 구현·격리 검증 완료)
+
+DB chat_templates: UUID id, name(1~100), description(0~1000), is_enabled, provider_model_id(nullable UUID; 삭제된 모델도 사용 불가로 구분하기 위해 FK 없음), settings JSONB, version bigint, timestamps. settings는 systemPrompt/historyMessageLimit/contextTokenLimit/requestTraceLimit/responseTimeoutSeconds/webSearchEnabled/generationParameters/resetParameters만 허용한다. 기존 설정 parser 범위 재사용. 누락된 항목은 유지, generationParameters는 지정 key만 merge하고 resetParameters(key 배열)로 직접 설정 해제를 표현한다. 관리자 수정/삭제는 기존 대화 snapshot에 소급하지 않는다.
+
+GET /admin/chat-templates: 전체 목록+파라미터 필드. POST 신규, PUT /:id version 필수 교체, DELETE /:id body.version 필수. 관리자 session/CSRF; audit에는 ID/version만 기록. GET /chat-templates: 사용자/게스트 활성 목록, 비허용 권장 모델 ID 숨김. POST /conversations/:id/template-preview: templateId/templateVersion/settingsRevision/providerModelId. POST /conversations/:id/template-apply: 같은 입력+previewToken. 선택 모델은 실제 허용 모델이어야 한다. preview는 merge 결과/제외 항목/일방향 token을 반환한다. apply는 template·conversation을 같은 transaction에서 잠그고 동일 결과를 재계산해 token 비교 후 기존 conversation update를 실행한다. token은 권한이 아니며 실제 권한/가용성을 매번 재검사한다. 미지원 필드 제외와 web search 미지원은 preview에 표시, 숫자 한도 초과는400으로 거부. template/대화 revision 또는 preview 결과 변경은409, 없는/비활성 template은404, 일반 사용자 admin 접근은 기존 guard로403. 기존 생성 중 적용 금지와 trace limit 반영 유지. 신규 migration21은 추가형이며 기존 DB/비밀값 변경 없음.
+
+검증: 입력 whitelist/범위, version 충돌, 미지원 항목 확인, 모델 권한 예외, 기존 설정·false·0 보존, 원자적 실패, guest 접근. 운영·유료 호출 없음.
+
+
 ## N09 탐색·설정 계약 (2026-10-01 구현·격리 검증 완료)
 
 - 대화 목록은 `{conversations,nextCursor}`다. query는 trim/NFC 정규화·최대 200자 제목 literal 부분 검색, pinned는 true/false 또는 생략, limit 기본 50·최대 100이다. 정렬은 pinned→updatedAt→UUID 내림차순 keyset이다. cursor는 version·owner/query/filter fingerprint·정렬 tuple을 base64url로 담고 형식/조건을 검증한다. cursor는 인증 자격증명이나 서명된 snapshot이 아니다. 소유권을 매 조회 다시 적용하며 변경된 행/새 행의 완전한 snapshot 일관성은 보장하지 않는다. 조건 변경·잘못된 cursor는 `400 CHAT_INPUT_INVALID`다.

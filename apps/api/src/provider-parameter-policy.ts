@@ -169,7 +169,7 @@ const policies: Record<
       stopSequences,
       {
         key: 'thinkingBudget',
-        maximum: 131_072,
+        maximum: 1,
         minimum: 0,
         step: 1,
         type: 'integer',
@@ -238,7 +238,7 @@ function profileFor(
   return 'openai';
 }
 
-export function providerParameterPolicy(
+function modelParameterPolicy(
   template: ProviderTemplate,
   modelId: string,
 ): ProviderParameterPolicy {
@@ -266,6 +266,38 @@ export function providerParameterPolicy(
     };
   }
   return policy;
+}
+
+// The model family does not guarantee that the configured transport carries every field.
+export function providerParameterPolicy(
+  template: ProviderTemplate,
+  modelId: string,
+): ProviderParameterPolicy {
+  const policy = modelParameterPolicy(template, modelId);
+  const unsupported =
+    template.defaultFormat !== 'anthropic' &&
+    template.defaultFormat !== 'gemini'
+      ? policy.fields.filter(({ key }) =>
+          [
+            'outputEffort',
+            'thinkingDisplay',
+            'thinkingLevel',
+            ...(template.parameterProfile === 'novelai'
+              ? []
+              : ['topK', 'thinkingBudget']),
+          ].includes(key),
+        )
+      : [];
+  return {
+    ...policy,
+    disabledFields: [
+      ...(policy.disabledFields ?? []),
+      ...unsupported.map(({ key }) => ({
+        key,
+        reason: '현재 Provider의 요청 형식에서 전송을 지원하지 않습니다.',
+      })),
+    ],
+  };
 }
 
 export class ProviderParameterValidationError extends Error {}
@@ -329,9 +361,15 @@ export function normalizeProviderParameters(
     delete output.topP;
     delete output.topK;
   }
+  if (
+    policy.profile === 'anthropic' &&
+    !(output.thinkingBudget && output.thinkingBudget > 0)
+  )
+    delete output.thinkingDisplay;
   if (policy.profile === 'openai-reasoning') {
     delete output.temperature;
     delete output.topP;
   }
+  for (const { key } of policy.disabledFields ?? []) delete output[key];
   return output;
 }

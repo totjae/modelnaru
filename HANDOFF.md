@@ -1,5 +1,12 @@
 # ModelNaru 새 버전 구현 인계
 
+
+## 최신: R3 로컬 구현·검증 완료 (2026-11-05)
+
+사용자가 계획 이후 순차 구현을 요청하여 R3-A~G를 수행했다. 요구 추적은 REFACTOR_V3, 순서는 IMPLEMENTATION_PLAN, 상태는 IMPLEMENTATION_STATUS, 실제 시험은 TEST_PLAN 최상단을 따른다. Q1~Q4 재질문 불필요. 명시 출력값 적용, 관리자 템플릿/사용자·게스트 적용, 복사 아이콘, 동일 질문 답변 한 박스, 사용자 오른쪽/AI 왼쪽을 구현했다.
+
+기준 HEAD b0d6b75 위의 미커밋 코드·문서·이미지를 보존한다. 다음 첫 작업은 사용자 후속 피드백 처리 또는 명시 요청 시 commit/배포다. 운영 반영은 아직 안 했으며 API+Web 및 추가형 migration0021이 필요하다. 과거 Web-only 배포/초기화/유료 호출 승인을 재사용하지 않는다. 실제 Provider 인증 호출, Linux Docker 배포, 실기기 터치는 미검증이다. 이전 OUTPUT-8192 공통 상한 기록은 역사이며 새 정책은 AI_INTEGRATION_SPEC R3-OUTPUT가 우선한다. 보존 대상은 기존 사용자·관리자 설정·Provider 키·대화·branch·첨부다.
+
 ## 최신: OUTPUT-8192 운영 적용 완료 (2026-11-04)
 
 제품28a869e 운영 API 반영 완료. 기본 출력/공통 상한8192, 기존 명시4096 등 작은 개별·모델 한도는 유지한다. 실제 컨테이너 계산4건 및 공인 HTTPS health 검증 완료. DB/config/사용자 설정/Web 보존, 유료 호출 없음. TEST_PLAN OUTPUT-8192 운영 검증 절에 image와 rollback 기록. 아래 배포 대기는 과거 기록이며 실패 trace 진단 보완은 여전히 미구현이다.

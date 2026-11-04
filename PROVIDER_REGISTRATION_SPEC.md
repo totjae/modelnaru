@@ -1,5 +1,9 @@
 # AI 서비스 제공자 등록 명세
 
+## R3 파라미터 표시 보완 (2026-11-05, 구현)
+
+파라미터 정책은 현재 모델 profile과 실제 전송 protocol을 함께 반영한다. OpenAI 호환 중계에서 전달하지 않는 native thinking/outputEffort/topK 항목은 이유를 표시하고 명시 저장을 거부한다. Anthropic thinking 종속 표시/샘플링 충돌을 UI·서버에 맞추고 NovelAI thinkingBudget은 enable_thinking으로 전송되는0/1 선택임을 표시한다. 등록·credential·model 동기화 정책은 변경하지 않는다. 전체 설정 경로는 REFACTOR_V3 §7, 출력 예산 원장은 AI_INTEGRATION_SPEC R3-OUTPUT다.
+
 ## N02 커스텀·로컬 연결 계약 (2026-09-30 확정, N07 API·fixture 구현)
 
 첫 새 버전의 커스텀 연결은 `openai-chat-completions` protocol 한 가지다. 내장 OpenAI/Anthropic/Gemini 연결은 기존 template protocol을 유지한다. 커스텀 Anthropic·Gemini 주소, Ollama native API, 임의 header/body/경로 override, 원격 registry 자동 실행은 이번 범위에서 제외한다. 표시는 관리자가 정한 연결 이름이며 입력 주소·키는 일반 사용자/게스트 응답에 나타나지 않는다. 상세 네트워크 검증은 SECURITY_SPEC.md N02 절이 원장이다.

@@ -107,6 +107,12 @@ export class ChatExecutionService {
         runtime.modelId,
         input.parameters,
       );
+      if (
+        Object.keys(input.parameters).some(
+          (key) => !Object.hasOwn(parameters, key),
+        )
+      )
+        throw new ProviderParameterValidationError('Unsupported setting.');
       const turn = input.regenerateAssistantMessageId
         ? await this.messages.beginRegeneration(principal, {
             assistantMessageId: input.regenerateAssistantMessageId,

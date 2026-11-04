@@ -1,5 +1,39 @@
 # ModelNaru 새 버전 실행 계획
 
+## R3 운영 배포 계약 (2026-11-05)
+
+사용자가 운영 배포와 검증 사항 정리를 요청했다. 메인이 기존 codex/refactor-v2 소스를 commit/push하고 clean 운영 checkout을 ff-only 갱신한다. 사전 활성 job0·DB backup·기존 API/Web image 복구 태그를 확보하고 제한 builder(CPU1.5/RAM3GiB)로 Linux build 후 기존 update 절차의 validate/migration/health를 수행한다. config/secrets/사용자·대화·첨부를 보존한다. 새 migration0021은 추가형이다. 실패 시 이전 API/Web image로 복구하고 추가 schema는 보존한다. 유료 Provider 생성은 실행하지 않으며 health/HTTPS/인증 차단/배포 코드 계산·schema 검증과 사용자 후속 UI 체크리스트를 기록한다. 수정 허용 문서는 본 계획/TEST_PLAN/STATUS/HANDOFF/README/DEPLOYMENT_RUNBOOK이며 배포 보조 스크립트는 ignored tmp에 둔다.
+
+## R3-G 최종 인수 범위 보완 (2026-11-05)
+
+기존 R3 계약의 정확한 추가 파일: eslint.config.mjs의 기존 browser mjs lint 대상 목록에 apps/web/test/r3-browser.mjs 한 항목만 등록한다. 신규 harness가 기존 TypeScript 전용 lint 설정을 상속해 parser 정보 오류가 발생한 것을 기존 N10/N11 처리와 동일하게 정렬하며 제품/테스트 규칙을 약화하지 않는다. README/DEPLOYMENT_RUNBOOK/SECURITY_SPEC/ADMIN_LOGGING_SPEC/PROVIDER_REGISTRATION_SPEC/PROVIDER_CONTRACT_TESTS/WEB_UI_SPEC/DECISIONS 및 진행 문서는 실제 구현에 맞춰 갱신한다. 선행 C/E/F 완료, 담당 메인, 완료 조건은 TEST_PLAN R3의 타입·빌드·lint·DB·브라우저 검사다. 운영 반영/의존성 변경은 제외한다.
+
+## R3 — 3차 리팩토링 준비 (2026-11-05)
+
+요청·초기 조사·질문 원장은 [REFACTOR_V3.md](./REFACTOR_V3.md)다. 이번 범위는 계획 준비까지이며 제품 구현과 배포는 미착수다. 아래 단계는 메인이 담당하며 미정 설계의 워커 배정은 금지한다. 기존 N/UI/OUTPUT 기록은 당시 결과다.
+
+후속 답변 반영: Q1~Q4 사용자 결정 완료. AI_INTEGRATION_SPEC R3-OUTPUT, CHAT_STATE_SPEC R3-TEMPLATE-APPLY/R3-TEMPLATE-MODEL, GUEST_ACCESS_SPEC R3-GUEST-TEMPLATE가 확정 요구 원장이다. 해당 절 갱신을 준비 범위에 포함한다. 사용자 답변 대기는 없으며 미지정 필드 병합·기본값 복원·API/DB/오류 코드 등 세부 기술 계약은 B/D에서 메인이 구체화한다.
+
+| 단계 | 선행·기준 | 작업과 완료 조건 | 허용 수정/생성 범위 |
+| --- | --- | --- | --- |
+| R3-A 조사·질문·계획 | HANDOFF 및 REFACTOR_V3 | 정적 경로·기존 시험·5개 요청·질문·순서 문서화. 이번 수행 범위 | REFACTOR_V3.md 생성, AGENTS.md, HANDOFF.md, IMPLEMENTATION_PLAN.md, IMPLEMENTATION_STATUS.md, TEST_PLAN.md, DEVELOPMENT_WORKFLOW.md 수정; design/refactor-v3/regeneration-before.png 생성 |
+| R3-B 설정 감사·정책 확정 | A; AI_INTEGRATION_SPEC, PROVIDER_REGISTRATION_SPEC, API_SPEC, CHAT_STATE_SPEC; R3-OUTPUT 확정 요구 적용 | 전수 설정표와 UI→저장→snapshot→wire 재현. Q1 확정 정책·검증 기준 작성. 현행 시험 실패와 새 결함 구분 | REFACTOR_V3.md, AI_INTEGRATION_SPEC.md, PROVIDER_REGISTRATION_SPEC.md, PROVIDER_CONTRACT_TESTS.md, API_SPEC.md, CHAT_STATE_SPEC.md, WEB_UI_SPEC.md, DECISIONS.md 및 공통 진행 문서. 재현 시험 파일은 착수 때 정확한 목록을 본 절에 추가 |
+| R3-C 설정 수정·검증 | B 완료 | 저장·복원·일반/재생성 전수표 통과, 제한 이유 표시, 보조 호출 보존 | 조사 대상 apps/web/app/chat-workspace.tsx, provider-parameter-fields.tsx; apps/api/src/chats.controller.ts, chats.service.ts, chats.repository.ts, chat-jobs.service.ts, chat-jobs.repository.ts, chat-execution.service.ts, provider-parameter-policy.ts, chat-streaming.ts, context-budget.ts. **이 목록은 읽기 대상이며 수정 허용은 원인 확정 뒤 파일별로 좁혀 기록** |
+| R3-D 템플릿 계약 | C 완료; R3-TEMPLATE-APPLY/MODEL 및 R3-GUEST-TEMPLATE | 필드/기본값 복원·원자성·권한·오류·삭제·schema/migration·API 요청/응답 계약 확정 | REFACTOR_V3.md, API_SPEC.md, DATABASE_SCHEMA.md, SECURITY_SPEC.md, GUEST_ACCESS_SPEC.md, ADMIN_LOGGING_SPEC.md, CHAT_STATE_SPEC.md, WEB_UI_SPEC.md, DECISIONS.md 및 공통 진행 문서 |
+| R3-E 템플릿 구현 | C·D 완료 | 관리자 관리→사용자 선택→저장→생성 mock 요청까지 인수 | 신설 API/DB/Web/test의 정확한 파일·migration 번호를 D 종료 때 본 절에 기록한 뒤에만 구현. 폴더 전체 수정 권한이나 추측 구현을 부여하지 않음 |
+| R3-F 메시지 UI | A; WEB_UI_SPEC·CHAT_STATE_SPEC에 REFACTOR_V3 C의 세부 동작 확정 | 복사 아이콘, 같은 질문의 재생성 박스 1개, 오른쪽 사용자·왼쪽 AI 박스. 이력·취소·재구독 보존 | apps/web/app/chat-workspace.tsx, chat-icons.tsx, chat-response-navigation.ts, styles.css; apps/web/test/chat-response-navigation.test.ts, n10-browser.mjs; WEB_UI_SPEC.md, CHAT_STATE_SPEC.md 및 공통 진행 문서. 추가 상태 helper/test가 필요하면 정확한 파일명부터 계약에 추가 |
+| R3-G 통합 인수·인계 | C·E·F 완료 | REFACTOR_V3 §5 전체 인수와 문서 정렬. 운영 미검증 구분 | 앞 단계에서 확정한 시험 파일, TEST_PLAN.md, PROVIDER_CONTRACT_TESTS.md, IMPLEMENTATION_STATUS.md, HANDOFF.md; 실제 사용법 변경에 맞춰 README.md·DEPLOYMENT_RUNBOOK.md 갱신 |
+
+확정 진행 순서 A → B → C → D → E → F → G. A~G 로컬 구현·검증 완료이며 실제 결과는 IMPLEMENTATION_STATUS와 TEST_PLAN R3를 따른다. E 내부는 DB migration·repository → 관리자/사용자 API와 권한 검증 → 관리자 관리 UI → 채팅 선택·미리보기·적용 UI 순서다. F 내부는 답변 그룹/재생성 상태 → 사용자·AI 박스 배치 → 복사 아이콘·피드백 순서다. 각 단계 관련 시험을 먼저 통과시키고 G에서 통합 회귀한다. 공유 chat-workspace.tsx는 순차 편집한다. 공통 진행 문서는 IMPLEMENTATION_PLAN.md, IMPLEMENTATION_STATUS.md, TEST_PLAN.md, HANDOFF.md다.
+
+각 구현 단계 시작 전에 최신 HEAD·사용자 diff·관련 시험 기준선을 확인한다. 공개 API/DB·인증·복잡한 상태는 메인이 직접 설계/검증한다. 범위 밖 파일·미정 계약·새 의존성이 필요하면 해당 부분을 중단하고 메인이 계약을 갱신한다. 기존 데이터/설정/branch를 보존하고 무관한 리팩토링·패키지/lockfile·배포 설정 변경·운영 초기화·유료 호출은 포함하지 않는다. 배포는 이 계획의 완료 조건과 별개다.
+
+### R3-B/C 실행 계약 (2026-11-05)
+
+사용자가 순차 구현 착수를 요청했다. 기존 미커밋 문서·이미지를 보존한다. 메인이 설정 전수 경로 조사 및 수정/시험 담당. 수정 허용: apps/api/src/context-budget.ts, provider-parameter-policy.ts, chats.controller.ts, chats.repository.ts; apps/web/app/provider-parameter-fields.tsx; apps/api/test/context-budget.test.ts, provider-parameter-policy.test.ts, chats.controller.test.ts; apps/web/test/provider-parameter-fields.test.ts 및 본 계획/상태/인계/시험/AI_INTEGRATION_SPEC/PROVIDER_CONTRACT_TESTS/REFACTOR_V3. 다른 제품 파일은 필요 근거와 계약 추가 후 변경. 새로운 dependency/실 Provider 호출/운영 변경 없음.
+
+명시 출력은 1~131072 범위 유지, 알려진 모델 상한 초과는 CHAT_PARAMETER_INVALID(400)로 거부하며 미지정 기본만 모델 상한과8192 중 최소값이다. 모델 출력 한도 null은8192 상한으로 간주하지 않는다. 문맥 한도 불명은 기존16384 fallback과 입력 예산 검사를 유지한다. 출력 예약을 줄여 맞추지 않는다. 일반 생성/재생성/기존 SSE 경로가 공통 계산을 사용하며 제목/요약의 호출부 개별 제한은 유지한다. 중계 protocol에서 전송되지 않는 필드는 disabled 이유 표시 및 정규화 제외, 명시 저장은 기존 CHAT_PARAMETER_INVALID로 거부한다.
+
 ## OUTPUT-8192 운영 반영 (2026-11-04)
 
 사용자 commit/push/배포 승인. 메인 담당. 기존 Git 브랜치 ff-only, 이전 API image rollback 태그 보존, CPU1.5/RAM3GiB builder로 API만 build. 활성 chat_jobs0 확인 후 API만 no-deps 재생성/healthy, Gateway nginx -t/reload. DB/Web/config/secrets와 사용자 설정 보존, migration 실행 없음. 새 container 내부 contextBudget 기본8192 및 작은 사용자/모델 상한 계산과 외부 HTTPS ready 확인. 실 Provider 호출 금지. 실패 시 이전 API image 복구. 결과 TEST_PLAN/STATUS/HANDOFF 기록.
@@ -497,3 +531,17 @@ N03 시안 작업은 백엔드 구현 전에 완료해 화면 구조 재작업�
 ### N14 실행 결과 (2026-10-02 완료)
 
 새 code-only archive 공식 Linux build/별도 v2 DB/CLI init·validate·20개 migration/checksum·staging smoke 후 32432 운영 전환 완료. 서버 자체 WAN timeout으로 실제 rollback 후 CA/SNI 유지 host HTTPS 및 PC 외부 경로 검증으로 재전환 성공. 운영 관리자만 보존·일반 사용자/Provider/대화 빈 상태, 이전 설치/DB/image 보존. 임시 mock/계정/password/builder 제거. 정확한 release/image/한계·운영/복구 명령은 TEST_PLAN/README/DEPLOYMENT_RUNBOOK/HANDOFF 최신 N14 절 참조. 제품/의존성/schema 변경과 유료 호출 없음.
+
+### R3-D/E 정확한 파일 계약 (2026-11-05)
+
+메인 직접 수행. API_SPEC R3 템플릿 구현 계약을 기준으로 신규 packages/database/migrations/0021_chat_templates.sql, apps/api/src/chat-templates.ts, chat-templates.controller.ts, apps/api/test/chat-templates.test.ts, apps/web/app/chat-template-manager.tsx, chat-template-picker.tsx, chat-template-types.ts를 생성한다. 수정 허용 apps/api/src/app.module.ts, chats.controller.ts(parseUpdate export), chats.repository.ts(transaction 재사용·잠금), apps/web/app/admin-workspace.tsx, chat-workspace.tsx, styles.css. 검증 추가 필요 시 apps/api/test/chat-templates-postgres.test.ts 생성 허용. API_SPEC/DATABASE_SCHEMA/SECURITY_SPEC/ADMIN_LOGGING_SPEC/GUEST_ACCESS_SPEC/CHAT_STATE_SPEC/WEB_UI_SPEC/README/DEPLOYMENT_RUNBOOK 및 공통 진행 문서 갱신. 기존 사용자 데이터/관리자 키·인증·quota·의존성 보존. D 완료 뒤 E 구현, 단위·타입 검사와 가능한 격리 DB 검증 후 F 진행.
+
+R3-E 추가 허용: apps/web/app/chat-api.ts (템플릿 충돌/설정 범위 오류의 사용자 안내).
+
+### R3-F 실행 보강 (2026-11-05)
+
+E API/Web typecheck와 입력·merge 단위시험 통과 후 F 착수. E 격리 PostgreSQL 인수는 G에서도 연속 검증한다. 서버 branch 활성화는 completed만 허용하는 계약을 유지한다. failed/cancelled 재생성은 UI에서 이력 미리보기로 선택하며 활성 문맥을 바꾸지 않는다. 재생성 중에는 해당 parent 질문의 표시 응답만 교체하고 같은 박스 key를 유지한다. 완료 후/새로고침에도 선택/실패 기록을 복원한다. 새 파일 apps/web/app/message-copy-button.tsx 생성 허용, 기존 response-navigation helper/test에 같은 질문 투영 검사를 추가. 브라우저 시험 apps/web/test/r3-browser.mjs 생성 허용.
+
+R3-C 후속 허용: apps/api/src/chat-jobs.service.ts (직접 job API 호출도 미지원 필드의 무음 누락을 거부), apps/web/test/provider-parameter-fields.test.ts (thinking 종속 필드 직렬화 검사). NovelAI thinkingBudget은 wire에서 enable_thinking boolean이므로 값 범위를0/1로 정확하게 표시·검증한다. Anthropic thinkingDisplay는 positive budget이 있을 때만 전송·선택 가능하다.
+
+R3-C 추가 허용: apps/api/src/chat-execution.service.ts (기존 SSE 경로도 명시 미지원 필드 거부), R3-F 선택 답변 ID는 기존 conversation URL과 함께 response query에 보존하며 서버가 반환한 같은 질문 후보에만 적용한다. 새 API나 branch 활성 규칙은 추가하지 않는다.

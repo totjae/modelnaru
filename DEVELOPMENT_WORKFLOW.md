@@ -1,5 +1,9 @@
 # 개발 및 상세 문서 관리 원칙
 
+## 3차 리팩토링 적용 (2026-11-05)
+
+요구·초기 조사·미결정은 [REFACTOR_V3.md](./REFACTOR_V3.md), 작업 순서는 IMPLEMENTATION_PLAN R3, 상태는 IMPLEMENTATION_STATUS R3를 따른다. 제안은 확정 정책과 분리하고, 확정 시 각 기능 기준 문서에 반영한다. 초기 준비와 후속 구현 결과는 구분하며 최신 완료 상태는 IMPLEMENTATION_STATUS를 따른다. 미정 API/DB 계약을 워커에게 추측 구현하도록 배정하지 않는다.
+
 ## Git 운영 변경 절차 (2026-10-02)
 
 현재 리팩토링은 codex/refactor-v2 브랜치로 커밋/push한 뒤 서버가 같은 branch/commit을 checkout한다. config/data/secrets·로컬 agent 첨부·runtime state는 제외한다. 서버 tracked 소스를 직접 편집하거나 archive로 덮어쓰지 않는다. 로컬 검증→commit/push→서버 fast-forward→build/validate/migration/health 순서와 명령은 README.md Git 절을 따른다. source HEAD/image를 시험 기록에 남긴다.

@@ -21,7 +21,7 @@ function body(
   const template = providerTemplateById(templateId)!;
   const request = buildProviderStreamRequest({
     apiKey: 'key',
-    baseUrl: template.baseUrl!,
+    baseUrl: template.baseUrl ?? 'https://fixture.example.test',
     messages,
     modelId,
     parameters,
@@ -170,4 +170,87 @@ describe('provider parameter policy', () => {
       ).profile,
     ).toBe('anthropic');
   });
+});
+
+describe('R3 explicit request settings', () => {
+  it('preserves zeroes, stops and explicit output above the default', () => {
+    expect(
+      body('openai', 'plain-model', {
+        maxOutputTokens: 16384,
+        temperature: 0,
+        topP: 0,
+        frequencyPenalty: 0,
+        presencePenalty: 0,
+        seed: 0,
+        stopSequences: ['END'],
+      }),
+    ).toMatchObject({
+      max_tokens: 16384,
+      temperature: 0,
+      top_p: 0,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+      seed: 0,
+      stop: ['END'],
+    });
+    expect(
+      body('google', 'gemini-test', {
+        thinkingBudget: 0,
+        topK: 0,
+        maxOutputTokens: 16384,
+      }),
+    ).toMatchObject({
+      generationConfig: {
+        maxOutputTokens: 16384,
+        topK: 0,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    expect(
+      body('anthropic', 'claude-test', {
+        maxOutputTokens: 16384,
+        outputEffort: 'high',
+      }),
+    ).toMatchObject({ max_tokens: 16384, output_config: { effort: 'high' } });
+  });
+  it('explains fields that an OpenAI-compatible transport cannot carry', () => {
+    const template = {
+      ...providerTemplateById('openai')!,
+      parameterProfile: 'routed' as const,
+    };
+    const policy = providerParameterPolicy(template, 'claude-test');
+    expect(policy.disabledFields?.map((f) => f.key)).toEqual(
+      expect.arrayContaining([
+        'topK',
+        'thinkingBudget',
+        'thinkingDisplay',
+        'outputEffort',
+      ]),
+    );
+    expect(
+      normalizeProviderParameters(template, 'claude-test', {
+        topK: 40,
+        maxOutputTokens: 16384,
+      }),
+    ).toEqual({ maxOutputTokens: 16384 });
+  });
+});
+
+it('R3 only accepts actual NovelAI on/off values and dependent Anthropic display', () => {
+  expect(() =>
+    normalizeProviderParameters(providerTemplateById('novelai')!, 'kayra', {
+      thinkingBudget: 1024,
+    }),
+  ).toThrow();
+  expect(body('novelai', 'kayra', { thinkingBudget: 1 })).toHaveProperty(
+    'enable_thinking',
+    true,
+  );
+  expect(
+    normalizeProviderParameters(
+      providerTemplateById('anthropic')!,
+      'claude-test',
+      { thinkingDisplay: 'summarized' },
+    ),
+  ).toEqual({});
 });

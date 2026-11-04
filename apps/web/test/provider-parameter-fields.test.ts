@@ -70,3 +70,30 @@ describe('provider parameter request', () => {
     ).toEqual({ topP: 0.9 });
   });
 });
+
+it('R3 omits dependent thinking controls and incompatible sampling consistently', () => {
+  const policy = {
+    profile: 'anthropic',
+    fields: [
+      { key: 'thinkingDisplay', type: 'select' as const },
+      { key: 'thinkingBudget', type: 'integer' as const },
+      { key: 'temperature', type: 'number' as const },
+    ],
+  };
+  expect(
+    providerParameterRequest(
+      { thinkingDisplay: 'summarized', temperature: '0' },
+      policy,
+    ),
+  ).toEqual({ temperature: 0 });
+  expect(
+    providerParameterRequest(
+      {
+        thinkingDisplay: 'summarized',
+        thinkingBudget: '1024',
+        temperature: '0',
+      },
+      policy,
+    ),
+  ).toEqual({ thinkingDisplay: 'summarized', thinkingBudget: 1024 });
+});

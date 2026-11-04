@@ -1,3 +1,4 @@
+import { ProviderParameterValidationError } from './provider-parameter-policy.js';
 import type { ChatProviderRuntime } from './chat-provider.service.js';
 
 export function estimateInput(
@@ -30,11 +31,20 @@ export function contextBudget(
   imageCount = 0,
 ) {
   const window = Math.min(requestedWindow, runtime.contextWindow ?? 16_384);
-  const output = Math.min(
-    requestedOutput ?? 8_192,
-    runtime.maxOutputTokens ?? 8_192,
-    8_192,
-  );
+  if (
+    requestedOutput !== undefined &&
+    (!Number.isInteger(requestedOutput) ||
+      requestedOutput < 1 ||
+      requestedOutput > 131_072 ||
+      (runtime.maxOutputTokens !== null &&
+        requestedOutput > runtime.maxOutputTokens))
+  ) {
+    throw new ProviderParameterValidationError(
+      'Maximum output exceeds the selected model limit.',
+    );
+  }
+  const output =
+    requestedOutput ?? Math.min(runtime.maxOutputTokens ?? 8_192, 8_192);
   if (imageCount && runtime.imageTokenEstimate == null)
     throw new Error('CHAT_IMAGE_BUDGET_UNKNOWN');
   const input =

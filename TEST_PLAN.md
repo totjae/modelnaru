@@ -1,5 +1,42 @@
 # ModelNaru 시험 계획·결과
 
+## R3 최종 로컬 검증 (2026-11-05)
+
+범위: 설정 전수 경로·명시 출력값, 관리자 템플릿/사용자·게스트 적용, 복사 아이콘, 답변 한 박스·좌우 배치. 기준 HEAD b0d6b75 위 작업 트리이며 운영 반영/외부 Provider 호출은 하지 않았다. 아래 A 절은 수정 전 기준선이다.
+
+| 검사 | 실제 결과·증거 |
+| --- | --- |
+| API 전체 | root에서 TEMP/TMP를 tmp/r3-test-temp로 설정하고 격리 loopback PostgreSQL용 MODELNARU_TEST_DATABASE_URL을 지정한 뒤 pnpm --filter @modelnaru/api exec vitest run --silent. exit0,51파일245개 통과. tmp/r3-api-final.log |
+| Web 전체 | pnpm --filter @modelnaru/web exec vitest run, exit0,8파일34개 통과 |
+| 타입·빌드 | pnpm --filter @modelnaru/api typecheck 및 build, Web typecheck 및 build 통과. 설치된 의존성 사용, 패키지/lockfile 변경 없음 |
+| 변경 lint | git diff 및 untracked의 변경 TS/TSX와 신규 r3-browser.mjs에 pnpm exec eslint … --max-warnings=0. 기존 browser harness 설정에 R3 경로만 추가 |
+| R3 브라우저 | 빌드한 Next+loopback HTTP fixture, 설치된 Playwright/Edge에서 node apps/web/test/r3-browser.mjs. exit0,5캡처/72요청, pageerror0·외부요청0. tmp/r3-browser/result.json |
+| 기존 채팅 N10 | node apps/web/test/n10-browser.mjs, exit0. 시작3/취소1/구독6/56캡처. tmp/ui-feedback/n10 |
+| 기존 진입/관리자 N11 | pnpm --filter @modelnaru/api exec tsx ../web/test/n11-browser.mjs, exit0.132캡처/280HTTP. TS helper의 런타임 import를 해석하도록 설치된 tsx 사용 |
+
+브라우저 명령은 MODELNARU_BROWSER_MODULE에 설치된 Playwright index.mjs 절대경로를 지정한다. R3는 복사 hover/성공 Clipboard 본문/키보드 실패 안내, 미지원 권장 모델 fallback과 제외 확인, 현재 설정16384 적용, 재생성 pending·새로고침·완료·이전 버전·취소·새로고침마다 AI 박스1개,360/768/1024/1440 overflow 없음/사용자 오른쪽, 게스트 선택, 관리자 생성까지 검사했다. chat-360.png/admin.png를 육안 점검했다. 기존 N10/N11은 light/dark·다중 폭·기존 탐색/스크롤/로그인 회귀 근거다. 신규 템플릿 모든 필드의 모든 실제 브라우저 조합을 검사한 것은 아니다.
+
+DB 시험은 새로 만든 테스트 전용 PostgreSQL17 cluster 및 시험 DB에서 migration 전체와 독립 schema를 사용하고 finally로 schema를 정리했다. CRUD/version 경합, 명시16384 저장/GET 복원, guest 적용, 소유권/모델 권한 거부, 비허용 권장 모델 ID 비노출, 미지원 항목, preview 변조/변경·권한 회수 시 원자적 실패, 삭제 후 snapshot 보존 및 audit에 prompt 미기록을 검사했다. 실제 운영 DB/키는 사용하지 않았다.
+
+실행 중 환경/검사 보완: 최초 sandbox 전체 API는 loopback EACCES로3건 실패·DB 조건부6건 제외되어 완료로 계산하지 않았다. 별도 native loopback 테스트 환경으로 재실행해245개 전체 통과했다. sandbox initdb 지연은 중단 후 테스트 전용 native cluster에서 재생성했다. Web build의 sandbox symlink EPERM은 승인된 로컬 빌드 재실행으로 해소했다. fixture의 접근 가능한 select 이름과 admin usage 응답을 보완하고 R3 브라우저 재실행 통과했다. 최종 테스트 fixture 타입 단언 및 metadata reflection lint를 수정했다. 테스트 삭제/skip/기대값 완화로 실패를 숨기지 않았다.
+
+최종 정리: 변경 diff 공백 검사와 실제 상대 문서 링크 검사 통과(AGENTS의 코드 블록 예시 링크 제외). 마지막 reflection 수정 뒤 템플릿 parser/guard 시험5개 재통과. 시험용 PostgreSQL은 pg_ctl fast stop으로 정상 종료했고 운영 프로세스는 건드리지 않았다.
+
+미검증/별도 인수: 외부 실제 Provider 인증/유료 생성, Linux Docker 배포·실운영, 실제 모바일 터치/OS Clipboard 정책, 모든 parameter×provider×model 조합, 여러 사용자의 실제 동시 조작은 미실행이다. fixture/실DB 결과를 해당 검증 완료로 해석하지 않는다. 운영 배포는 API+Web+migration0021이 함께 필요하며 README/DEPLOYMENT_RUNBOOK R3를 따른다.
+
+## R3-A 계획 준비 검증 (2026-11-05)
+
+- 추가 결정 반영: Q2 사용자 동의를 CHAT_STATE_SPEC R3-TEMPLATE-MODEL에 반영하고 제안 표를 원장으로 이관했다. 실행 순서 및 템플릿/UI 내부 순서를 구체화했다. 문서만 변경했으며 제품 시험은 재실행하지 않았다. 아래 후속 답변의 Q2 제안 표기는 이 동의 이전 기록이다.
+
+- 후속 사용자 답변 문서화: Q1/Q3/Q4 확정 요구를 기능 기준 문서에 반영하고 Q2 권한 예외를 제안으로 구분했다. 진행/인계 문서의 대기 항목을 정렬했다. 문서만 변경하여 제품 시험은 재실행하지 않았으며 아래 45개는 앞선 기준선 결과다. 명시 16,384 보존 및 템플릿 권한 예외 시험은 향후 인수 항목이다.
+
+- 환경: Windows PowerShell, 기준 HEAD b0d6b75, 초기 git status clean. 제품 코드 수정 없음.
+- 정적 조사: Web 입력/PATCH/생성·재생성 body, API parsing·job 정규화·context budget·protocol body, 재생성 구독 callback와 렌더링. 사실/추정 구분과 향후 인수표는 REFACTOR_V3.md §2~5 참조.
+- 저장소 root에서 `pnpm --filter @modelnaru/api exec vitest run test/chat-streaming.test.ts test/provider-parameter-policy.test.ts test/context-budget.test.ts`: 첫 실행 exit 1, sandbox Temp의 SSR cache rename EPERM으로 0개 실행. 제품 실패로 판정하지 않음.
+- `tmp/r3-test-temp`를 만들고 같은 PowerShell 프로세스의 TEMP/TMP를 해당 절대경로로 지정한 뒤 같은 명령 재실행: exit 0, 3파일 45개 통과. 테스트/기대값/의존성 변경 없음. mock 시험이며 유료 호출 없음.
+- 문서 및 이미지 검증: 변경 파일 범위, 상대 파일 링크, 이미지 원본/보존본 SHA256, `git diff --check` 확인. 최종 결과는 이번 작업 보고를 함께 참조한다.
+- 미검증: 모든 설정의 UI→DB→wire 전수 비교, 실제 브라우저 재생성 재현, 실제 Provider/운영, 템플릿 신규 기능 및 새 UI. 이번 기존 시험 통과를 R3-B~G 인수로 재사용하지 않는다.
+
 ## OUTPUT-8192 운영 검증 완료 (2026-11-04)
 
 제품28a869e commit/push 및 서버 ff-only 반영. 제한 builder(CPU1.5/RAM3GiB) frozen-lockfile Linux build 통과. API image sha256:ee184752fc7994fd226e7d69794f73bcd65b99a88b2895a57036acec69f9bd2f로 API만 교체했다. 재시작 전 미종료 job0건 확인, gateway nginx -t/reload 및 live/ready·공인 HTTPS ready 정상,4서비스 healthy. 실제 실행 API의 contextBudget 검사4개 통과: 기본8192·명시1024 유지·모델4096 유지·큰 요청8192 제한. PostgreSQL container ID 보존, DB/config/secrets/Web 변경 및 migration 없음. Provider 호출0회로 실제 생성 재시험은 미실행. rollback image modelnaru-output8192-rollback-api 보존, 임시 builder 제거. 아래 로컬 미배포 기록은 당시 상태다.

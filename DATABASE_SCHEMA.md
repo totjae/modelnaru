@@ -1,5 +1,10 @@
 # ModelNaru Database 상세 명세
 
+## R3 템플릿 저장 (2026-11-05, 구현·격리 검증 완료)
+
+Migration0021_chat_templates.sql을 추가한다. 필드/삭제·snapshot 계약은 API_SPEC.md R3 템플릿 구현 계약 참조. 기존 대화에 FK를 추가하지 않으며 적용값은 기존 conversations에 원자적으로 저장한다. template 모델 UUID는 삭제된 권장 모델 판별을 위해 참조 정보로만 보관한다. migration은 기존 데이터·설정을 수정하지 않는다.
+
+
 ## N09 저장소 구현 (2026-10-01, migration 추가 없음)
 
 - `0020`의 is_pinned/settings_revision/model_favorites/in_use_job_id 및 기존 attachments processing/failed/ready/expired를 사용한다. 별도 queue/schema/의존성은 추가하지 않았다.

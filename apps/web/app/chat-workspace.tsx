@@ -23,9 +23,14 @@ import { SafeMarkdown } from './safe-markdown';
 import { ModelPicker, type PickerModel } from './chat-model-picker';
 import { ThemeToggle } from './theme-toggle';
 import { ChatDialog } from './chat-dialog';
+import { ChatTemplatePicker } from './chat-template-picker';
 import { ChatIcon } from './chat-icons';
 import { mergeOlderMessagePage } from './chat-message-pagination';
-import { responseAlternatives } from './chat-response-navigation';
+import { MessageCopyButton } from './message-copy-button';
+import {
+  displayResponse,
+  responseAlternatives,
+} from './chat-response-navigation';
 import { isNearScrollEnd } from './chat-scroll';
 import { LatestRequest } from './latest-request';
 import {
@@ -111,6 +116,7 @@ interface ConversationDetail extends ConversationSummary {
     isSelectable: boolean;
     messages: ChatMessage[];
     parentBranchId: string | null;
+    forkedFromMessageId: string | null;
   }>;
   messagePage: MessagePageMetadata;
   messages: ChatMessage[];
@@ -326,8 +332,18 @@ function temporaryMessage(
 
 function rememberConversation(id: string | null) {
   const url = new URL(window.location.href);
+  if (url.searchParams.get('conversation') !== id)
+    url.searchParams.delete('response');
   if (id) url.searchParams.set('conversation', id);
   else url.searchParams.delete('conversation');
+  window.history.replaceState(null, '', url);
+}
+
+function rememberResponse(messageId: string | null) {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('response') === messageId) return;
+  if (messageId) url.searchParams.set('response', messageId);
+  else url.searchParams.delete('response');
   window.history.replaceState(null, '', url);
 }
 
@@ -348,11 +364,18 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [unknownStarts, setUnknownStarts] = useState<
     Record<string, { path: string; body: Record<string, unknown>; key: string }>
   >({});
   const startsRef = useRef(new Set<string>());
+  const responseSelection = useRef<{
+    conversationId: string;
+    messageId: string;
+  } | null>(null);
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
   const [connection, setConnection] = useState('ended');
   const [query, setQuery] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -533,7 +556,44 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         .at(-1);
       if (lastAnswer)
         setJobStates((current) => ({ ...current, [id]: lastAnswer.status }));
-      setMessages(activeMessages);
+      const last = activeMessages.at(-1);
+      const candidates = value.branches
+        .flatMap((branch) => branch.messages)
+        .filter(
+          (m) =>
+            m.role === 'assistant' &&
+            m.parentMessageId === last?.parentMessageId,
+        );
+      const location = new URL(window.location.href);
+      if (
+        location.searchParams.get('conversation') === id &&
+        location.searchParams.has('response')
+      )
+        responseSelection.current = {
+          conversationId: id,
+          messageId: location.searchParams.get('response')!,
+        };
+      const selected =
+        responseSelection.current?.conversationId === id
+          ? candidates.find(
+              (m) => m.id === responseSelection.current?.messageId,
+            )
+          : undefined;
+      const active = candidates.find(
+        (m) => m.id === value.activeJob?.assistantMessageId,
+      );
+      const newest = candidates.at(-1);
+      const selectedResponse =
+        active ??
+        selected ??
+        (newest && ['failed', 'cancelled'].includes(newest.status)
+          ? newest
+          : undefined);
+      setMessages(
+        selectedResponse
+          ? displayResponse(activeMessages, selectedResponse)
+          : activeMessages,
+      );
       setMessagePage(value.messagePage);
       setSelectedModel(
         modelsRef.current.some(
@@ -1046,12 +1106,12 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
   const alternatives = useMemo(
     () =>
       detail && latestMessage?.branchId
-        ? responseAlternatives(detail.branches, latestMessage)
+        ? responseAlternatives(detail.branches, latestMessage, true)
         : [],
     [detail, latestMessage],
   );
   const activeAlternativeIndex = alternatives.findIndex(
-    (alternative) => alternative.branchId === detail?.activeBranchId,
+    (alternative) => alternative.messageId === latestMessage?.id,
   );
 
   useEffect(() => {
@@ -1082,27 +1142,41 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
         if (controller.signal.aborted || selectedRef.current !== id) return;
         setJobStates((current) => ({ ...current, [id]: job.status }));
         setMessages((current) => {
-          const exists = current.some(
-            (message) => message.id === job.assistantMessageId,
+          const branch = detailRef.current?.branches.find(
+            (b) => b.id === job.branchId,
           );
-          const list = exists
-            ? current
-            : [
-                ...current,
-                temporaryMessage(job.assistantMessageId, 'assistant', ''),
-              ];
-          return list.map((message) =>
-            message.id === job.assistantMessageId
-              ? {
-                  ...message,
-                  content: job.content,
-                  status: job.status,
-                  errorCode: job.errorCode,
-                  branchId: job.branchId,
-                  jobId: job.id,
-                }
-              : message,
+          const existing = current.find((m) => m.id === job.assistantMessageId);
+          const stored = branch?.messages.find(
+            (m) => m.id === job.assistantMessageId,
           );
+          const target = current.find(
+            (m) => m.id === branch?.forkedFromMessageId,
+          );
+          const base =
+            existing ??
+            stored ??
+            (target
+              ? { ...target, id: job.assistantMessageId }
+              : temporaryMessage(job.assistantMessageId, 'assistant', ''));
+          const response = {
+            ...base,
+            content: job.content,
+            status: job.status,
+            errorCode: job.errorCode,
+            branchId: job.branchId,
+            jobId: job.id,
+          };
+          if (job.kind === 'regenerate') {
+            rememberResponse(job.assistantMessageId);
+            responseSelection.current = {
+              conversationId: id,
+              messageId: job.assistantMessageId,
+            };
+            return displayResponse(current, response);
+          }
+          return existing
+            ? current.map((m) => (m.id === response.id ? response : m))
+            : [...current, response];
         });
         if (!isRunning(job)) {
           setDetail((current) =>
@@ -1423,6 +1497,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       return;
     }
     followLatestRef.current = true;
+    responseSelection.current = null;
+    rememberResponse(null);
     await startJob(
       {
         path: `/api/conversations/${selectedId}/jobs`,
@@ -1460,6 +1536,19 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
       },
       selectedId,
     );
+  }
+  async function selectResponse(index: number) {
+    const choice = alternatives[index];
+    const branch = detail?.branches.find((b) => b.id === choice?.branchId);
+    const response = branch?.messages.find((m) => m.id === choice?.messageId);
+    if (!selectedId || !response || busy) return;
+    rememberResponse(response.id);
+    responseSelection.current = {
+      conversationId: selectedId,
+      messageId: response.id,
+    };
+    if (branch?.isSelectable) await activateBranch(branch.id);
+    else setMessages((current) => displayResponse(current, response));
   }
   async function stopResponse() {
     if (!selectedId || !detail?.activeJob) return;
@@ -1699,7 +1788,11 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                 messages.map((message, messageIndex) => (
                   <article
                     className={`chat-message ${message.role} ${message.status}`}
-                    key={message.id}
+                    key={
+                      message.role === 'assistant'
+                        ? (message.parentMessageId ?? message.id)
+                        : message.id
+                    }
                   >
                     <div>
                       <strong>{message.role === 'user' ? '나' : 'AI'}</strong>
@@ -1718,22 +1811,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                       }
                     />
                     {message.content && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void navigator.clipboard
-                            .writeText(message.content)
-                            .then(
-                              () => setNotice('답변을 복사했습니다.'),
-                              () =>
-                                setError(
-                                  '복사할 수 없습니다. 텍스트를 선택해 복사하세요.',
-                                ),
-                            )
-                        }
-                      >
-                        복사
-                      </button>
+                      <MessageCopyButton content={message.content} />
                     )}
                     {message.attachments.length > 0 && (
                       <ul className="message-attachments" aria-label="첨부파일">
@@ -1763,6 +1841,14 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                         ))}
                       </ul>
                     )}
+                    {message.role === 'assistant' &&
+                      !detail.activeJob &&
+                      message.branchId !== detail.activeBranchId && (
+                        <small className="message-state">
+                          이 답변은 이력 미리보기입니다. 후속 질문은 선택된 완료
+                          답변을 기준으로 이어집니다.
+                        </small>
+                      )}
                     {(message.status === 'failed' ||
                       message.status === 'cancelled') && (
                       <small className="message-state">
@@ -1783,10 +1869,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                               aria-label="이전 답변"
                               title="이전 답변"
                               onClick={() =>
-                                activateBranch(
-                                  alternatives[activeAlternativeIndex - 1]!
-                                    .branchId,
-                                )
+                                selectResponse(activeAlternativeIndex - 1)
                               }
                               disabled={busy || activeAlternativeIndex <= 0}
                             >
@@ -1803,10 +1886,7 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                               aria-label="다음 답변"
                               title="다음 답변"
                               onClick={() =>
-                                activateBranch(
-                                  alternatives[activeAlternativeIndex + 1]!
-                                    .branchId,
-                                )
+                                selectResponse(activeAlternativeIndex + 1)
                               }
                               disabled={
                                 busy ||
@@ -1819,7 +1899,8 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                             </button>
                           </div>
                           {message.status !== 'pending' &&
-                            message.status !== 'streaming' && (
+                            message.status !== 'streaming' &&
+                            message.branchId === detail.activeBranchId && (
                               <button
                                 className="regenerate-button"
                                 type="button"
@@ -1996,6 +2077,20 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                   onSelect={(id) => void selectModel(id)}
                   onFavorite={(model) => void favoriteModel(model)}
                 />
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const open = () => {
+                      closeSettings(true);
+                      setTemplateOpen(true);
+                    };
+                    if (settingsDirty) setPendingAction(() => open);
+                    else open();
+                  }}
+                >
+                  템플릿
+                </button>
                 {detail.activeJob ? (
                   <button
                     type="button"
@@ -2256,6 +2351,23 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
             </form>
           </section>
         </ChatDialog>
+      )}
+      {templateOpen && detail && selectedId && (
+        <ChatTemplatePicker
+          key={selectedId}
+          conversationId={selectedId}
+          revision={detail.settingsRevision}
+          currentModel={selectedModel}
+          models={models}
+          onClose={() => setTemplateOpen(false)}
+          onApplied={async () => {
+            await loadDetail(selectedId);
+            await refreshConversations();
+            setNotice(
+              '템플릿을 적용했습니다. 설정은 자유롭게 수정할 수 있습니다.',
+            );
+          }}
+        />
       )}
       {pendingAction && (
         <ChatDialog label="미적용 설정" onClose={() => setPendingAction(null)}>

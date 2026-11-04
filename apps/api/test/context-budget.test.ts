@@ -14,7 +14,7 @@ describe('N08 model context budget', () => {
       contextBudget(
         { contextWindow: 8_000, maxOutputTokens: 2_000 },
         6_000,
-        3_000,
+        2_000,
       ),
     ).toEqual({
       window: 6_000,
@@ -22,9 +22,16 @@ describe('N08 model context budget', () => {
       input: 2_976,
     });
   });
-  it('caps large requests at 8192 while preserving smaller explicit limits', () => {
+  it('preserves explicit output while retaining defaults and rejecting model overflow', () => {
     const runtime = { contextWindow: 100_000, maxOutputTokens: 32_768 };
-    expect(contextBudget(runtime, 100_000, 16_384).output).toBe(8_192);
+    expect(contextBudget(runtime, 100_000, 16_384).output).toBe(16_384);
+    expect(() => contextBudget(runtime, 100_000, 32_769)).toThrow(
+      'Maximum output',
+    );
+    expect(
+      contextBudget({ ...runtime, maxOutputTokens: null }, 100_000, 16_384)
+        .output,
+    ).toBe(16_384);
     expect(contextBudget(runtime, 100_000, 1_024).output).toBe(1_024);
     expect(
       contextBudget({ ...runtime, maxOutputTokens: 4_096 }, 100_000).output,

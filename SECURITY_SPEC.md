@@ -1,5 +1,9 @@
 # ModelNaru 보안 상세 명세
 
+## R3 템플릿 보안 (2026-11-05, 로컬 구현)
+
+조회는 기존 인증 session/no-store, 변경·preview/apply는 기존 CSRF mutation guard를 재사용한다. 관리 CRUD는 admin 전용이며 사용자·게스트는 활성 템플릿 조회/자신의 대화 적용만 가능하다. 비허용 권장 모델 UUID를 사용자 목록에서 제거하고 modelUnavailable로만 안내한다. 선택 모델의 권한은 적용 transaction에서 다시 확인한다. previewToken은 결과 변경 탐지용 hash이며 인증 권한을 부여하지 않는다. 입력 whitelist/범위·버전 CAS·소유 대화 잠금·활성 생성 검사 후 원자 저장한다. 템플릿 내용은 사용자/게스트에게 공개되는 공유 설정이므로 관리자 키/비밀값 보관 용도가 아니다. 감사에는 내용 대신 ID/version만 남긴다. 검증/한계는 TEST_PLAN R3.
+
 ## N12 관리자 복구 구현 (2026-10-01, 격리 인수 완료)
 
 기존 대화형 reset-totp와 원자적 config 저장을 유지한다. validate는 Unix config/secret 0600을 요구하고 비대화형 초기화·복구는 거부한다. 새 secret은 터미널에서만 등록하며 시험도 PTY 출력을 메모리에서 폐기한다. restart는 config 파일의 atomic rename 후 mount를 재생성한다. 새 자격증명 fingerprint와 기존 session의 불일치로 이전 관리자 session을 폐기한다. 실제 HTTP 로그인/복구 검증 결과는 TEST_PLAN.md N12에 기록한다. 실행 절차의 원장은 README.md와 DEPLOYMENT_RUNBOOK.md다.

@@ -226,7 +226,9 @@ function parseCreate(body: unknown): CreateConversationInput | undefined {
   };
 }
 
-function parseUpdate(body: unknown): UpdateConversationInput | undefined {
+export function parseUpdate(
+  body: unknown,
+): UpdateConversationInput | undefined {
   const input = recordBody(body);
   if (
     !input ||
@@ -892,7 +894,17 @@ export class ChatJobsController {
   }
 
   private mapError(error: unknown): never {
-    if (error instanceof ProviderParameterValidationError) this.invalid();
+    if (error instanceof ProviderParameterValidationError)
+      throw new HttpException(
+        {
+          error: {
+            code: 'CHAT_PARAMETER_INVALID',
+            message:
+              '설정값이 모델의 지원 범위를 벗어납니다. 최대 출력 토큰과 모델 한도를 확인하세요.',
+          },
+        },
+        400,
+      );
     if (error instanceof ProviderDestinationError) {
       throw new HttpException(
         {

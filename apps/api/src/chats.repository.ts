@@ -1,3 +1,4 @@
+import { contextBudget } from './context-budget.js';
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
@@ -288,7 +289,7 @@ const conversationColumns = `
 export class ChatsRepository {
   constructor(private readonly database: DatabaseService) {}
 
-  private async locked(
+  async locked(
     sql: DatabaseTransaction,
     principal: ChatPrincipal,
     id: string,
@@ -326,8 +327,13 @@ export class ChatsRepository {
       sql,
     );
     const [model] = await sql<
-      { template_id: string; model_id: string }[]
-    >`SELECT c.template_id,m.model_id FROM provider_models m
+      {
+        template_id: string;
+        model_id: string;
+        max_output_tokens: number | null;
+        context_window: number | null;
+      }[]
+    >`SELECT c.template_id,m.model_id,m.max_output_tokens,m.context_window FROM provider_models m
       JOIN provider_connections c ON c.id=m.provider_connection_id WHERE m.id=${modelId}`;
     const template = model && providerTemplateById(model.template_id);
     if (!template) throw new Error('CHAT_PARAMETER_INVALID');
@@ -359,6 +365,14 @@ export class ChatsRepository {
           Object.keys(explicit).some((key) => !Object.hasOwn(normalized, key))
         )
           throw new Error('CHAT_PARAMETER_INVALID');
+        contextBudget(
+          {
+            maxOutputTokens: model.max_output_tokens,
+            contextWindow: model.context_window,
+          },
+          model.context_window ?? 16_384,
+          normalized.maxOutputTokens,
+        );
         return {
           parameters: normalized,
           removed,
@@ -818,8 +832,9 @@ export class ChatsRepository {
     principal: ChatPrincipal,
     id: string,
     input: UpdateConversationInput,
+    transaction?: DatabaseTransaction,
   ): Promise<ConversationRecord & { removedParameters: string[] }> {
-    return this.database.getClient().begin(async (sql) => {
+    const run = async (sql: DatabaseTransaction) => {
       const current = await this.locked(
         sql,
         principal,
@@ -923,7 +938,10 @@ export class ChatsRepository {
       const conversation = mapConversation(row);
       await this.attachActiveJobs([conversation], sql);
       return { ...conversation, removedParameters };
-    });
+    };
+    return transaction
+      ? run(transaction)
+      : this.database.getClient().begin(run);
   }
 
   async delete(principal: ChatPrincipal, id: string): Promise<void> {

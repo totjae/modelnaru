@@ -1,3 +1,8 @@
+import { ChatTemplatesRepository } from './chat-templates.js';
+import {
+  AdminChatTemplatesController,
+  ChatTemplatesController,
+} from './chat-templates.controller.js';
 import { Module } from '@nestjs/common';
 
 import {
@@ -59,6 +64,8 @@ import { TitleGenerationController } from './title-generation.controller.js';
 
 @Module({
   controllers: [
+    AdminChatTemplatesController,
+    ChatTemplatesController,
     HealthController,
     AuthController,
     UsersController,
@@ -76,6 +83,7 @@ import { TitleGenerationController } from './title-generation.controller.js';
     AdminLogsController,
   ],
   providers: [
+    ChatTemplatesRepository,
     modelNaruConfigProvider,
     DatabaseService,
     AuthRepository,
