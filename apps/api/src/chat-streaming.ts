@@ -262,7 +262,7 @@ export function buildProviderStreamRequest(
   if (input.template.defaultFormat === 'anthropic') {
     return providerRequest(
       {
-        max_tokens: parameters.maxOutputTokens ?? 4_096,
+        max_tokens: parameters.maxOutputTokens ?? 8_192,
         messages: input.messages.map((message) => ({
           content: anthropicContent(message),
           role: message.role,

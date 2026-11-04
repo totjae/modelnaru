@@ -7,8 +7,8 @@ describe('N08 model context budget', () => {
       contextBudget({ contextWindow: null, maxOutputTokens: null }, 100_000),
     ).toEqual({
       window: 16_384,
-      output: 4_096,
-      input: 10_649,
+      output: 8_192,
+      input: 6_553,
     });
     expect(
       contextBudget(
@@ -21,6 +21,14 @@ describe('N08 model context budget', () => {
       output: 2_000,
       input: 2_976,
     });
+  });
+  it('caps large requests at 8192 while preserving smaller explicit limits', () => {
+    const runtime = { contextWindow: 100_000, maxOutputTokens: 32_768 };
+    expect(contextBudget(runtime, 100_000, 16_384).output).toBe(8_192);
+    expect(contextBudget(runtime, 100_000, 1_024).output).toBe(1_024);
+    expect(
+      contextBudget({ ...runtime, maxOutputTokens: 4_096 }, 100_000).output,
+    ).toBe(4_096);
   });
   it('requires verified image costs and reserves every image', () => {
     expect(() =>

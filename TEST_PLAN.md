@@ -1,5 +1,10 @@
 # ModelNaru 시험 계획·결과
 
+## OUTPUT-8192 로컬 검증 (2026-11-04)
+
+기본 출력 예약/공통 상한과 Anthropic 미지정 fallback4096→8192 변경. API230개 통과·조건부6개 제외, API typecheck/build·변경 코드 lint·diff 검사 통과. 기본 context16384에서 출력8192/입력6553, 명시1024 유지·모델4096 상한 유지·큰 요청8192 제한 회귀 확인. DB 변경·실 Provider 호출·운영 반영 없음. 실패 trace 기록 보완은 이번 범위에 포함하지 않는다.
+
+
 ## UI-J 운영 반영 및 위치 검증 완료 (2026-10-02)
 
 제품8159953 commit/push·clean 서버 ff-only 반영. 제한 builder(CPU1.5/RAM3GiB) frozen-lockfile Linux build 통과, Web image sha256:1579c101023cb67cccf385dfe0ec4eeefa69e5f1b3d20e8b3985bfd09ee134fe로 Web만 교체. Gateway nginx -t/reload·health 정상. API/PostgreSQL container ID 보존. 이전 image modelnaru-ui-j-rollback-web 보존, 임시 builder 제거. DB/config/secrets 수정·migration·Provider 호출0.

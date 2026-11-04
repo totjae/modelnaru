@@ -1,5 +1,14 @@
 # ModelNaru 새 버전 실행 계획
 
+## OUTPUT-8192 운영 반영 (2026-11-04)
+
+사용자 commit/push/배포 승인. 메인 담당. 기존 Git 브랜치 ff-only, 이전 API image rollback 태그 보존, CPU1.5/RAM3GiB builder로 API만 build. 활성 chat_jobs0 확인 후 API만 no-deps 재생성/healthy, Gateway nginx -t/reload. DB/Web/config/secrets와 사용자 설정 보존, migration 실행 없음. 새 container 내부 contextBudget 기본8192 및 작은 사용자/모델 상한 계산과 외부 HTTPS ready 확인. 실 Provider 호출 금지. 실패 시 이전 API image 복구. 결과 TEST_PLAN/STATUS/HANDOFF 기록.
+
+## OUTPUT-8192 (2026-11-04)
+
+사용자 기본값2배 요청, 메인 담당. AI_INTEGRATION_SPEC 출력 예산 원장에 맞춰 context-budget.ts의 기본/공통 상한 및 chat-streaming.ts Anthropic 미지정 fallback을4096→8192로 변경. 수정 허용 해당2파일, context-budget.test.ts와 관련 AI_INTEGRATION_SPEC/README/TEST_PLAN/STATUS/HANDOFF/본 계획. 모델 상한·사용자 작은 설정·컨텍스트/이미지 여유·제목/요약 개별 제한 보존. DB/의존성/운영 설정/Provider 실호출 변경 금지. 검증 API 시험/typecheck/build/lint. 운영 반영 별도.
+
+
 ## UI-J 운영 반영 계약 (2026-10-02)
 
 사용자 commit/push/운영 반영 명시 승인. 메인 담당, 검증한 UI-J를 기존 codex/refactor-v2에 push·clean 서버 ff-only 반영. 이전 Web rollback 태그 보존, CPU1.5/RAM3GiB builder로 Web build 후 Web만 교체·Gateway nginx -t/reload. API/DB container·config/secrets/data 보존, migration/유료 호출/인증정보 열람 금지. health 및 공인 HTTPS의 실제 사용자/관리자 전환 소개/카드 좌표 검증. 실패 시 이전 Web 복구, 결과는 TEST_PLAN/STATUS/HANDOFF 기록.

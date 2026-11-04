@@ -31,9 +31,9 @@ export function contextBudget(
 ) {
   const window = Math.min(requestedWindow, runtime.contextWindow ?? 16_384);
   const output = Math.min(
-    requestedOutput ?? 4_096,
-    runtime.maxOutputTokens ?? 4_096,
-    4_096,
+    requestedOutput ?? 8_192,
+    runtime.maxOutputTokens ?? 8_192,
+    8_192,
   );
   if (imageCount && runtime.imageTokenEstimate == null)
     throw new Error('CHAT_IMAGE_BUDGET_UNKNOWN');
