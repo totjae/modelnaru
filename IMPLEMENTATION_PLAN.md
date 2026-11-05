@@ -2,6 +2,8 @@
 
 ## 헤더 순서 정정 운영 반영 (2026-11-05)
 
+완료: 제품3677af6 Web-only 운영 배포와 외부 검증을 마쳤다. 실제 결과는 TEST_PLAN의 템플릿 헤더 순서 운영 검증 완료 절을 따른다. 아래 계약과 로컬 상태는 배포 전 기록이다.
+
 사용자가 실서버 반영을 요청했다. 기존 Web-only 배포 절차를 재사용한다. 메인 담당, 변경 소스 commit/push·clean 서버 ff-only·이전 Web 복구 태그·설정/API/DB 보존 확인·제한 Linux Web build·활성 job0 확인·Web 교체·gateway reload/HTTPS 확인 후 문서에 기록한다. API/DB/migration 변경·유료 호출 없음. 허용 변경은 기존 정정 파일과 배포 기록 문서/ignored tmp 보조파일이다.
 
 ## 템플릿 헤더 버튼 순서 정정 (2026-11-05)

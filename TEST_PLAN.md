@@ -1,5 +1,11 @@
 # ModelNaru 시험 계획·결과
 
+## 템플릿 헤더 순서 운영 검증 완료 (2026-11-05)
+
+제품3677af64e65ffddeefcd9bd800c10eda8a751d3e 운영 Web-only 반영 완료. 제한 builder(CPU1.5/RAM3GiB) Linux build/타입 검사 통과. 실행 Web image는 sha256:bd5e6a22a2e05dd58da2238be5f8b66bf8b2e33a6df292825ee615c541756f3e. 준비/교체 직전 active job0, API/DB container ID 및 config/secrets/.runtime.env hash 불변. nginx 검사/reload·health·4서비스 healthy 확인. 임시 builder 제거, 이전 Web 복구 태그 modelnaru-r3-header-rollback-web 보존.
+
+외부 Edge 검사 exit0: live/ready200, 비인증 template API401, 배포 JS에서 CHAT PRESETS의 새 템플릿→새로고침 순서 확인, 기존 R3 CSS/문구 확인. 로그인 화면1440/360 캡처2개·모바일 overflow 없음·pageerror0(tmp/r3-header-live). 인증된 관리자 화면 조작과 유료 Provider 호출은 실행하지 않았다. 사용자는 관리자 템플릿에서 새 템플릿 왼쪽/새로고침 오른쪽 및 각 버튼 동작을 확인한다. 아래 로컬 미배포 표기는 배포 전 기록이다.
+
 ## 템플릿 헤더 순서 정정 검증 (2026-11-05)
 
 새 템플릿 왼쪽/새로고침 오른쪽 DOM 순서 및 각 onClick/disabled 조건 보존 정적 검사 통과. 변경 TSX/mjs lint·diff 검사 exit0. 기존 브라우저 인수의 기대 순서를 사용자 정정에 맞춰 갱신했다. 단순 버튼 순서 변경으로 전체 build/브라우저는 재실행하지 않았고 운영 미반영이다.

@@ -1,5 +1,9 @@
 # ModelNaru 배포 실행서
 
+## 템플릿 헤더 순서 운영 적용 (2026-11-05)
+
+제품3677af6을 clean ff-only 후 제한 builder(CPU1.5/RAM3GiB)로 빌드하고 Web만 no-deps 교체했다. 새 템플릿 왼쪽/새로고침 오른쪽 정정이며 API/DB container·설정 hash 보존, migration 없음. nginx 검사/reload·health와 외부 HTTPS 검증 통과. 복구 태그 modelnaru-r3-header-rollback-web, 서버 보존 state는 tmp/r3-header-3677af6/state.json이다. 복구는 이전 Web 태그를 modelnaru-git-web으로 복원→Web만 no-deps 교체→gateway reload/health의 기존 절차를 따른다. 상세 검증은 TEST_PLAN 최신 절을 따른다. 운영 명령/설치 절차 변경은 없다.
+
 ## 템플릿 카드·대화 버튼 운영 적용 (2026-11-05)
 
 제품594a013은 기존 Git root의 clean ff-only 후 제한 builder(CPU1.5/RAM3GiB)로 Web만 빌드해 no-deps 교체했다. API/DB container 및 config/secrets/.runtime.env hash 보존. migration 없음. 복구 태그 modelnaru-r3-actions-rollback-web, 보존/배포 state는 서버 tmp/r3-actions-594a013/state.json이다. 복구는 이전 Web 태그 복원→Web만 no-deps 교체→gateway reload/health 절차를 따른다. 실제 결과는 TEST_PLAN 최신 절.
