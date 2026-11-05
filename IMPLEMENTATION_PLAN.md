@@ -1,5 +1,13 @@
 # ModelNaru 새 버전 실행 계획
 
+## 헤더 순서 정정 운영 반영 (2026-11-05)
+
+사용자가 실서버 반영을 요청했다. 기존 Web-only 배포 절차를 재사용한다. 메인 담당, 변경 소스 commit/push·clean 서버 ff-only·이전 Web 복구 태그·설정/API/DB 보존 확인·제한 Linux Web build·활성 job0 확인·Web 교체·gateway reload/HTTPS 확인 후 문서에 기록한다. API/DB/migration 변경·유료 호출 없음. 허용 변경은 기존 정정 파일과 배포 기록 문서/ignored tmp 보조파일이다.
+
+## 템플릿 헤더 버튼 순서 정정 (2026-11-05)
+
+사용자 정정에 따라 새 템플릿을 왼쪽, 새로고침을 오른쪽에 배치한다. 이전 반대 순서 기록보다 이 결정이 우선한다. 메인이 chat-template-manager.tsx의 헤더 버튼 순서와 기존 r3-browser.mjs 인수 기대 순서만 수정했으며 동작·비활성 조건·카드 버튼은 보존했다. 로컬 수정이며 운영은 아직594a013이다.
+
 ## 템플릿 카드·대화 버튼 실서버 반영 (2026-11-05)
 
 사용자가 두 로컬 완료 변경의 실서버 적용을 요청했다. 메인이 검증 소스 commit/push→clean 운영 ff-only→Web만 제한 build→활성 job0 확인→no-deps Web 교체→gateway/HTTPS/health를 확인한다. API/DB container 및 config/secrets hash 보존, 이전 Web image 복구 태그 확보. 변경 허용 배포 결과 관련 문서와 ignored tmp 보조파일. 새 migration·초기화·유료 Provider 호출 없음. 실제 계정 기능 인수는 사용자가 진행한다.

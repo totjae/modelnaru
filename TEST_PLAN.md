@@ -1,5 +1,9 @@
 # ModelNaru 시험 계획·결과
 
+## 템플릿 헤더 순서 정정 검증 (2026-11-05)
+
+새 템플릿 왼쪽/새로고침 오른쪽 DOM 순서 및 각 onClick/disabled 조건 보존 정적 검사 통과. 변경 TSX/mjs lint·diff 검사 exit0. 기존 브라우저 인수의 기대 순서를 사용자 정정에 맞춰 갱신했다. 단순 버튼 순서 변경으로 전체 build/브라우저는 재실행하지 않았고 운영 미반영이다.
+
 ## 템플릿 카드·대화 버튼 운영 적용 (2026-11-05)
 
 제품594a013df8d5f699a6805f3700d1cd3c8765bc9a commit/push·clean 서버 ff-only 완료. 준비와 Web 교체 직전 active job0 확인. CPU1.5/RAM3GiB frozen-lockfile Linux Web build(타입 포함) 통과. 실행 Web image sha256:544a7c3f248f0af27ac6b7376dad2579654986f27f5e5f4870db8d18f4e9d5a8. 이전 Web 복구 태그 modelnaru-r3-actions-rollback-web 보존, 임시 buildx 제거. API/DB container ID 및 config/secrets/.runtime.env hash 불변,4서비스 healthy, nginx -t/reload·서버 HTTPS ready 정상. 외부 Edge에서 live/ready200·비인증 template API401·로그인1440/360 화면/overflow 없음/pageerror0, 새로운 template-list row-actions/message-actions CSS 및 상태 변경 UI 번들 확인(exit0, tmp/r3-actions-live). 실계정 기능 테스트와 유료 Provider 호출은 미실행이며 사용자가 직접 테스트 예정이다. 확인 항목은 템플릿 toggle/편집 초안 보존·카드 버튼 색상/우측 정렬, 사용자 복사 우측 하단, AI 복사 아래 탐색/재생성·복사 성공/실패·모바일 배치다. 기존 대화·설정·Provider 키를 초기화하지 않았다.

@@ -201,18 +201,18 @@ export function ChatTemplateManager() {
           <button
             className="quiet-button"
             type="button"
-            disabled={busy}
-            onClick={() => setReload((v) => v + 1)}
-          >
-            새로고침
-          </button>
-          <button
-            className="quiet-button"
-            type="button"
             disabled={busy || !loaded}
             onClick={() => edit(null)}
           >
             새 템플릿
+          </button>
+          <button
+            className="quiet-button"
+            type="button"
+            disabled={busy}
+            onClick={() => setReload((v) => v + 1)}
+          >
+            새로고침
           </button>
         </div>
       </div>

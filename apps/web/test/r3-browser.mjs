@@ -682,7 +682,7 @@ try {
   const headingActions = await page
     .locator('.template-manager .section-heading .row-actions button')
     .allTextContents();
-  assert.deepEqual(headingActions, ['새로고침', '새 템플릿']);
+  assert.deepEqual(headingActions, ['새 템플릿', '새로고침']);
   await page.setViewportSize({ width: 360, height: 900 });
   assert.equal(
     await templateRow
