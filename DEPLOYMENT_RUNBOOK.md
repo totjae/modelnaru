@@ -1,5 +1,9 @@
 # ModelNaru 배포 실행서
 
+## 템플릿 카드·대화 버튼 운영 적용 (2026-11-05)
+
+제품594a013은 기존 Git root의 clean ff-only 후 제한 builder(CPU1.5/RAM3GiB)로 Web만 빌드해 no-deps 교체했다. API/DB container 및 config/secrets/.runtime.env hash 보존. migration 없음. 복구 태그 modelnaru-r3-actions-rollback-web, 보존/배포 state는 서버 tmp/r3-actions-594a013/state.json이다. 복구는 이전 Web 태그 복원→Web만 no-deps 교체→gateway reload/health 절차를 따른다. 실제 결과는 TEST_PLAN 최신 절.
+
 ## R3 UI 후속 배포 기록 (2026-11-05)
 
 Web 제품 ccb10da 운영 반영 완료. 이번 변경은 Web-only이므로 API/DB/migration을 재실행하지 않았다. 기존 운영 Git root에서 clean ff-only→제한 Web build→active job 확인→Web up --no-deps --no-build --force-recreate --wait→gateway nginx -t/reload→health/공인 HTTPS를 수행했다. 설정/비밀값·API/DB container 보존 확인.

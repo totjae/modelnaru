@@ -1,5 +1,9 @@
 # ModelNaru 시험 계획·결과
 
+## 템플릿 카드·대화 버튼 운영 적용 (2026-11-05)
+
+제품594a013df8d5f699a6805f3700d1cd3c8765bc9a commit/push·clean 서버 ff-only 완료. 준비와 Web 교체 직전 active job0 확인. CPU1.5/RAM3GiB frozen-lockfile Linux Web build(타입 포함) 통과. 실행 Web image sha256:544a7c3f248f0af27ac6b7376dad2579654986f27f5e5f4870db8d18f4e9d5a8. 이전 Web 복구 태그 modelnaru-r3-actions-rollback-web 보존, 임시 buildx 제거. API/DB container ID 및 config/secrets/.runtime.env hash 불변,4서비스 healthy, nginx -t/reload·서버 HTTPS ready 정상. 외부 Edge에서 live/ready200·비인증 template API401·로그인1440/360 화면/overflow 없음/pageerror0, 새로운 template-list row-actions/message-actions CSS 및 상태 변경 UI 번들 확인(exit0, tmp/r3-actions-live). 실계정 기능 테스트와 유료 Provider 호출은 미실행이며 사용자가 직접 테스트 예정이다. 확인 항목은 템플릿 toggle/편집 초안 보존·카드 버튼 색상/우측 정렬, 사용자 복사 우측 하단, AI 복사 아래 탐색/재생성·복사 성공/실패·모바일 배치다. 기존 대화·설정·Provider 키를 초기화하지 않았다.
+
 ## 대화 버튼 배치 로컬 완료 (2026-11-05)
 
 Web build(타입 포함), 변경 TSX/mjs lint, 최종 R3 browser exit0. 라이트/다크 각각360/768/1024/1440에서 사용자·AI 복사 버튼이 본문 오른쪽에1px 이내 정렬, AI 탐색이 복사 아래, 재생성 오른쪽=복사 오른쪽, 탐색/재생성 같은 줄·간격13px 이하 검사. 기존 복사 Clipboard 성공/실패·재생성/취소·템플릿 적용·관리자 toggle/초안 보존 인수 유지. 최초 viewport 전환 직후0크기 측정으로 실패하여2 animation frame 및 visible 대기 후 재검증 통과; 기준값 완화 없음.12캡처, 모바일 dark 육안 확인. API/실운영/유료 생성 변경·검증 없음.
