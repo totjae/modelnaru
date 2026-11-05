@@ -1810,9 +1810,6 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                             : '')
                       }
                     />
-                    {message.content && (
-                      <MessageCopyButton content={message.content} />
-                    )}
                     {message.attachments.length > 0 && (
                       <ul className="message-attachments" aria-label="첨부파일">
                         {message.attachments.map((attachment) => (
@@ -1856,6 +1853,9 @@ export function ChatWorkspace({ isGuest }: { isGuest: boolean }) {
                           ? '중지됨'
                           : streamError(message.errorCode ?? '')}
                       </small>
+                    )}
+                    {message.content && (
+                      <MessageCopyButton content={message.content} />
                     )}
                     {messageIndex === messages.length - 1 &&
                       message.role === 'assistant' && (

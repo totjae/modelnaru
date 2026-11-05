@@ -1,5 +1,21 @@
 # ModelNaru 새 버전 실행 계획
 
+## 템플릿 카드·대화 버튼 실서버 반영 (2026-11-05)
+
+사용자가 두 로컬 완료 변경의 실서버 적용을 요청했다. 메인이 검증 소스 commit/push→clean 운영 ff-only→Web만 제한 build→활성 job0 확인→no-deps Web 교체→gateway/HTTPS/health를 확인한다. API/DB container 및 config/secrets hash 보존, 이전 Web image 복구 태그 확보. 변경 허용 배포 결과 관련 문서와 ignored tmp 보조파일. 새 migration·초기화·유료 Provider 호출 없음. 실제 계정 기능 인수는 사용자가 진행한다.
+
+## 대화 버튼 배치 확정·구현 (2026-11-05)
+
+사용자가 message-actions-preview 시안대로 구현을 승인했다. 사용자 복사는 첨부/본문 뒤 박스 우측 하단, AI 복사는 본문·상태 안내 뒤 오른쪽, 탐색/순번/재생성은 그 아래 줄 오른쪽 한 그룹이다.44px 버튼·복사 피드백·비활성/분기·재생성 조건은 보존한다. 메인 담당. 수정 허용 chat-workspace.tsx/styles.css/r3-browser.mjs 및 WEB_UI_SPEC/PLAN/STATUS/HANDOFF/TEST_PLAN/README. 기존 템플릿 카드 로컬 변경 보존. API/DB/운영 변경 없음. build/타입/lint·4폭2테마 좌표/기존 재생성·복사 인수 통과 시 로컬 완료. 이전 시안 선택 대기는 해소됐다.
+
+## 대화 버튼 배치 시안 (2026-11-05, 제품 미적용)
+
+추가 요청은 적용 전 시안 제출이다. 생성 허용 design/refactor-v3/message-actions-preview.html 및 message-actions-dark.png/message-actions-light.png, 수정 허용 WEB_UI_SPEC/TEST_PLAN/STATUS/HANDOFF/본 계획. 메인 담당, 제품 메시지 CSS/상태/배포는 이번에 변경 금지. 앞선 관리자 템플릿 카드 변경은 별도 로컬 완료로 보존한다. 시안 light/dark/390px·오른쪽 정렬·다음 줄 배치 검사 후 사용자에게 제출하고 선택 뒤 구현한다.
+
+## 템플릿 목록 관리 UI 통일 (2026-11-05)
+
+사용자 관리의 user-list/user-row/user-identity/account-status/row-actions/danger-button을 재사용한다. 새로고침 왼쪽/새 템플릿 오른쪽, 활성 초록 배지, 목록 버튼 우측 정렬, 비활성화/활성화 toggle과 빨간 삭제. 기존 PUT version CAS로 공개 상태만 전환하며 편집 중 초안은 보존한다. 메인 담당, 수정 허용 chat-template-manager.tsx/styles.css/r3-browser.mjs 및 진행·사용법·시험 문서. API/DB/권한·배포 변경 없음. 완료 조건 build/타입/lint와 토글·초안 보존·모바일 정렬 브라우저 확인.
+
 ## R3 UI 후속 운영 배포 (2026-11-05)
 
 사용자가 A안·템플릿 UI 후속의 운영 배포와 검증 사항 기록을 요청했다. 메인 담당. 검증한 변경만 기존 codex/refactor-v2에 commit/push, clean 서버 ff-only. 이번 제품 변경은 Web만 해당하므로 이전 Web image 복구 태그 및 config/secrets hash·API/DB container ID를 보존하고 제한 builder로 Web만 build한다. 활성 job 상태 확인 후 Web만 no-deps 교체/healthy, gateway nginx 검사/reload, 공인 HTTPS·새 CSS/번들·비인증 API 차단 검증. API/DB/migration/config 변경·유료 호출 없음. 실패 시 이전 Web image 복구. 수정 허용 계획/STATUS/HANDOFF/TEST_PLAN/README/DEPLOYMENT_RUNBOOK 및 ignored tmp 배포 보조파일.

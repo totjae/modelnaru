@@ -380,6 +380,72 @@ try {
   await page.goto(origin);
   await page.getByText('기존 답변입니다.', { exact: true }).waitFor();
   const card = page.locator('.chat-message.assistant');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    for (const width of [360, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          ),
+      );
+      await card.waitFor({ state: 'visible' });
+      assert(
+        await page.locator('.chat-message').evaluateAll((nodes) =>
+          nodes.every((node) => {
+            const copy = node
+              .querySelector('.message-copy-button')
+              .getBoundingClientRect();
+            const rect = node.getBoundingClientRect();
+            const css = getComputedStyle(node);
+            return (
+              Math.abs(
+                copy.right -
+                  (rect.right -
+                    parseFloat(css.paddingRight) -
+                    parseFloat(css.borderRightWidth)),
+              ) < 1
+            );
+          }),
+        ),
+      );
+      assert(
+        await card.evaluate((node) => {
+          const copy = node
+            .querySelector('.message-copy-button')
+            .getBoundingClientRect();
+          const nav = node
+            .querySelector('.response-navigation')
+            .getBoundingClientRect();
+          const retry = node
+            .querySelector('.regenerate-button')
+            .getBoundingClientRect();
+          return (
+            nav.top > copy.bottom &&
+            Math.abs(retry.right - copy.right) < 1 &&
+            retry.left - nav.right <= 13 &&
+            Math.abs(nav.top - retry.top) < 1
+          );
+        }),
+      );
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+      if (theme === 'dark' && [360, 1440].includes(width))
+        await page.screenshot({
+          path: resolve(output, `actions-${width}.png`),
+          fullPage: true,
+        });
+    }
+  }
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'light';
+  });
   await card.getByRole('button', { name: '메시지 복사' }).hover();
   await card.getByRole('button', { name: '메시지 복사' }).click();
   await card.getByRole('button', { name: '복사 완료' }).waitFor();
@@ -578,6 +644,62 @@ try {
     templates.find((t) => t.name === '새 템플릿').settings.resetParameters,
     ['maxOutputTokens'],
   );
+  const savedTemplate = structuredClone(
+    templates.find((t) => t.name === '새 템플릿'),
+  );
+  const templateRow = page.locator('.template-list .user-row').filter({
+    has: page.getByRole('heading', { name: '새 템플릿', exact: true }),
+  });
+  await page.getByLabel('설명', { exact: true }).fill('저장 전 설명');
+  await templateRow
+    .getByRole('button', { name: '비활성화', exact: true })
+    .click();
+  await templateRow.getByText('비활성', { exact: true }).waitFor();
+  assert.equal(
+    await page.getByLabel('설명', { exact: true }).inputValue(),
+    '저장 전 설명',
+  );
+  assert.equal(
+    await page.getByRole('checkbox', { name: '사용자에게 공개' }).isChecked(),
+    false,
+  );
+  assert.deepEqual(
+    templates.find((t) => t.id === savedTemplate.id).settings,
+    savedTemplate.settings,
+  );
+  await templateRow
+    .getByRole('button', { name: '활성화', exact: true })
+    .click();
+  await templateRow.locator('.account-status.active').waitFor();
+  assert.equal(
+    await page.getByRole('checkbox', { name: '사용자에게 공개' }).isChecked(),
+    true,
+  );
+  assert.equal(
+    await templateRow.locator('.row-actions .danger-button').innerText(),
+    '삭제',
+  );
+  const headingActions = await page
+    .locator('.template-manager .section-heading .row-actions button')
+    .allTextContents();
+  assert.deepEqual(headingActions, ['새로고침', '새 템플릿']);
+  await page.setViewportSize({ width: 360, height: 900 });
+  assert.equal(
+    await templateRow
+      .locator('.row-actions')
+      .evaluate((node) => getComputedStyle(node).justifyContent),
+    'flex-end',
+  );
+  assert(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  );
+  await page.screenshot({
+    path: resolve(output, 'admin-mobile.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: resolve(output, 'admin.png'), fullPage: true });
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
@@ -590,7 +712,7 @@ try {
         applyCalls,
         errors,
         external,
-        screenshots: 9,
+        screenshots: 12,
         requests: requests.length,
       },
       null,

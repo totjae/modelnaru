@@ -1,5 +1,17 @@
 # ModelNaru 시험 계획·결과
 
+## 대화 버튼 배치 로컬 완료 (2026-11-05)
+
+Web build(타입 포함), 변경 TSX/mjs lint, 최종 R3 browser exit0. 라이트/다크 각각360/768/1024/1440에서 사용자·AI 복사 버튼이 본문 오른쪽에1px 이내 정렬, AI 탐색이 복사 아래, 재생성 오른쪽=복사 오른쪽, 탐색/재생성 같은 줄·간격13px 이하 검사. 기존 복사 Clipboard 성공/실패·재생성/취소·템플릿 적용·관리자 toggle/초안 보존 인수 유지. 최초 viewport 전환 직후0크기 측정으로 실패하여2 animation frame 및 visible 대기 후 재검증 통과; 기준값 완화 없음.12캡처, 모바일 dark 육안 확인. API/실운영/유료 생성 변경·검증 없음.
+
+## 대화 버튼 배치 시안 (2026-11-05, 제품 미적용)
+
+관리자 템플릿 최종 재빌드 및 R3 browser exit0(10캡처/77요청/pageerror0/외부요청0). 모바일 row-actions flex-end와 초안 보존 포함. 이어서 별도 메시지 버튼 HTML 시안은 Edge1380px dark/light PNG2개 생성, 데스크톱/모바일 시안 모두 AI 복사 오른쪽과 재생성 오른쪽1px 이내 일치·탐색 줄이 복사 아래 배치됨 확인.390px 페이지 overflow 없음. 가상 데이터·시안이며 운영/제품 메시지 버튼 배치를 검증한 것은 아니다.
+
+## 템플릿 목록 카드 관리 보완 (2026-11-05)
+
+템플릿 관리 Web build/타입 및 변경 TSX·브라우저 harness lint 통과. 로컬 R3 browser에서 활성→비활성→활성 전환, badge/action 이름과 공개 checkbox 반영, 저장 전 설명 초안 보존, 저장된 settings 불변, 헤더 새로고침/새 템플릿 순서, danger-button과360px overflow 없음 확인. 최초 모바일 캡처에서 공통 row-actions의 왼쪽 정렬을 발견해 템플릿 전용 우측 정렬 보완 후 재검증했다. 기존 R3 적용/재생성/복사 인수도 유지한다. API/실운영/유료 호출은 재실행하지 않았다.
+
 ## R3 UI 후속 운영 배포 검증 완료 (2026-11-05)
 
 - 배포 제품 ccb10da3ae4f71002b5c13f5ff47b4cf762c22bb, clean 서버 ff-only. Web만 배포했으며 API는 a087c3f 유지. Dockerfile 공통 build stage에서 컴파일되지만 실행 API/migrate/admin image는 교체하지 않았다. builder CPU1.5/RAM3GiB·frozen-lockfile Linux build exit0.

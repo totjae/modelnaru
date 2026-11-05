@@ -5500,14 +5500,6 @@ body:has(.user-shell) > .theme-control {
 .template-manager select {
   width: 100%;
 }
-.template-list > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-}
 .template-preview {
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -5557,7 +5549,7 @@ body:has(.user-shell) > .theme-control {
 }
 .chat-message .message-copy {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
   margin-top: 8px;
@@ -5590,8 +5582,18 @@ body:has(.user-shell) > .theme-control {
   transform: scale(0.92);
 }
 .copy-error {
+  order: -1;
+  min-width: 0;
   font-size: 12px;
   color: var(--muted);
+}
+.chat-message .message-actions {
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+.chat-message .response-navigation button {
+  border-color: transparent;
 }
 @media (max-width: 767px) {
   .chat-message.user {
@@ -5685,4 +5687,24 @@ body:has(.user-shell) > .theme-control {
 }
 .template-dialog-actions > button {
   margin: 0;
+}
+.template-list {
+  margin-bottom: 24px;
+}
+.template-list .user-identity {
+  flex: 1;
+}
+.template-list .account-status {
+  flex-shrink: 0;
+}
+.template-list .user-identity > div {
+  min-width: 0;
+}
+.template-list .user-identity p {
+  overflow-wrap: anywhere;
+}
+.template-list .row-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+  justify-content: flex-end;
 }

@@ -1,5 +1,17 @@
 # ModelNaru Web UI 명세
 
+## 대화 버튼 배치 확정·구현 (2026-11-05)
+
+사용자가 message-actions-preview 시안대로 구현을 승인했다. 사용자 복사는 첨부/본문 뒤 박스 우측 하단, AI 복사는 본문·상태 안내 뒤 오른쪽, 탐색/순번/재생성은 그 아래 줄 오른쪽 한 그룹이다.44px 버튼·복사 피드백·비활성/분기·재생성 조건은 보존한다. 메인 담당. 수정 허용 chat-workspace.tsx/styles.css/r3-browser.mjs 및 WEB_UI_SPEC/PLAN/STATUS/HANDOFF/TEST_PLAN/README. 기존 템플릿 카드 로컬 변경 보존. API/DB/운영 변경 없음. build/타입/lint·4폭2테마 좌표/기존 재생성·복사 인수 통과 시 로컬 완료. 이전 시안 선택 대기는 해소됐다.
+
+## 대화 버튼 배치 시안 (2026-11-05, 제품 미적용)
+
+사용자가 사용자 복사 우측 하단, AI 복사 우측 및 그 다음 줄에 이전/순번/다음/재생성을 모으는 변경을 요청했다. 적용 전 시안 요청이므로 제품 chat-workspace/styles의 메시지 동작은 변경하지 않는다. [시안 HTML](./design/refactor-v3/message-actions-preview.html), [다크](./design/refactor-v3/message-actions-dark.png), [라이트](./design/refactor-v3/message-actions-light.png). A안 본문을 유지하고44px 조작 영역, AI 복사와 재생성 오른쪽 끝 정렬, 탐색은 아래 줄로 분리한다.1/1 예시는 이전/다음 비활성. 시안 버튼은 실제 복사/Provider 호출을 하지 않는다. 사용자 선택 대기.
+
+## 템플릿 목록 관리 UI 통일 (2026-11-05)
+
+사용자 관리의 user-list/user-row/user-identity/account-status/row-actions/danger-button을 재사용한다. 새로고침 왼쪽/새 템플릿 오른쪽, 활성 초록 배지, 목록 버튼 우측 정렬, 비활성화/활성화 toggle과 빨간 삭제. 기존 PUT version CAS로 공개 상태만 전환하며 편집 중 초안은 보존한다. 메인 담당, 수정 허용 chat-template-manager.tsx/styles.css/r3-browser.mjs 및 진행·사용법·시험 문서. API/DB/권한·배포 변경 없음. 완료 조건 build/타입/lint와 토글·초안 보존·모바일 정렬 브라우저 확인.
+
 ## R3 템플릿 적용 버튼 보완 (2026-11-05)
 
 사용자 요청: 적용 버튼을 미리보기 밖의 하단 오른쪽으로 옮기고 닫기와 같은 줄에 둔다. 미리보기는 펼침/접힘을 제공한다. 직접 적용 시 UI를 펼치지 않고 서버 preview를 먼저 받아 기존 token/원자성 계약을 유지한다. 미지원 제외 항목은 접힌 상태에도 별도로 표시하며 확인 전 적용하지 않는다. 템플릿/모델 변경·오류는 이전 preview와 확인 상태를 폐기한다. 수정 허용 chat-template-picker.tsx/styles.css/r3-browser.mjs 및 관련 진행·시험·사용법 문서. API/DB/권한/배포 변경 없음. 검증은 build/타입/lint 및 직접 적용·접기·미지원 확인 브라우저 인수다.

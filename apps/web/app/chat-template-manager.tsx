@@ -24,6 +24,8 @@ export function ChatTemplateManager() {
   const [fields, setFields] = useState<ParameterField[]>([]);
   const [models, setModels] = useState<{ id: string; label: string }[]>([]);
   const [editing, setEditing] = useState<ChatTemplate | null>(null);
+  const [editorKey, setEditorKey] = useState(0);
+  const [published, setPublished] = useState(true);
   const [values, setValues] = useState<ParameterValues>({});
   const [resetKeys, setResetKeys] = useState<string[]>([]);
   const [message, setMessage] = useState('');
@@ -75,6 +77,8 @@ export function ChatTemplateManager() {
   }, [reload]);
   function edit(template: ChatTemplate | null) {
     setEditing(template);
+    setEditorKey((key) => key + 1);
+    setPublished(template?.isEnabled ?? true);
     setResetKeys(template?.settings.resetParameters ?? []);
     setValues(
       parameterValuesFromRequest(template?.settings.generationParameters ?? {}),
@@ -125,6 +129,40 @@ export function ChatTemplateManager() {
       setMessage('템플릿을 저장했습니다. 기존 대화의 적용값은 유지됩니다.');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : '저장하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggle(t: ChatTemplate) {
+    setBusy(true);
+    setMessage('');
+    try {
+      const { id, ...body } = t;
+      const saved = await chatApi<ChatTemplate>(
+        `/api/admin/chat-templates/${id}`,
+        {
+          method: 'PUT',
+          body: { ...body, isEnabled: !t.isEnabled },
+        },
+      );
+      setTemplates((list) =>
+        list.map((item) => (item.id === id ? saved : item)),
+      );
+      if (editing?.id === id) {
+        setEditing((current) =>
+          current
+            ? { ...current, version: saved.version, isEnabled: saved.isEnabled }
+            : current,
+        );
+        setPublished(saved.isEnabled);
+      }
+      setMessage(
+        `템플릿을 ${saved.isEnabled ? '활성화' : '비활성화'}했습니다. 기존 대화의 적용값은 유지됩니다.`,
+      );
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : '상태를 변경하지 못했습니다.',
+      );
     } finally {
       setBusy(false);
     }
@@ -182,41 +220,55 @@ export function ChatTemplateManager() {
         사용자와 게스트가 현재 대화에 적용한 뒤 자유롭게 수정할 수 있습니다.
       </p>
       <p role="status">{message}</p>
-      <div className="template-list">
+      <div className="template-list user-list">
         {templates.map((t) => (
-          <div key={t.id}>
-            <strong>{t.name}</strong>{' '}
-            <small>{t.isEnabled ? '활성' : '비활성'}</small>
-            <button
-              className="quiet-button"
-              disabled={busy}
-              onClick={() => edit(t)}
-            >
-              수정
-            </button>
-            <button
-              className="quiet-button"
-              disabled={busy}
-              onClick={() =>
-                edit({ ...t, id: '', name: `${t.name} 복사`.slice(0, 100) })
-              }
-            >
-              복제
-            </button>
-            <button
-              className="quiet-button"
-              disabled={busy}
-              onClick={() => void remove(t)}
-            >
-              삭제
-            </button>
-          </div>
+          <article className="user-row" key={t.id}>
+            <div className="user-identity">
+              <span
+                className={
+                  t.isEnabled ? 'account-status active' : 'account-status'
+                }
+              >
+                {t.isEnabled ? '활성' : '비활성'}
+              </span>
+              <div>
+                <h3>{t.name}</h3>
+                {t.description && <p>{t.description}</p>}
+              </div>
+            </div>
+            <div className="row-actions">
+              <button type="button" disabled={busy} onClick={() => edit(t)}>
+                수정
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  edit({ ...t, id: '', name: `${t.name} 복사`.slice(0, 100) })
+                }
+              >
+                복제
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void toggle(t)}
+              >
+                {t.isEnabled ? '비활성화' : '활성화'}
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                disabled={busy}
+                onClick={() => void remove(t)}
+              >
+                삭제
+              </button>
+            </div>
+          </article>
         ))}
       </div>
-      <form
-        key={`${editing?.id ?? 'new'}:${editing?.version ?? ''}:${editing?.name ?? ''}`}
-        onSubmit={save}
-      >
+      <form key={editorKey} onSubmit={save}>
         <fieldset disabled={busy || !loaded}>
           <legend>{editing?.id ? '템플릿 수정' : '템플릿 등록'}</legend>
           <label>
@@ -240,7 +292,8 @@ export function ChatTemplateManager() {
             <input
               name="isEnabled"
               type="checkbox"
-              defaultChecked={editing?.isEnabled ?? true}
+              checked={published}
+              onChange={(event) => setPublished(event.target.checked)}
             />
             사용자에게 공개
           </label>
